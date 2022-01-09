@@ -1,0 +1,13 @@
+[package]
+name = "untitled"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+winit       = "^0.26"
+ash         = {version = "^0.35", features = ["linked"]}
+ash-window  = "^0.9"
+image       = "^0.23"
+memoffset   = "^0.6"
