@@ -40,7 +40,23 @@ impl WindowedApp {
             .expect("Failed to initialize window")
     }
 
-    // fn create_instance(entry: &ash::Entry, window: &Option<Window>) -> ash::Instance {
+    fn select_device(instance: &Instance) -> vk::PhysicalDevice {
+        unsafe {
+            let physical_devices = instance
+                .enumerate_physical_devices()
+                .expect("Cannot find physical devices");
+
+            let (p_device, queue_family_index) = physical_devices
+                .iter()
+                .map(|p_device| {
+
+                })
+                .flatten()
+                .next()
+                .expect("Couldn't find suitable physical device");
+        }
+    }
+
     fn create_instance(entry: &ash::Entry, window: &Window) -> Instance{
         let engine_name = CString::new("Framegraph").unwrap();
         let app_name = CString::new(WINDOW_TITLE).unwrap();
