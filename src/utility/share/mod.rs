@@ -3,9 +3,9 @@
 pub mod v1;
 pub mod v2;
 
-use ash::version::DeviceV1_0;
-use ash::version::EntryV1_0;
-use ash::version::InstanceV1_0;
+// use ash::version::DeviceV1_0;
+// use ash::version::EntryV1_0;
+// use ash::version::InstanceV1_0;
 use ash::vk;
 
 use std::ffi::CString;
@@ -13,6 +13,7 @@ use std::os::raw::c_char;
 use std::os::raw::c_void;
 use std::path::Path;
 use std::ptr;
+use tobj::LoadOptions;
 
 
 use crate::utility::constants::*;
@@ -275,7 +276,7 @@ pub fn find_queue_family(
                     surface_stuff.surface,
                 )
         };
-        if queue_family.queue_count > 0 && is_present_support {
+        if queue_family.queue_count > 0 && is_present_support.is_ok() {
             queue_family_indices.present_family = Some(index);
         }
 
@@ -749,7 +750,10 @@ pub fn find_supported_format(
 }
 
 pub fn load_model(model_path: &Path) -> (Vec<VertexV3>, Vec<u32>) {
-    let model_obj = tobj::load_obj(model_path).expect("Failed to load model object!");
+    let load_options: LoadOptions = {
+        Default::default()
+    };
+    let model_obj = tobj::load_obj(model_path, &load_options).expect("Failed to load model object!");
 
     let mut vertices = vec![];
     let mut indices = vec![];

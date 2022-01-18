@@ -64,7 +64,8 @@ impl VulkanApp {
         let window = utility::window::init_window(event_loop, WINDOW_TITLE, WINDOW_WIDTH, WINDOW_HEIGHT);
 
         // init vulkan stuff
-        let entry = ash::Entry::new().unwrap();
+        // let entry = ash::Entry::new().unwrap();
+        let entry = ash::Entry::linked();
         let instance = share::create_instance(
             &entry,
             WINDOW_TITLE,

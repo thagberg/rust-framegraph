@@ -78,11 +78,13 @@ pub fn create_graphics_pipeline(
 ) -> (vk::Pipeline, vk::PipelineLayout) {
     let vert_shader_module = create_shader_module(
         device,
-        include_bytes!("../../../shaders/spv/09-shader-base.vert.spv").to_vec(),
+        //include_bytes!("../../../shaders/spv/09-shader-base.vert.spv").to_vec(),
+        std::fs::read("../../../shaders/spv/09-shader-base.vert.spv").expect("Failed to load vert shader"),
     );
     let frag_shader_module = create_shader_module(
         device,
-        include_bytes!("../../../shaders/spv/09-shader-base.frag.spv").to_vec(),
+        //include_bytes!("../../../shaders/spv/09-shader-base.frag.spv").to_vec(),
+        std::fs::read("../../../shaders/spv/09-shader-base.frag.spv").expect("Failed to load frag shader"),
     );
 
     let main_function_name = CString::new("main").unwrap(); // the beginning function name in shader code.
@@ -205,7 +207,8 @@ pub fn create_graphics_pipeline(
 
     let color_blend_attachment_states = [vk::PipelineColorBlendAttachmentState {
         blend_enable: vk::FALSE,
-        color_write_mask: vk::ColorComponentFlags::all(),
+        // color_write_mask: vk::ColorComponentFlags::all(),
+        color_write_mask: vk::ColorComponentFlags::R | vk::ColorComponentFlags::G | vk::ColorComponentFlags::B | vk::ColorComponentFlags::A,
         src_color_blend_factor: vk::BlendFactor::ONE,
         dst_color_blend_factor: vk::BlendFactor::ZERO,
         color_blend_op: vk::BlendOp::ADD,
@@ -959,7 +962,9 @@ pub fn create_texture_image(
         | image::DynamicImage::ImageRgb8(_) => image_object.to_rgba().into_raw(),
         image::DynamicImage::ImageBgra8(_)
         | image::DynamicImage::ImageLumaA8(_)
-        | image::DynamicImage::ImageRgba8(_) => image_object.raw_pixels(),
+        // | image::DynamicImage::ImageRgba8(_) => image_object.raw_pixels(),
+        | image::DynamicImage::ImageRgba8(_) => image_object.into_bytes(),
+        _ => image_object.into_bytes()
     };
     let image_size =
         (::std::mem::size_of::<u8>() as u32 * image_width * image_height * 4) as vk::DeviceSize;

@@ -11,3 +11,9 @@ ash         = {version = "^0.35", features = ["linked"]}
 ash-window  = "^0.9"
 image       = "^0.23"
 memoffset   = "^0.6"
+num         = "^0.4"
+cgmath      = "^0.18"
+tobj        = "^3.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winapi = { version = "^0.3", features = ["windef", "libloaderapi"] }

@@ -1,5 +1,5 @@
 
-use ash::version::{EntryV1_0, InstanceV1_0};
+//use ash::version::{EntryV1_0, InstanceV1_0};
 use ash::vk;
 
 #[cfg(target_os = "windows")]
@@ -109,10 +109,13 @@ pub unsafe fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
     macos_surface_loader.create_mac_os_surface_mvk(&create_info, None)
 }
 
+// entry: &ash::Entry,
+// instance: &ash::Instance,
 #[cfg(target_os = "windows")]
-pub unsafe fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
-    entry: &E,
-    instance: &I,
+pub unsafe fn create_surface(
+// pub unsafe fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
+    entry: &ash::Entry,
+    instance: &ash::Instance,
     window: &winit::window::Window,
 ) -> Result<vk::SurfaceKHR, vk::Result> {
     use std::os::raw::c_void;
