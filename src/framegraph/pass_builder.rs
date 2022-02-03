@@ -1,3 +1,5 @@
+use crate::framegraph::frame_graph::{ResourceHandle, TextureDesc};
+
 struct PassBuilder {
 
 }

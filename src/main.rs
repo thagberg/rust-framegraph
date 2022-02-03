@@ -11,6 +11,9 @@ use winit::event_loop::{EventLoop, ControlFlow};
 
 use std::ptr;
 
+mod context;
+use crate::context::render_context::RenderContext;
+
 // Constants
 const WINDOW_TITLE: &'static str = "15.Hello Triangle";
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
@@ -32,10 +35,12 @@ struct VulkanApp {
     debug_merssager: vk::DebugUtilsMessengerEXT,
 
     _physical_device: vk::PhysicalDevice,
-    device: ash::Device,
 
-    graphics_queue: vk::Queue,
-    present_queue: vk::Queue,
+    render_context: RenderContext,
+    // device: ash::Device,
+
+    // graphics_queue: vk::Queue,
+    // present_queue: vk::Queue,
 
     swapchain_loader: ash::extensions::khr::Swapchain,
     swapchain: vk::SwapchainKHR,
@@ -126,6 +131,7 @@ impl VulkanApp {
         let sync_ojbects = VulkanApp::create_sync_objects(&device);
 
         // cleanup(); the 'drop' function will take care of it.
+        let render_context = RenderContext::new(device, graphics_queue, present_queue);
         VulkanApp {
             window,
             // vulkan stuff
@@ -137,10 +143,11 @@ impl VulkanApp {
             debug_merssager,
 
             _physical_device: physical_device,
-            device,
-
-            graphics_queue,
-            present_queue,
+            render_context,
+            // device,
+            //
+            // graphics_queue,
+            // present_queue,
 
             swapchain_loader: swapchain_stuff.swapchain_loader,
             swapchain: swapchain_stuff.swapchain,
@@ -168,7 +175,8 @@ impl VulkanApp {
         let wait_fences = [self.in_flight_fences[self.current_frame]];
 
         let (image_index, _is_sub_optimal) = unsafe {
-            self.device
+            // self.device
+            self.render_context.get_device()
                 .wait_for_fences(&wait_fences, true, std::u64::MAX)
                 .expect("Failed to wait for Fence!");
 
@@ -199,13 +207,16 @@ impl VulkanApp {
         }];
 
         unsafe {
-            self.device
+            // self.device
+            self.render_context.get_device()
                 .reset_fences(&wait_fences)
                 .expect("Failed to reset Fence!");
 
-            self.device
+            // self.device
+            self.render_context.get_device()
                 .queue_submit(
-                    self.graphics_queue,
+                    // self.graphics_queue,
+                    self.render_context.get_graphics_queue(),
                     &submit_infos,
                     self.in_flight_fences[self.current_frame],
                 )
@@ -227,7 +238,10 @@ impl VulkanApp {
 
         unsafe {
             self.swapchain_loader
-                .queue_present(self.present_queue, &present_info)
+                // .queue_present(self.present_queue, &present_info)
+                .queue_present(
+                    self.render_context.get_present_queue(),
+                    &present_info)
                 .expect("Failed to execute queue present.");
         }
 
@@ -344,32 +358,30 @@ impl VulkanApp {
 impl Drop for VulkanApp {
     fn drop(&mut self) {
         unsafe {
+            let device = self.render_context.get_device();
             for i in 0..MAX_FRAMES_IN_FLIGHT {
-                self.device
-                    .destroy_semaphore(self.image_available_semaphores[i], None);
-                self.device
-                    .destroy_semaphore(self.render_finished_semaphores[i], None);
-                self.device.destroy_fence(self.in_flight_fences[i], None);
+                device.destroy_semaphore(self.image_available_semaphores[i], None);
+                device.destroy_semaphore(self.render_finished_semaphores[i], None);
+                device.destroy_fence(self.in_flight_fences[i], None);
             }
 
-            self.device.destroy_command_pool(self.command_pool, None);
+            device.destroy_command_pool(self.command_pool, None);
 
             for &framebuffer in self.swapchain_framebuffers.iter() {
-                self.device.destroy_framebuffer(framebuffer, None);
+                device.destroy_framebuffer(framebuffer, None);
             }
 
-            self.device.destroy_pipeline(self.graphics_pipeline, None);
-            self.device
-                .destroy_pipeline_layout(self.pipeline_layout, None);
-            self.device.destroy_render_pass(self.render_pass, None);
+            device.destroy_pipeline(self.graphics_pipeline, None);
+           device .destroy_pipeline_layout(self.pipeline_layout, None);
+            device.destroy_render_pass(self.render_pass, None);
 
             for &imageview in self.swapchain_imageviews.iter() {
-                self.device.destroy_image_view(imageview, None);
+                device.destroy_image_view(imageview, None);
             }
 
             self.swapchain_loader
                 .destroy_swapchain(self.swapchain, None);
-            self.device.destroy_device(None);
+            device.destroy_device(None);
             self.surface_loader.destroy_surface(self.surface, None);
 
             if VALIDATION.is_enable {
@@ -417,7 +429,7 @@ impl VulkanApp {
                 },
                 | Event::LoopDestroyed => {
                     unsafe {
-                        self.device.device_wait_idle()
+                        self.render_context.get_device().device_wait_idle()
                             .expect("Failed to wait device idle!")
                     };
                 },
