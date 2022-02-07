@@ -10,9 +10,14 @@ use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEve
 use winit::event_loop::{EventLoop, ControlFlow};
 
 use std::ptr;
+use ash::extensions::khr::Surface;
 
 mod context;
+mod api_types;
 use crate::context::render_context::RenderContext;
+use crate::api_types::surface::SurfaceWrapper;
+use crate::api_types::device::DeviceWrapper;
+use crate::api_types::instance::InstanceWrapper;
 
 // Constants
 const WINDOW_TITLE: &'static str = "15.Hello Triangle";
@@ -27,10 +32,10 @@ struct SyncObjects {
 struct VulkanApp {
     window: winit::window::Window,
     // vulkan stuff
-    _entry: ash::Entry,
-    instance: ash::Instance,
-    surface_loader: ash::extensions::khr::Surface,
-    surface: vk::SurfaceKHR,
+    // _entry: ash::Entry,
+    // instance: ash::Instance,
+    // surface_loader: ash::extensions::khr::Surface,
+    // surface: vk::SurfaceKHR,
     debug_utils_loader: ash::extensions::ext::DebugUtils,
     debug_merssager: vk::DebugUtilsMessengerEXT,
 
@@ -131,14 +136,25 @@ impl VulkanApp {
         let sync_ojbects = VulkanApp::create_sync_objects(&device);
 
         // cleanup(); the 'drop' function will take care of it.
-        let render_context = RenderContext::new(device, graphics_queue, present_queue);
+        let surface_wrapper = SurfaceWrapper::new(
+            surface_stuff.surface,
+            surface_stuff.surface_loader
+        );
+        let render_context = RenderContext::new(
+            entry,
+            instance,
+            device,
+            Some(surface_wrapper),
+            graphics_queue,
+            present_queue);
+
         VulkanApp {
             window,
             // vulkan stuff
-            _entry: entry,
-            instance,
-            surface: surface_stuff.surface,
-            surface_loader: surface_stuff.surface_loader,
+            // _entry: entry,
+            // instance,
+            // surface: surface_stuff.surface,
+            // surface_loader: surface_stuff.surface_loader,
             debug_utils_loader,
             debug_merssager,
 
@@ -381,14 +397,15 @@ impl Drop for VulkanApp {
 
             self.swapchain_loader
                 .destroy_swapchain(self.swapchain, None);
-            device.destroy_device(None);
-            self.surface_loader.destroy_surface(self.surface, None);
+            // device.destroy_device(None);
+            // self.surface_loader.destroy_surface(self.surface, None);
 
             if VALIDATION.is_enable {
                 self.debug_utils_loader
                     .destroy_debug_utils_messenger(self.debug_merssager, None);
             }
-            self.instance.destroy_instance(None);
+            // self.render_context.get_instance().destroy_instance(None);
+            // self.instance.destroy_instance(None);
         }
     }
 }
