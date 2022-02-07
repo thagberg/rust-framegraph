@@ -16,8 +16,8 @@ impl SurfaceWrapper {
         }
     }
 
-    pub fn get_surface(&self) -> &vk::SurfaceKHR {
-        &self.surface
+    pub fn get_surface(&self) -> vk::SurfaceKHR {
+        self.surface
     }
 
     pub fn get_loader(&self) -> &ash::extensions::khr::Surface {
