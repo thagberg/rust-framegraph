@@ -1,6 +1,7 @@
 use std::ptr::drop_in_place;
 use std::thread::current;
 use std::ffi::CStr;
+use std::ffi::CString;
 use ash::vk;
 use ash::vk::SwapchainImageUsageFlagsANDROID;
 
@@ -40,7 +41,7 @@ fn get_queue_family_indices(
     surface: &Option<SurfaceWrapper>
 ) -> QueueFamilies {
     let queue_families = unsafe {
-        instance.get().get_physical_device_queue_family_properties(physical_device);
+        instance.get().get_physical_device_queue_family_properties(physical_device)
     };
 
     let mut queue_family_indices = QueueFamilies {graphics: None, compute: None, present: None};
@@ -63,7 +64,7 @@ fn get_queue_family_indices(
                             physical_device,
                             current_index,
                             surface.get_surface()
-                        )
+                        ).is_ok()
                     }
                 },
                 None => {
@@ -71,7 +72,7 @@ fn get_queue_family_indices(
                 }
             }
         };
-        if is_present_supported.is_ok() {
+        if is_present_supported {
             queue_family_indices.present = Some(current_index);
         }
 
@@ -90,18 +91,23 @@ fn get_queue_family_indices(
 pub fn are_extensions_supported(
     instance: &InstanceWrapper,
     physical_device: vk::PhysicalDevice,
-    required_extensions: &[str]
+    required_extensions: &[&str]
 ) -> bool {
-    let available_extensions: Vec<CStr> = unsafe {
-        instance.get().enumerate_device_extension_properties(physical_device)
-            .expect("Failed to enumerate extensions from physical device.")
-            .iter()
-            .map(|extension| {
-                let raw_string = CStr::from_ptr(extension.extension_name.as_ptr());
-                raw_string.to_str().expect("Failed to retrieve extension name")
-            })
-            .collect()
+    // let available_extensions: Vec<&CStr> = unsafe {
+    let mut extension_properties;
+    let mut available_extensions = unsafe {
+        extension_properties = instance.get().enumerate_device_extension_properties(physical_device)
+        .expect("Failed to enumerate extensions from physical device.");
+
+        extension_properties
+        .iter()
+        .map(|extension| {
+            let raw_string = CStr::from_ptr(extension.extension_name.as_ptr());
+            raw_string.to_str().expect("Failed to retrieve extension name")
+        })
+        // .collect()
     };
+
 
     for extension in required_extensions.iter() {
         let found = available_extensions.find(|available| {
@@ -120,7 +126,7 @@ fn is_physical_device_suitable(
     physical_device: vk::PhysicalDevice,
     instance: &InstanceWrapper,
     surface: &Option<SurfaceWrapper>,
-    required_extensions: &[str] ) -> bool {
+    required_extensions: &[&str] ) -> bool {
 
     let device_features = unsafe {
         instance.get().get_physical_device_features(physical_device)
@@ -138,7 +144,7 @@ fn is_physical_device_suitable(
 fn pick_physical_device(
     instance: &InstanceWrapper,
     surface: &Option<SurfaceWrapper>,
-    required_extensions: &[str]) -> Result<PhysicalDeviceWrapper, &str> {
+    required_extensions: &[&str]) -> Result<PhysicalDeviceWrapper, &'static str> {
 
     let devices = unsafe {
         instance.get()
@@ -158,7 +164,7 @@ fn pick_physical_device(
     });
 
     match result {
-        Some(physical_device) => Ok(PhysicalDeviceWrapper::new(physical_device)),
+        Some(physical_device) => Ok(PhysicalDeviceWrapper::new(*physical_device)),
         None => Err("No suitable device found.")
     }
 
@@ -169,10 +175,10 @@ impl RenderContext {
     pub fn new(
         entry: ash::Entry,
         instance: ash::Instance,
-        // device: ash::Device,
+        device: ash::Device,
         surface: Option<SurfaceWrapper>,
-        // graphics_queue: vk::Queue,
-        // present_queue: vk::Queue
+        graphics_queue: vk::Queue,
+        present_queue: vk::Queue
     ) -> RenderContext {
 
         let instance_wrapper = InstanceWrapper::new(instance);
@@ -184,7 +190,7 @@ impl RenderContext {
         RenderContext {
             entry,
             instance: instance_wrapper,
-            device: DeviceWrapper::new(),
+            device: DeviceWrapper::new(device),
             physical_device,
             surface,
             graphics_queue,
