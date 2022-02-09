@@ -4,26 +4,14 @@ use std::ffi::CStr;
 use std::ffi::CString;
 use ash::vk;
 use ash::vk::SwapchainImageUsageFlagsANDROID;
+use untitled::utility::share::find_queue_family;
 
 use crate::{
     InstanceWrapper,
     // PhysicalDeviceWrapper,
     DeviceWrapper,
     SurfaceWrapper};
-use crate::api_types::device::PhysicalDeviceWrapper;
-
-// type QueueFamilies = (Option<u32>, Option<u32>);
-pub struct QueueFamilies {
-    pub graphics: Option<u32>,
-    pub compute: Option<u32>,
-    pub present: Option<u32>
-}
-
-impl QueueFamilies {
-    fn is_complete(&self) -> bool {
-        self.graphics.is_some() && self.compute.is_some() && self.present.is_some()
-    }
-}
+use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper};
 
 pub struct RenderContext {
     graphics_queue: vk::Queue,
@@ -137,8 +125,16 @@ fn is_physical_device_suitable(
         physical_device,
         required_extensions);
 
-    queue_families.is_complete() && extensions_supported
-
+    match surface {
+        Some(surface) => {
+            queue_families.is_complete() && extensions_supported
+        },
+        None => {
+            queue_families.graphics.is_some() &&
+                queue_families.compute.is_some() &&
+                extensions_supported
+        }
+    }
 }
 
 fn pick_physical_device(
@@ -170,6 +166,69 @@ fn pick_physical_device(
 
 }
 
+fn create_logical_device(
+    instance: &InstanceWrapper,
+    physical_device: &PhysicalDeviceWrapper,
+    surface: &Option<SurfaceWrapper>
+) -> DeviceWrapper {
+    let queue_family_indices = get_queue_family_indices(
+        instance,
+        physical_device.get(),
+        surface);
+
+    // queue family indices could be overlapping (i.e. graphics and compute on the same family)
+    // thus we want to ensure we're only creating one queue per family
+    // Investigate explicitly creating separate queues even if one family supports all
+    use std::collections::HashSet;
+    let mut unique_family_indices = HashSet::new();
+    unique_family_indices.insert(queue_family_indices.graphics.unwrap());
+    unique_family_indices.insert(queue_family_indices.compute.unwrap());
+    if queue_family_indices.present.is_some() {
+        unique_family_indices.insert(queue_family_indices.present.unwrap());
+    }
+
+    let priorities = [1.0_f32];
+    let mut queue_create_infos = vec![];
+    for &family_index in unique_family_indices.iter() {
+        let queue_create_info = vk::DeviceQueueCreateInfo {
+            s_type: vk::StructureType::DEVICE_QUEUE_CREATE_INFO,
+            p_next: std::ptr::null(),
+            flags: vk::DeviceQueueCreateFlags::empty(),
+            queue_family_index: family_index,
+            p_queue_priorities: priorities.as_ptr(),
+            queue_count: priorities.len() as u32
+        };
+        queue_create_infos.push(queue_create_info);
+    }
+
+    let physical_device_features = vk::PhysicalDeviceFeatures {
+        ..Default::default()
+    };
+
+    // TODO: implement layers and extensions
+    let device_create_info = vk::DeviceCreateInfo {
+        s_type: vk::StructureType::DEVICE_CREATE_INFO,
+        p_next: std::ptr::null(),
+        flags: vk::DeviceCreateFlags::empty(),
+        queue_create_info_count: queue_create_infos.len() as u32,
+        p_queue_create_infos: queue_create_infos.as_ptr(),
+
+        enabled_layer_count: 0,
+        pp_enabled_layer_names: std::ptr::null(),
+        enabled_extension_count: 0,
+        pp_enabled_extension_names: std::ptr::null(),
+
+        p_enabled_features: &physical_device_features
+    };
+
+    let device = unsafe {
+        instance.get().create_device(physical_device.get(), &device_create_info, None)
+            .expect("Failed to create logical device.")
+    };
+
+    DeviceWrapper::new(device, queue_family_indices)
+}
+
 
 impl RenderContext {
     pub fn new(
@@ -187,10 +246,16 @@ impl RenderContext {
             &surface,
             &[]).expect("Failed to select a suitable physical device.");
 
+        let logical_device = create_logical_device(
+            &instance_wrapper,
+            &physical_device,
+            &surface
+        );
+
         RenderContext {
             entry,
             instance: instance_wrapper,
-            device: DeviceWrapper::new(device),
+            device: logical_device,
             physical_device,
             surface,
             graphics_queue,
