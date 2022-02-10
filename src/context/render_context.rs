@@ -2,8 +2,10 @@ use std::ptr::drop_in_place;
 use std::thread::current;
 use std::ffi::CStr;
 use std::ffi::CString;
+use std::os::raw::c_char;
 use ash::vk;
 use ash::vk::SwapchainImageUsageFlagsANDROID;
+use winapi::um::wingdi::wglSwapMultipleBuffers;
 use untitled::utility::share::find_queue_family;
 
 use crate::{
@@ -16,7 +18,9 @@ use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper};
 pub struct RenderContext {
     graphics_queue: vk::Queue,
     present_queue: vk::Queue,
+    compute_queue: vk::Queue,
     surface: Option<SurfaceWrapper>,
+    graphics_command_pool: vk::CommandPool,
     device: DeviceWrapper,
     physical_device: PhysicalDeviceWrapper,
     instance: InstanceWrapper,
@@ -169,7 +173,9 @@ fn pick_physical_device(
 fn create_logical_device(
     instance: &InstanceWrapper,
     physical_device: &PhysicalDeviceWrapper,
-    surface: &Option<SurfaceWrapper>
+    surface: &Option<SurfaceWrapper>,
+    layers: Vec<&str>,
+    extensions: Vec<&str>
 ) -> DeviceWrapper {
     let queue_family_indices = get_queue_family_indices(
         instance,
@@ -205,6 +211,23 @@ fn create_logical_device(
         ..Default::default()
     };
 
+    // convert layer names to const char*
+    let c_layers : Vec<CString> = layers.iter().map(|layer| {
+        CString::new(*layer).expect("Failed to translate layer name to C String")
+    }).collect();
+    let p_layers: Vec<*const c_char> = c_layers.iter().map(|c_layer| {
+        c_layer.as_ptr()
+    }).collect();
+
+    // do the same for extensions
+    let c_extensions : Vec<CString> = extensions.iter().map(|extension| {
+        CString::new(*extension).expect("Failed to translate extension name to C String")
+    }).collect();
+    let p_extensions: Vec<*const c_char> = c_extensions.iter().map(|c_extension| {
+        c_extension.as_ptr()
+    }).collect();
+
+
     // TODO: implement layers and extensions
     let device_create_info = vk::DeviceCreateInfo {
         s_type: vk::StructureType::DEVICE_CREATE_INFO,
@@ -213,10 +236,10 @@ fn create_logical_device(
         queue_create_info_count: queue_create_infos.len() as u32,
         p_queue_create_infos: queue_create_infos.as_ptr(),
 
-        enabled_layer_count: 0,
-        pp_enabled_layer_names: std::ptr::null(),
-        enabled_extension_count: 0,
-        pp_enabled_extension_names: std::ptr::null(),
+        enabled_layer_count: layers.len() as u32,
+        pp_enabled_layer_names: p_layers.as_ptr(),
+        enabled_extension_count: extensions.len() as u32,
+        pp_enabled_extension_names: p_extensions.as_ptr(),
 
         p_enabled_features: &physical_device_features
     };
@@ -229,16 +252,33 @@ fn create_logical_device(
     DeviceWrapper::new(device, queue_family_indices)
 }
 
+fn create_command_pool(
+    device: &DeviceWrapper,
+    queue_family_index: u32
+) -> vk::CommandPool {
+    let create_info = vk::CommandPoolCreateInfo {
+        s_type: vk::StructureType::COMMAND_POOL_CREATE_INFO,
+        p_next: std::ptr::null(),
+        flags: vk::CommandPoolCreateFlags::empty(),
+        queue_family_index
+    };
+
+    unsafe {
+        device.get().create_command_pool(&create_info, None)
+            .expect("Failed to create graphics command pool.")
+    }
+}
+
 
 impl RenderContext {
     pub fn new(
         entry: ash::Entry,
         instance: ash::Instance,
-        device: ash::Device,
-        surface: Option<SurfaceWrapper>,
-        graphics_queue: vk::Queue,
-        present_queue: vk::Queue
+        surface: Option<SurfaceWrapper>
     ) -> RenderContext {
+        let layers = vec!("VK_LAYER_KHRONOS_validation");
+        let extensions = vec!("VK_KHR_swapchain");
+        // let extensions = vec!(ash::extensions::khr::Swapchain::name().as_ptr());
 
         let instance_wrapper = InstanceWrapper::new(instance);
         let physical_device = pick_physical_device(
@@ -249,8 +289,30 @@ impl RenderContext {
         let logical_device = create_logical_device(
             &instance_wrapper,
             &physical_device,
-            &surface
+            &surface,
+            layers,
+            extensions
         );
+
+        let graphics_queue = unsafe {
+            logical_device.get().get_device_queue(
+                logical_device.get_queue_family_indices().graphics.unwrap(),
+                0)
+        };
+        let present_queue = unsafe {
+            logical_device.get().get_device_queue(
+                logical_device.get_queue_family_indices().present.unwrap(),
+                0)
+        };
+        let compute_queue = unsafe {
+            logical_device.get().get_device_queue(
+                logical_device.get_queue_family_indices().compute.unwrap(),
+                0)
+        };
+
+        let graphics_command_pool = create_command_pool(
+            &logical_device,
+            logical_device.get_queue_family_indices().graphics.unwrap());
 
         RenderContext {
             entry,
@@ -259,7 +321,9 @@ impl RenderContext {
             physical_device,
             surface,
             graphics_queue,
-            present_queue
+            present_queue,
+            compute_queue,
+            graphics_command_pool
         }
     }
 
@@ -269,6 +333,8 @@ impl RenderContext {
 
     pub fn get_device(&self) -> &ash::Device { &self.device.get() }
 
+    pub fn get_physical_device(&self) -> vk::PhysicalDevice { self.physical_device.get() }
+
     pub fn get_graphics_queue(&self) -> vk::Queue {
         self.graphics_queue
     }
@@ -276,4 +342,6 @@ impl RenderContext {
     pub fn get_present_queue(&self) -> vk::Queue {
         self.present_queue
     }
+
+    pub fn get_graphics_command_pool(&self) -> vk::CommandPool { self.graphics_command_pool }
 }

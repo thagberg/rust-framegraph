@@ -59,7 +59,7 @@ struct VulkanApp {
     pipeline_layout: vk::PipelineLayout,
     graphics_pipeline: vk::Pipeline,
 
-    command_pool: vk::CommandPool,
+    // command_pool: vk::CommandPool,
     command_buffers: Vec<vk::CommandBuffer>,
 
     image_available_semaphores: Vec<vk::Semaphore>,
@@ -86,67 +86,72 @@ impl VulkanApp {
             share::create_surface(&entry, &instance, &window, WINDOW_WIDTH, WINDOW_HEIGHT);
         let (debug_utils_loader, debug_merssager) =
             setup_debug_utils(VALIDATION.is_enable, &entry, &instance);
-        let physical_device =
-            share::pick_physical_device(&instance, &surface_stuff, &DEVICE_EXTENSIONS);
-        let (device, family_indices) = share::create_logical_device(
-            &instance,
-            physical_device,
-            &VALIDATION,
-            &DEVICE_EXTENSIONS,
-            &surface_stuff,
+        // let physical_device =
+        //     share::pick_physical_device(&instance, &surface_stuff, &DEVICE_EXTENSIONS);
+        // let (device, family_indices) = share::create_logical_device(
+        //     &instance,
+        //     physical_device,
+        //     &VALIDATION,
+        //     &DEVICE_EXTENSIONS,
+        //     &surface_stuff,
+        // );
+        // let graphics_queue =
+        //     unsafe { device.get_device_queue(family_indices.graphics_family.unwrap(), 0) };
+        // let present_queue =
+        //     unsafe { device.get_device_queue(family_indices.present_family.unwrap(), 0) };
+
+        let surface_wrapper = SurfaceWrapper::new(
+            surface_stuff.surface,
+            surface_stuff.surface_loader
         );
-        let graphics_queue =
-            unsafe { device.get_device_queue(family_indices.graphics_family.unwrap(), 0) };
-        let present_queue =
-            unsafe { device.get_device_queue(family_indices.present_family.unwrap(), 0) };
+
+        let render_context = RenderContext::new(
+            entry,
+            instance,
+            Some(surface_wrapper));
+
         let swapchain_stuff = share::create_swapchain(
             &instance,
-            &device,
-            physical_device,
+            // &device,
+            render_context.get_device(),
+            render_context.get_physical_device(),
             &window,
             &surface_stuff,
             &family_indices,
         );
         let swapchain_imageviews = share::v1::create_image_views(
-            &device,
+            render_context.get_device(),
             swapchain_stuff.swapchain_format,
             &swapchain_stuff.swapchain_images,
         );
-        let render_pass = VulkanApp::create_render_pass(&device, swapchain_stuff.swapchain_format);
+        let render_pass = VulkanApp::create_render_pass(
+            render_context.get_device(),
+            swapchain_stuff.swapchain_format);
         let (graphics_pipeline, pipeline_layout) = share::v1::create_graphics_pipeline(
-            &device,
+            render_context.get_device(),
             render_pass,
             swapchain_stuff.swapchain_extent,
         );
         let swapchain_framebuffers = share::v1::create_framebuffers(
-            &device,
+            render_context.get_device(),
             render_pass,
             &swapchain_imageviews,
             swapchain_stuff.swapchain_extent,
         );
-        let command_pool = share::v1::create_command_pool(&device, &family_indices);
+        // let command_pool = share::v1::create_command_pool(
+        //     render_context.get_device(),
+        //     render_context);
         let command_buffers = share::v1::create_command_buffers(
-            &device,
-            command_pool,
+            render_context.get_device(),
+            render_context.get_graphics_command_pool(),
             graphics_pipeline,
             &swapchain_framebuffers,
             render_pass,
             swapchain_stuff.swapchain_extent,
         );
-        let sync_ojbects = VulkanApp::create_sync_objects(&device);
+        let sync_ojbects = VulkanApp::create_sync_objects(render_context.get_device());
 
         // cleanup(); the 'drop' function will take care of it.
-        let surface_wrapper = SurfaceWrapper::new(
-            surface_stuff.surface,
-            surface_stuff.surface_loader
-        );
-        let render_context = RenderContext::new(
-            entry,
-            instance,
-            device,
-            Some(surface_wrapper),
-            graphics_queue,
-            present_queue);
 
         VulkanApp {
             window,
@@ -177,7 +182,7 @@ impl VulkanApp {
             render_pass,
             graphics_pipeline,
 
-            command_pool,
+            // command_pool,
             command_buffers,
 
             image_available_semaphores: sync_ojbects.image_available_semaphores,
