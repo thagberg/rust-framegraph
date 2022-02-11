@@ -108,17 +108,19 @@ impl VulkanApp {
         let render_context = RenderContext::new(
             entry,
             instance,
-            Some(surface_wrapper));
+            Some(surface_wrapper),
+            &window);
 
-        let swapchain_stuff = share::create_swapchain(
-            &instance,
-            // &device,
-            render_context.get_device(),
-            render_context.get_physical_device(),
-            &window,
-            &surface_stuff,
-            &family_indices,
-        );
+
+        // let swapchain_stuff = share::create_swapchain(
+        //     &instance,
+        //     // &device,
+        //     render_context.get_device(),
+        //     render_context.get_physical_device(),
+        //     &window,
+        //     &surface_stuff,
+        //     &family_indices,
+        // );
         let swapchain_imageviews = share::v1::create_image_views(
             render_context.get_device(),
             swapchain_stuff.swapchain_format,

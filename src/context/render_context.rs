@@ -1,10 +1,10 @@
-use std::ptr::drop_in_place;
+use std::ptr::{drop_in_place, swap};
 use std::thread::current;
 use std::ffi::CStr;
 use std::ffi::CString;
 use std::os::raw::c_char;
 use ash::vk;
-use ash::vk::SwapchainImageUsageFlagsANDROID;
+use ash::vk::{Image, SwapchainImageUsageFlagsANDROID};
 use winapi::um::wingdi::wglSwapMultipleBuffers;
 use untitled::utility::share::find_queue_family;
 
@@ -14,11 +14,15 @@ use crate::{
     DeviceWrapper,
     SurfaceWrapper};
 use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper};
+use crate::api_types::swapchain::SwapchainWrapper;
+use crate::api_types::image::ImageWrapper;
+use crate::api_types::surface::SurfaceCapabilities;
 
 pub struct RenderContext {
     graphics_queue: vk::Queue,
     present_queue: vk::Queue,
     compute_queue: vk::Queue,
+    swapchain: Option<SwapchainWrapper>,
     surface: Option<SurfaceWrapper>,
     graphics_command_pool: vk::CommandPool,
     device: DeviceWrapper,
@@ -269,12 +273,116 @@ fn create_command_pool(
     }
 }
 
+fn create_swapchain(
+    instance: &InstanceWrapper,
+    device: &DeviceWrapper,
+    physical_device: &PhysicalDeviceWrapper,
+    surface: &SurfaceWrapper,
+    window: &winit::window::Window
+) -> SwapchainWrapper {
+    let swapchain_capabilities = surface.get_surface_capabilities(physical_device, surface);
+
+    // TODO: may want to make format and color space customizable
+    let swapchain_format = {
+        for format in swapchain_capabilities.formats {
+            if format.format == vk::Format::R8G8B8A8_SRGB &&
+                format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR {
+                format.clone()
+            }
+        }
+        // TODO: pick better than just the first format available
+        swapchain_capabilities.formats.first().unwrap().clone()
+    };
+
+    let swapchain_present_mode = {
+        for present_mode in swapchain_capabilities.present_modes {
+            if present_mode == vk::PresentModeKHR::IMMEDIATE {
+                present_mode
+            }
+        }
+        vk::PresentModeKHR::FIFO
+    };
+
+    let swapchain_extent = {
+        use num::clamp;
+        let window_size = window.inner_size();
+        let caps = &swapchain_capabilities.capabilities;
+        vk::Extent2D {
+            width: clamp(
+                window_size.width,
+                caps.min_image_extent.width,
+                caps.max_image_extent.width
+            ),
+            height: clamp(
+                window_size.height,
+                caps.min_image_extent.height,
+                caps.max_image_extent.height
+            )
+        }
+    };
+
+    // just assume double-buffering for now
+    let image_count = 2;
+
+    // TODO: using exclusive mode right now but might want to make this concurrent
+    let image_sharing_mode = vk::SharingMode::EXCLUSIVE;
+
+    let create_info = vk::SwapchainCreateInfoKHR {
+        s_type: vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR,
+        p_next: std::ptr::null(),
+        flags: vk::SwapchainCreateFlagsKHR::empty(),
+        surface: surface.get_surface(),
+        min_image_count: image_count,
+        image_color_space: swapchain_format.color_space,
+        image_format: swapchain_format.format,
+        image_extent: swapchain_extent,
+        image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
+        image_sharing_mode,
+        queue_family_index_count: 0,
+        p_queue_family_indices: std::ptr::null(),
+        pre_transform: swapchain_capabilities.capabilities.current_transform,
+        composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
+        present_mode: swapchain_present_mode,
+        clipped: vk::TRUE,
+        old_swapchain: vk::SwapchainKHR::null(),
+        image_array_layers: 1
+    };
+
+    let swapchain_loader = ash::extensions::khr::Swapchain::new(
+        instance.get(),
+        device.get());
+    let swapchain = unsafe {
+        swapchain_loader
+            .create_swapchain(&create_info, None)
+            .expect("Failed to create swapchain.")
+    };
+
+    let mut swapchain_images = unsafe {
+        swapchain_loader
+            .get_swapchain_images(swapchain)
+            .expect("Failed to get swapchain images.")
+            .iter()
+            .map(|image| {
+                // image is just a handle type
+                ImageWrapper::new(image.clone())
+            })
+            .collect()
+    };
+
+    SwapchainWrapper::new(
+        swapchain_loader,
+        swapchain,
+        swapchain_images,
+        swapchain_format.format,
+        swapchain_extent)
+}
 
 impl RenderContext {
     pub fn new(
         entry: ash::Entry,
         instance: ash::Instance,
-        surface: Option<SurfaceWrapper>
+        surface: Option<SurfaceWrapper>,
+        window: &winit::window::Window
     ) -> RenderContext {
         let layers = vec!("VK_LAYER_KHRONOS_validation");
         let extensions = vec!("VK_KHR_swapchain");
@@ -314,6 +422,19 @@ impl RenderContext {
             &logical_device,
             logical_device.get_queue_family_indices().graphics.unwrap());
 
+        let swapchain = {
+            if surface.is_some() {
+                Some(create_swapchain(
+                    &instance_wrapper,
+                    &logical_device,
+                    &physical_device,
+                    &surface.unwrap(),
+                    window))
+            } else {
+                None
+            }
+        };
+
         RenderContext {
             entry,
             instance: instance_wrapper,
@@ -323,7 +444,8 @@ impl RenderContext {
             graphics_queue,
             present_queue,
             compute_queue,
-            graphics_command_pool
+            graphics_command_pool,
+            swapchain
         }
     }
 
@@ -344,4 +466,6 @@ impl RenderContext {
     }
 
     pub fn get_graphics_command_pool(&self) -> vk::CommandPool { self.graphics_command_pool }
+
+    pub fn get_swapchain(&self) -> &Option<SwapchainWrapper> { &self.swapchain }
 }
