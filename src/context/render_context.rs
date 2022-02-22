@@ -4,7 +4,7 @@ use std::ffi::CStr;
 use std::ffi::CString;
 use std::os::raw::c_char;
 use ash::vk;
-use ash::vk::{Image, SwapchainImageUsageFlagsANDROID};
+use ash::vk::{Image, ImageView, PresentModeKHR, SwapchainImageUsageFlagsANDROID};
 use winapi::um::wingdi::wglSwapMultipleBuffers;
 use untitled::utility::share::find_queue_family;
 
@@ -23,6 +23,7 @@ pub struct RenderContext {
     present_queue: vk::Queue,
     compute_queue: vk::Queue,
     swapchain: Option<SwapchainWrapper>,
+    swapchain_image_views: Option<Vec<vk::ImageView>>,
     surface: Option<SurfaceWrapper>,
     graphics_command_pool: vk::CommandPool,
     device: DeviceWrapper,
@@ -284,23 +285,38 @@ fn create_swapchain(
 
     // TODO: may want to make format and color space customizable
     let swapchain_format = {
-        for format in swapchain_capabilities.formats {
+        let mut chosen_format: Option<vk::SurfaceFormatKHR> = None;
+        for format in &swapchain_capabilities.formats {
             if format.format == vk::Format::R8G8B8A8_SRGB &&
                 format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR {
-                format.clone()
+                // break format.clone();
+                chosen_format = Some(format.clone());
+                break;
             }
         }
-        // TODO: pick better than just the first format available
-        swapchain_capabilities.formats.first().unwrap().clone()
+
+        if chosen_format.is_none() {
+            // TODO: pick better than just the first format available
+            chosen_format = Some(swapchain_capabilities.formats.first().unwrap().clone());
+        }
+
+        chosen_format.unwrap()
     };
 
     let swapchain_present_mode = {
+        let mut chosen_mode: Option<PresentModeKHR> = None;
         for present_mode in swapchain_capabilities.present_modes {
             if present_mode == vk::PresentModeKHR::IMMEDIATE {
-                present_mode
+                chosen_mode = Some(present_mode);
+                break;
             }
         }
-        vk::PresentModeKHR::FIFO
+
+        if chosen_mode.is_none() {
+            chosen_mode = Some(vk::PresentModeKHR::FIFO);
+        }
+
+        chosen_mode.unwrap()
     };
 
     let swapchain_extent = {
@@ -377,6 +393,42 @@ fn create_swapchain(
         swapchain_extent)
 }
 
+fn create_image_view(
+    device: &DeviceWrapper,
+    image: &ImageWrapper,
+    format: vk::Format,
+    image_view_flags: vk::ImageViewCreateFlags,
+    aspect_flags: vk::ImageAspectFlags,
+    mip_levels: u32
+) -> vk::ImageView {
+    let create_info = vk::ImageViewCreateInfo {
+        s_type: vk::StructureType::IMAGE_VIEW_CREATE_INFO,
+        p_next: std::ptr::null(),
+        flags: image_view_flags,
+        view_type: vk::ImageViewType::TYPE_2D,
+        format,
+        components: vk::ComponentMapping {
+            r: vk::ComponentSwizzle::IDENTITY,
+            g: vk::ComponentSwizzle::IDENTITY,
+            b: vk::ComponentSwizzle::IDENTITY,
+            a: vk::ComponentSwizzle::IDENTITY
+        },
+        subresource_range: vk::ImageSubresourceRange {
+            aspect_mask: aspect_flags,
+            base_mip_level: 0,
+            level_count: mip_levels,
+            base_array_layer: 0,
+            layer_count: 1
+        },
+        image: image.get()
+    };
+
+    unsafe {
+        device.get().create_image_view(&create_info, None)
+            .expect("Failed to create image view.")
+    }
+}
+
 impl RenderContext {
     pub fn new(
         entry: ash::Entry,
@@ -428,10 +480,29 @@ impl RenderContext {
                     &instance_wrapper,
                     &logical_device,
                     &physical_device,
-                    &surface.unwrap(),
+                    &surface.as_ref().unwrap(),
                     window))
             } else {
                 None
+            }
+        };
+
+        let swapchain_image_views: Option<Vec<vk::ImageView>> = {
+            match &swapchain {
+                Some(swapchain) => {
+                    Some(swapchain.get_images().iter()
+                        .map(|image| {
+                            create_image_view(
+                                &logical_device,
+                                image,
+                                swapchain.get_format(),
+                                vk::ImageViewCreateFlags::empty(),
+                                vk::ImageAspectFlags::COLOR,
+                                1)
+                        })
+                        .collect())
+                },
+                _ => { None }
             }
         };
 
@@ -445,7 +516,8 @@ impl RenderContext {
             present_queue,
             compute_queue,
             graphics_command_pool,
-            swapchain
+            swapchain,
+            swapchain_image_views
         }
     }
 
@@ -468,4 +540,20 @@ impl RenderContext {
     pub fn get_graphics_command_pool(&self) -> vk::CommandPool { self.graphics_command_pool }
 
     pub fn get_swapchain(&self) -> &Option<SwapchainWrapper> { &self.swapchain }
+
+    pub fn get_swapchain_image_views(&self) -> &Option<Vec<vk::ImageView>> { &self.swapchain_image_views }
+}
+
+impl Drop for RenderContext {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.get().destroy_command_pool(self.graphics_command_pool, None);
+
+            if self.swapchain_image_views.is_some() {
+                for &imageview in self.swapchain_image_views.as_ref().unwrap().iter() {
+                    self.device.get().destroy_image_view(imageview, None);
+                }
+            }
+        }
+    }
 }

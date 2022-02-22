@@ -26,4 +26,22 @@ impl SwapchainWrapper {
             extent
         }
     }
+
+    pub fn get(&self) -> vk::SwapchainKHR { self.swapchain }
+
+    pub fn get_images(&self) -> &Vec<ImageWrapper> { &self.images }
+
+    pub fn get_format(&self) -> vk::Format { self.format }
+
+    pub fn get_extent(&self) -> vk::Extent2D { self.extent }
+
+    pub fn get_loader(&self) -> &ash::extensions::khr::Swapchain { &self.loader }
+}
+
+impl Drop for SwapchainWrapper {
+    fn drop(&mut self) {
+        unsafe {
+            self.loader.destroy_swapchain(self.swapchain, None);
+        }
+    }
 }

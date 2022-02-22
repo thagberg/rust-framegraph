@@ -1,3 +1,4 @@
+use std::mem::swap;
 use untitled::{
     utility, // the mod define some fixed functions that have been learned before.
     utility::constants::*,
@@ -39,7 +40,7 @@ struct VulkanApp {
     debug_utils_loader: ash::extensions::ext::DebugUtils,
     debug_merssager: vk::DebugUtilsMessengerEXT,
 
-    _physical_device: vk::PhysicalDevice,
+    // _physical_device: vk::PhysicalDevice,
 
     render_context: RenderContext,
     // device: ash::Device,
@@ -47,12 +48,12 @@ struct VulkanApp {
     // graphics_queue: vk::Queue,
     // present_queue: vk::Queue,
 
-    swapchain_loader: ash::extensions::khr::Swapchain,
-    swapchain: vk::SwapchainKHR,
-    _swapchain_images: Vec<vk::Image>,
-    _swapchain_format: vk::Format,
-    _swapchain_extent: vk::Extent2D,
-    swapchain_imageviews: Vec<vk::ImageView>,
+    // swapchain_loader: ash::extensions::khr::Swapchain,
+    // swapchain: vk::SwapchainKHR,
+    // _swapchain_images: Vec<vk::Image>,
+    // _swapchain_format: vk::Format,
+    // _swapchain_extent: vk::Extent2D,
+    // swapchain_imageviews: Vec<vk::ImageView>,
     swapchain_framebuffers: Vec<vk::Framebuffer>,
 
     render_pass: vk::RenderPass,
@@ -121,24 +122,32 @@ impl VulkanApp {
         //     &surface_stuff,
         //     &family_indices,
         // );
-        let swapchain_imageviews = share::v1::create_image_views(
-            render_context.get_device(),
-            swapchain_stuff.swapchain_format,
-            &swapchain_stuff.swapchain_images,
-        );
+        // let swapchain_imageviews = share::v1::create_image_views(
+        //     render_context.get_device(),
+        //     swapchain_stuff.swapchain_format,
+        //     &swapchain_stuff.swapchain_images,
+        // );
+        assert!(render_context.get_swapchain().is_some(), "Can't continue without valid swapchain");
+        let swapchain = &render_context.get_swapchain().as_ref().unwrap();
+        assert!(render_context.get_swapchain_image_views().is_some(), "Can't continue without image views");
+        let image_views = &render_context.get_swapchain_image_views().as_ref().unwrap();
+
         let render_pass = VulkanApp::create_render_pass(
             render_context.get_device(),
-            swapchain_stuff.swapchain_format);
+            swapchain.get_format());
+        // swapchain_stuff.swapchain_format);
         let (graphics_pipeline, pipeline_layout) = share::v1::create_graphics_pipeline(
             render_context.get_device(),
             render_pass,
-            swapchain_stuff.swapchain_extent,
+            swapchain.get_extent()
+            // swapchain_stuff.swapchain_extent,
         );
         let swapchain_framebuffers = share::v1::create_framebuffers(
             render_context.get_device(),
             render_pass,
-            &swapchain_imageviews,
-            swapchain_stuff.swapchain_extent,
+            image_views,
+            // &swapchain_imageviews,
+            swapchain.get_extent(),
         );
         // let command_pool = share::v1::create_command_pool(
         //     render_context.get_device(),
@@ -149,7 +158,7 @@ impl VulkanApp {
             graphics_pipeline,
             &swapchain_framebuffers,
             render_pass,
-            swapchain_stuff.swapchain_extent,
+            swapchain.get_extent(),
         );
         let sync_ojbects = VulkanApp::create_sync_objects(render_context.get_device());
 
@@ -165,19 +174,19 @@ impl VulkanApp {
             debug_utils_loader,
             debug_merssager,
 
-            _physical_device: physical_device,
+            // _physical_device: physical_device,
             render_context,
             // device,
             //
             // graphics_queue,
             // present_queue,
 
-            swapchain_loader: swapchain_stuff.swapchain_loader,
-            swapchain: swapchain_stuff.swapchain,
-            _swapchain_format: swapchain_stuff.swapchain_format,
-            _swapchain_images: swapchain_stuff.swapchain_images,
-            _swapchain_extent: swapchain_stuff.swapchain_extent,
-            swapchain_imageviews,
+            // swapchain_loader: swapchain_stuff.swapchain_loader,
+            // swapchain: swapchain_stuff.swapchain,
+            // _swapchain_format: swapchain_stuff.swapchain_format,
+            // _swapchain_images: swapchain_stuff.swapchain_images,
+            // _swapchain_extent: swapchain_stuff.swapchain_extent,
+            // swapchain_imageviews,
             swapchain_framebuffers,
 
             pipeline_layout,
@@ -203,9 +212,11 @@ impl VulkanApp {
                 .wait_for_fences(&wait_fences, true, std::u64::MAX)
                 .expect("Failed to wait for Fence!");
 
-            self.swapchain_loader
+            self.render_context.get_swapchain().as_ref().unwrap().get_loader()
+            // self.swapchain_loader
                 .acquire_next_image(
-                    self.swapchain,
+                    // self.swapchain,
+                    self.render_context.get_swapchain().as_ref().unwrap().get(),
                     std::u64::MAX,
                     self.image_available_semaphores[self.current_frame],
                     vk::Fence::null(),
@@ -246,7 +257,7 @@ impl VulkanApp {
                 .expect("Failed to execute queue submit.");
         }
 
-        let swapchains = [self.swapchain];
+        let swapchains = [self.render_context.get_swapchain().as_ref().unwrap().get()];
 
         let present_info = vk::PresentInfoKHR {
             s_type: vk::StructureType::PRESENT_INFO_KHR,
@@ -260,7 +271,8 @@ impl VulkanApp {
         };
 
         unsafe {
-            self.swapchain_loader
+            // self.swapchain_loader
+            self.render_context.get_swapchain().as_ref().unwrap().get_loader()
                 // .queue_present(self.present_queue, &present_info)
                 .queue_present(
                     self.render_context.get_present_queue(),
@@ -388,7 +400,7 @@ impl Drop for VulkanApp {
                 device.destroy_fence(self.in_flight_fences[i], None);
             }
 
-            device.destroy_command_pool(self.command_pool, None);
+            // device.destroy_command_pool(self.command_pool, None);
 
             for &framebuffer in self.swapchain_framebuffers.iter() {
                 device.destroy_framebuffer(framebuffer, None);
@@ -398,12 +410,12 @@ impl Drop for VulkanApp {
            device .destroy_pipeline_layout(self.pipeline_layout, None);
             device.destroy_render_pass(self.render_pass, None);
 
-            for &imageview in self.swapchain_imageviews.iter() {
-                device.destroy_image_view(imageview, None);
-            }
+            // for &imageview in self.swapchain_imageviews.iter() {
+            //     device.destroy_image_view(imageview, None);
+            // }
 
-            self.swapchain_loader
-                .destroy_swapchain(self.swapchain, None);
+            // self.swapchain_loader
+            //     .destroy_swapchain(self.swapchain, None);
             // device.destroy_device(None);
             // self.surface_loader.destroy_surface(self.surface, None);
 

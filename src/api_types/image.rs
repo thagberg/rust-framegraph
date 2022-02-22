@@ -11,4 +11,6 @@ impl ImageWrapper {
             image
         }
     }
+
+    pub fn get(&self) -> vk::Image { self.image }
 }
