@@ -75,7 +75,6 @@ impl VulkanApp {
         let window = utility::window::init_window(event_loop, WINDOW_TITLE, WINDOW_WIDTH, WINDOW_HEIGHT);
 
         // init vulkan stuff
-        // let entry = ash::Entry::new().unwrap();
         let entry = ash::Entry::linked();
         let instance = share::create_instance(
             &entry,
@@ -83,27 +82,15 @@ impl VulkanApp {
             VALIDATION.is_enable,
             &VALIDATION.required_validation_layers.to_vec(),
         );
-        let surface_stuff =
-            share::create_surface(&entry, &instance, &window, WINDOW_WIDTH, WINDOW_HEIGHT);
+        // let surface_stuff =
+        //     share::create_surface(&entry, &instance, &window, WINDOW_WIDTH, WINDOW_HEIGHT);
         let (debug_utils_loader, debug_merssager) =
             setup_debug_utils(VALIDATION.is_enable, &entry, &instance);
-        // let physical_device =
-        //     share::pick_physical_device(&instance, &surface_stuff, &DEVICE_EXTENSIONS);
-        // let (device, family_indices) = share::create_logical_device(
-        //     &instance,
-        //     physical_device,
-        //     &VALIDATION,
-        //     &DEVICE_EXTENSIONS,
-        //     &surface_stuff,
-        // );
-        // let graphics_queue =
-        //     unsafe { device.get_device_queue(family_indices.graphics_family.unwrap(), 0) };
-        // let present_queue =
-        //     unsafe { device.get_device_queue(family_indices.present_family.unwrap(), 0) };
 
         let surface_wrapper = SurfaceWrapper::new(
-            surface_stuff.surface,
-            surface_stuff.surface_loader
+            &entry,
+            &instance,
+            &window
         );
 
         let render_context = RenderContext::new(
@@ -113,20 +100,6 @@ impl VulkanApp {
             &window);
 
 
-        // let swapchain_stuff = share::create_swapchain(
-        //     &instance,
-        //     // &device,
-        //     render_context.get_device(),
-        //     render_context.get_physical_device(),
-        //     &window,
-        //     &surface_stuff,
-        //     &family_indices,
-        // );
-        // let swapchain_imageviews = share::v1::create_image_views(
-        //     render_context.get_device(),
-        //     swapchain_stuff.swapchain_format,
-        //     &swapchain_stuff.swapchain_images,
-        // );
         assert!(render_context.get_swapchain().is_some(), "Can't continue without valid swapchain");
         let swapchain = &render_context.get_swapchain().as_ref().unwrap();
         assert!(render_context.get_swapchain_image_views().is_some(), "Can't continue without image views");
