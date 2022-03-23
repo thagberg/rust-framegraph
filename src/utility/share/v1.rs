@@ -234,12 +234,34 @@ pub fn create_graphics_pipeline(
         blend_constants: [0.0, 0.0, 0.0, 0.0],
     };
 
+    let ubo_binding = vk::DescriptorSetLayoutBinding {
+        binding: 0,
+        descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+        descriptor_count: 1,
+        stage_flags: vk::ShaderStageFlags::ALL_GRAPHICS,
+        p_immutable_samplers: std::ptr::null()
+    };
+    let ubo_bindings = [ubo_binding];
+
+    let descriptor_set_layout_create_info = vk::DescriptorSetLayoutCreateInfo {
+        s_type: vk::StructureType::DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        p_next: ptr::null(),
+        flags: vk::DescriptorSetLayoutCreateFlags::empty(),
+        binding_count: ubo_bindings.len() as u32,
+        p_bindings: ubo_bindings.as_ptr()
+    };
+    let descriptor_set_layout = unsafe {
+        device.create_descriptor_set_layout(&descriptor_set_layout_create_info, None)
+            .expect("Failed to create descriptor set layout")
+    };
+    let descriptor_set_layouts = [descriptor_set_layout];
+
     let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo {
         s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
         p_next: ptr::null(),
         flags: vk::PipelineLayoutCreateFlags::empty(),
-        set_layout_count: 0,
-        p_set_layouts: ptr::null(),
+        set_layout_count: descriptor_set_layouts.len() as u32,
+        p_set_layouts: descriptor_set_layouts.as_ptr(),
         push_constant_range_count: 0,
         p_push_constant_ranges: ptr::null(),
     };

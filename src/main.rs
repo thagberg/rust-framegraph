@@ -24,6 +24,10 @@ use crate::api_types::instance::InstanceWrapper;
 const WINDOW_TITLE: &'static str = "15.Hello Triangle";
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
+struct OffsetUBO {
+    offset: [f32; 3]
+}
+
 struct SyncObjects {
     image_available_semaphores: Vec<vk::Semaphore>,
     render_finished_semaphores: Vec<vk::Semaphore>,
