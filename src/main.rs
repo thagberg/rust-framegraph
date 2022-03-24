@@ -121,6 +121,85 @@ impl VulkanApp {
             };
         });
 
+        let ubo_binding = vk::DescriptorSetLayoutBinding {
+            binding: 0,
+            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+            descriptor_count: 1,
+            stage_flags: vk::ShaderStageFlags::ALL_GRAPHICS,
+            p_immutable_samplers: std::ptr::null()
+        };
+        let ubo_bindings = [ubo_binding];
+
+        let ubo_descriptor_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::UNIFORM_BUFFER,
+            descriptor_count: 8
+        };
+        let descriptor_pool_sizes = [ubo_descriptor_size];
+        let descriptor_pool_create = vk::DescriptorPoolCreateInfo {
+            s_type: vk::StructureType::DESCRIPTOR_POOL_CREATE_INFO,
+            p_next: ptr::null(),
+            flags: vk::DescriptorPoolCreateFlags::empty(),
+            max_sets: 8,
+            pool_size_count: descriptor_pool_sizes.len() as u32,
+            p_pool_sizes: descriptor_pool_sizes.as_ptr()
+        };
+        let descriptor_pool = unsafe {
+            render_context.get_device().create_descriptor_pool(
+                &descriptor_pool_create,
+                None)
+                .expect("Failed to create descriptor pool")
+        };
+
+        let descriptor_set_layout_create_info = vk::DescriptorSetLayoutCreateInfo {
+            s_type: vk::StructureType::DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            p_next: ptr::null(),
+            flags: vk::DescriptorSetLayoutCreateFlags::empty(),
+            binding_count: ubo_bindings.len() as u32,
+            p_bindings: ubo_bindings.as_ptr()
+        };
+        let descriptor_set_layout = unsafe {
+            render_context.get_device().create_descriptor_set_layout(
+                &descriptor_set_layout_create_info,
+                None)
+                .expect("Failed to create descriptor set layout")
+        };
+        let descriptor_set_layouts = [descriptor_set_layout];
+
+        let descriptor_set_alloc_info = vk::DescriptorSetAllocateInfo {
+            s_type: vk::StructureType::DESCRIPTOR_SET_ALLOCATE_INFO,
+            p_next: ptr::null(),
+            descriptor_pool,
+            descriptor_set_count: descriptor_set_layouts.len() as u32,
+            p_set_layouts: descriptor_set_layouts.as_ptr()
+        };
+
+        let descriptor_sets = unsafe {
+            render_context.get_device().allocate_descriptor_sets(&descriptor_set_alloc_info)
+                .expect("Failed to allocate descriptor sets")
+        };
+
+        let descriptor_buffer = vk::DescriptorBufferInfo {
+            buffer: uniform_buffer.get(),
+            offset: 0,
+            range: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize
+        };
+
+        let descriptor_write = vk::WriteDescriptorSet {
+            s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
+            p_next: ptr::null(),
+            dst_set: descriptor_sets[0],
+            dst_binding: 0,
+            dst_array_element: 0,
+            descriptor_count: 1,
+            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+            p_buffer_info: &descriptor_buffer,
+            ..Default::default()
+        };
+        let descriptor_write_sets = [descriptor_write];
+
+        unsafe {
+            render_context.get_device().update_descriptor_sets(&descriptor_write_sets, &[]);
+        }
 
         assert!(render_context.get_swapchain().is_some(), "Can't continue without valid swapchain");
         let swapchain = &render_context.get_swapchain().as_ref().unwrap();
@@ -154,6 +233,8 @@ impl VulkanApp {
             &swapchain_framebuffers,
             render_pass,
             swapchain.get_extent(),
+            &descriptor_sets,
+            pipeline_layout
         );
         let sync_ojbects = VulkanApp::create_sync_objects(render_context.get_device());
 

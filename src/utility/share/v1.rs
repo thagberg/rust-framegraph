@@ -243,6 +243,7 @@ pub fn create_graphics_pipeline(
     };
     let ubo_bindings = [ubo_binding];
 
+    // TODO: pass in ref to descriptor_set_layouts instead of creating it here
     let descriptor_set_layout_create_info = vk::DescriptorSetLayoutCreateInfo {
         s_type: vk::StructureType::DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         p_next: ptr::null(),
@@ -375,6 +376,8 @@ pub fn create_command_buffers(
     framebuffers: &Vec<vk::Framebuffer>,
     render_pass: vk::RenderPass,
     surface_extent: vk::Extent2D,
+    descriptor_sets: &[vk::DescriptorSet],
+    pipeline_layout: vk::PipelineLayout
 ) -> Vec<vk::CommandBuffer> {
     let command_buffer_allocate_info = vk::CommandBufferAllocateInfo {
         s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
@@ -434,6 +437,15 @@ pub fn create_command_buffers(
                 vk::PipelineBindPoint::GRAPHICS,
                 graphics_pipeline,
             );
+            //vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[i], 0, nullptr);
+            device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                pipeline_layout,
+                0,
+                descriptor_sets,
+                &[]
+                );
             device.cmd_draw(command_buffer, 3, 1, 0, 0);
 
             device.cmd_end_render_pass(command_buffer);
