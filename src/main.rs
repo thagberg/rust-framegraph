@@ -15,6 +15,7 @@ use ash::extensions::khr::Surface;
 
 mod context;
 mod api_types;
+mod resource;
 use crate::context::render_context::RenderContext;
 use crate::api_types::surface::SurfaceWrapper;
 use crate::api_types::device::DeviceWrapper;
@@ -97,11 +98,14 @@ impl VulkanApp {
             &window
         );
 
-        let render_context = RenderContext::new(
+        let mut render_context = RenderContext::new(
             entry,
             instance,
             Some(surface_wrapper),
             &window);
+
+        let uniform_buffer = render_context.create_uniform_buffer(
+            std::mem::size_of::<OffsetUBO>() as vk::DeviceSize);
 
 
         assert!(render_context.get_swapchain().is_some(), "Can't continue without valid swapchain");

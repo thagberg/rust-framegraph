@@ -17,6 +17,7 @@ use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper};
 use crate::api_types::swapchain::SwapchainWrapper;
 use crate::api_types::image::ImageWrapper;
 use crate::api_types::surface::SurfaceCapabilities;
+use crate::resource::resource_manager::ResourceManager;
 
 pub struct RenderContext {
     graphics_queue: vk::Queue,
@@ -26,6 +27,7 @@ pub struct RenderContext {
     swapchain_image_views: Option<Vec<vk::ImageView>>,
     surface: Option<SurfaceWrapper>,
     graphics_command_pool: vk::CommandPool,
+    resource_manager: ResourceManager,
     device: DeviceWrapper,
     physical_device: PhysicalDeviceWrapper,
     instance: InstanceWrapper,
@@ -506,6 +508,11 @@ impl RenderContext {
             }
         };
 
+        let resource_manager = ResourceManager::new(
+            instance_wrapper.get(),
+            &logical_device,
+            &physical_device);
+
         RenderContext {
             entry,
             instance: instance_wrapper,
@@ -517,7 +524,8 @@ impl RenderContext {
             compute_queue,
             graphics_command_pool,
             swapchain,
-            swapchain_image_views
+            swapchain_image_views,
+            resource_manager
         }
     }
 
@@ -542,6 +550,10 @@ impl RenderContext {
     pub fn get_swapchain(&self) -> &Option<SwapchainWrapper> { &self.swapchain }
 
     pub fn get_swapchain_image_views(&self) -> &Option<Vec<vk::ImageView>> { &self.swapchain_image_views }
+
+    pub fn create_uniform_buffer(&mut self, size: vk::DeviceSize) -> vk::Buffer {
+        self.resource_manager.create_uniform_buffer(&self.device, size)
+    }
 }
 
 impl Drop for RenderContext {
