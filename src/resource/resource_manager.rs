@@ -9,8 +9,18 @@ enum ResourceHandle {
     Persistent(u32)
 }
 
+pub struct ResolvedBuffer {
+    buffer: vk::Buffer,
+    allocation: Allocation
+}
+
 pub struct ResourceManager {
     allocator: Allocator
+}
+
+impl ResolvedBuffer {
+    pub fn get(&self) -> vk::Buffer { self.buffer }
+    pub fn get_allocation(&self) -> &Allocation { &self.allocation }
 }
 
 impl ResourceManager {
@@ -36,7 +46,7 @@ impl ResourceManager {
         &mut self,
         device: &DeviceWrapper,
         size: vk::DeviceSize
-    ) -> vk::Buffer {
+    ) -> ResolvedBuffer {
         let create_info = vk::BufferCreateInfo {
             s_type: vk::StructureType::BUFFER_CREATE_INFO,
             size,
@@ -68,6 +78,9 @@ impl ResourceManager {
                 .expect("Failed to bind uniform buffer to memory")
         };
 
-        buffer
+        ResolvedBuffer {
+            buffer,
+            allocation: buffer_alloc
+        }
     }
 }

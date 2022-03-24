@@ -1,4 +1,5 @@
 use std::mem::swap;
+use core::ffi::c_void;
 use untitled::{
     utility, // the mod define some fixed functions that have been learned before.
     utility::constants::*,
@@ -106,6 +107,19 @@ impl VulkanApp {
 
         let uniform_buffer = render_context.create_uniform_buffer(
             std::mem::size_of::<OffsetUBO>() as vk::DeviceSize);
+        let ubo_value = OffsetUBO {
+            offset: [0.2, 0.1, 0.0]
+        };
+        render_context.update_uniform_buffer(&uniform_buffer, |mapped_memory: *mut c_void| {
+            println!("Updating uniform buffer");
+            unsafe {
+                // *mapped_memory as OffsetUBO = ubo_value;
+                core::ptr::copy_nonoverlapping(
+                    &ubo_value,
+                    mapped_memory as *mut OffsetUBO,
+                    std::mem::size_of::<OffsetUBO>());
+            };
+        });
 
 
         assert!(render_context.get_swapchain().is_some(), "Can't continue without valid swapchain");
