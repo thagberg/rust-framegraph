@@ -17,6 +17,7 @@ use ash::extensions::khr::Surface;
 mod context;
 mod api_types;
 mod resource;
+mod framegraph;
 use crate::context::render_context::RenderContext;
 use crate::api_types::surface::SurfaceWrapper;
 use crate::api_types::device::DeviceWrapper;

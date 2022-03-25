@@ -4,7 +4,7 @@ use gpu_allocator::MemoryLocation;
 use crate::api_types::device::PhysicalDeviceWrapper;
 use crate::DeviceWrapper;
 
-enum ResourceHandle {
+pub enum ResourceHandle {
     Transient(u32),
     Persistent(u32)
 }
