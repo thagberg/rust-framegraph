@@ -1,7 +1,7 @@
 use ash::vk;
 use crate::resource::resource_manager::{ResourceHandle};
 
-struct PassNode {
+pub struct PassNode {
     layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
     renderpass: vk::RenderPass,
@@ -10,7 +10,7 @@ struct PassNode {
 }
 
 #[derive(Default)]
-struct PassNodeBuilder {
+pub struct PassNodeBuilder {
     layout: Option<vk::PipelineLayout>,
     pipeline: Option<vk::Pipeline>,
     renderpass: Option<vk::RenderPass>,
@@ -62,8 +62,8 @@ impl PassNodeBuilder {
                 layout: self.layout.unwrap(),
                 pipeline: self.pipeline.unwrap(),
                 renderpass: self.renderpass.unwrap(),
-                inputs: self.inputs,
-                outputs: self.outputs
+                inputs: self.inputs.take(),
+                outputs: self.outputs.take()
             })
         } else {
             Err("PassNodeBuilder was incomplete before building")

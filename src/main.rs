@@ -22,6 +22,7 @@ use crate::context::render_context::RenderContext;
 use crate::api_types::surface::SurfaceWrapper;
 use crate::api_types::device::DeviceWrapper;
 use crate::api_types::instance::InstanceWrapper;
+use crate::framegraph::pass_node::{PassNodeBuilder, PassNode};
 
 // Constants
 const WINDOW_TITLE: &'static str = "15.Hello Triangle";
@@ -224,6 +225,15 @@ impl VulkanApp {
             // &swapchain_imageviews,
             swapchain.get_extent(),
         );
+
+        // try creating a PassNode
+        let pass_node = PassNode::builder()
+            .renderpass(render_pass)
+            .layout(pipeline_layout)
+            .pipeline(graphics_pipeline)
+            .build();
+
+
         // let command_pool = share::v1::create_command_pool(
         //     render_context.get_device(),
         //     render_context);
