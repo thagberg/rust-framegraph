@@ -23,6 +23,7 @@ use crate::api_types::surface::SurfaceWrapper;
 use crate::api_types::device::DeviceWrapper;
 use crate::api_types::instance::InstanceWrapper;
 use crate::framegraph::pass_node::{PassNodeBuilder, PassNode};
+use crate::framegraph::frame_graph::{FrameGraph};
 
 // Constants
 const WINDOW_TITLE: &'static str = "15.Hello Triangle";
@@ -231,8 +232,16 @@ impl VulkanApp {
             .renderpass(render_pass)
             .layout(pipeline_layout)
             .pipeline(graphics_pipeline)
-            .build();
+            .fill_commands(|| {
+                println!("I'm doing something!");
+            })
+            .build()
+            .expect("Failed to create PassNode");
 
+        let mut framegraph = FrameGraph::new();
+        framegraph.start();
+        framegraph.add_node(&pass_node);
+        framegraph.end();
 
         // let command_pool = share::v1::create_command_pool(
         //     render_context.get_device(),

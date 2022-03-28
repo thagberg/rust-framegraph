@@ -6,7 +6,9 @@ pub struct PassNode {
     pipeline: vk::Pipeline,
     renderpass: vk::RenderPass,
     inputs: Option<Vec<ResourceHandle>>,
-    outputs: Option<Vec<ResourceHandle>>
+    outputs: Option<Vec<ResourceHandle>>,
+    // fill_callback: dyn FnMut()
+    fill_callback: fn()
 }
 
 #[derive(Default)]
@@ -15,15 +17,21 @@ pub struct PassNodeBuilder {
     pipeline: Option<vk::Pipeline>,
     renderpass: Option<vk::RenderPass>,
     inputs: Option<Vec<ResourceHandle>>,
-    outputs: Option<Vec<ResourceHandle>>
+    outputs: Option<Vec<ResourceHandle>>,
+    // fill_callback: Option<dyn FnMut()>
+    fill_callback: Option<fn()>
 }
 
 impl PassNode {
-   pub fn builder() -> PassNodeBuilder {
-       PassNodeBuilder {
+    pub fn builder() -> PassNodeBuilder {
+        PassNodeBuilder {
             ..Default::default()
-       }
-   }
+        }
+    }
+
+    pub fn execute(&self) {
+        (self.fill_callback)();
+    }
 }
 
 impl PassNodeBuilder {
@@ -52,10 +60,19 @@ impl PassNodeBuilder {
         self
     }
 
+    // pub fn fill_commands<F>(&mut self, mut fill_callback: F) -> &mut Self
+    //     where F: FnMut()
+    pub fn fill_commands(&mut self, fill_callback: fn()) -> &mut Self
+    {
+        self.fill_callback = Some(fill_callback);
+        self
+    }
+
     pub fn build(&mut self) -> Result<PassNode, &'static str> {
         assert!(self.layout.is_some(), "No layout set");
         assert!(self.pipeline.is_some(), "No pipeline set");
         assert!(self.renderpass.is_some(), "No renderpass set");
+        assert!(self.fill_callback.is_some(), "No fill callback set");
 
         if self.layout.is_some() && self.pipeline.is_some() && self.renderpass.is_some() {
             Ok(PassNode {
@@ -63,7 +80,8 @@ impl PassNodeBuilder {
                 pipeline: self.pipeline.unwrap(),
                 renderpass: self.renderpass.unwrap(),
                 inputs: self.inputs.take(),
-                outputs: self.outputs.take()
+                outputs: self.outputs.take(),
+                fill_callback: self.fill_callback.unwrap()
             })
         } else {
             Err("PassNodeBuilder was incomplete before building")
