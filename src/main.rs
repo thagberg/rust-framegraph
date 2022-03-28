@@ -232,7 +232,7 @@ impl VulkanApp {
             .renderpass(render_pass)
             .layout(pipeline_layout)
             .pipeline(graphics_pipeline)
-            .fill_commands(|| {
+            .fill_commands(|render_context: &RenderContext, command_buffer: &vk::CommandBuffer| {
                 println!("I'm doing something!");
             })
             .build()

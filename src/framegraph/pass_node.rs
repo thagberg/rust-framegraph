@@ -1,5 +1,8 @@
 use ash::vk;
 use crate::resource::resource_manager::{ResourceHandle};
+use crate::context::render_context::{RenderContext};
+
+type FillCallback = fn(&RenderContext, &vk::CommandBuffer);
 
 pub struct PassNode {
     layout: vk::PipelineLayout,
@@ -8,7 +11,7 @@ pub struct PassNode {
     inputs: Option<Vec<ResourceHandle>>,
     outputs: Option<Vec<ResourceHandle>>,
     // fill_callback: dyn FnMut()
-    fill_callback: fn()
+    fill_callback: FillCallback
 }
 
 #[derive(Default)]
@@ -19,7 +22,7 @@ pub struct PassNodeBuilder {
     inputs: Option<Vec<ResourceHandle>>,
     outputs: Option<Vec<ResourceHandle>>,
     // fill_callback: Option<dyn FnMut()>
-    fill_callback: Option<fn()>
+    fill_callback: Option<FillCallback>
 }
 
 impl PassNode {
@@ -62,7 +65,7 @@ impl PassNodeBuilder {
 
     // pub fn fill_commands<F>(&mut self, mut fill_callback: F) -> &mut Self
     //     where F: FnMut()
-    pub fn fill_commands(&mut self, fill_callback: fn()) -> &mut Self
+    pub fn fill_commands(&mut self, fill_callback: FillCallback) -> &mut Self
     {
         self.fill_callback = Some(fill_callback);
         self
