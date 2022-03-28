@@ -232,16 +232,16 @@ impl VulkanApp {
             .renderpass(render_pass)
             .layout(pipeline_layout)
             .pipeline(graphics_pipeline)
-            .fill_commands(|render_context: &RenderContext, command_buffer: &vk::CommandBuffer| {
+            .fill_commands(Box::new(|render_context: &RenderContext, command_buffer: &vk::CommandBuffer| {
                 println!("I'm doing something!");
-            })
+            }))
             .build()
             .expect("Failed to create PassNode");
 
         let mut framegraph = FrameGraph::new();
         framegraph.start();
         framegraph.add_node(&pass_node);
-        framegraph.end();
+        framegraph.end(&render_context, &vk::CommandBuffer::null());
 
         // let command_pool = share::v1::create_command_pool(
         //     render_context.get_device(),

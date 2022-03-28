@@ -1,5 +1,5 @@
 use ash::vk;
-use crate::{PassNode, PassNodeBuilder};
+use crate::{PassNode, PassNodeBuilder, RenderContext};
 
 pub struct FrameGraph<'a> {
     nodes: Vec<&'a PassNode>,
@@ -28,11 +28,11 @@ impl<'a> FrameGraph<'a> {
         assert!(self.frame_started, "Can't compile FrameGraph before it's been started");
     }
 
-    pub fn end(&mut self) {
+    pub fn end(&mut self, render_context: &RenderContext, command_buffer: &vk::CommandBuffer) {
         assert!(self.frame_started, "Can't end frame before it's been started");
         let mut next = self.nodes.pop();
         while next.is_some() {
-            next.unwrap().execute();
+            next.unwrap().execute(render_context, command_buffer);
             next = self.nodes.pop();
         }
     }

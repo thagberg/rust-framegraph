@@ -2,7 +2,8 @@ use ash::vk;
 use crate::resource::resource_manager::{ResourceHandle};
 use crate::context::render_context::{RenderContext};
 
-type FillCallback = fn(&RenderContext, &vk::CommandBuffer);
+//type FillCallback = fn(&RenderContext, &vk::CommandBuffer);
+type FillCallback = dyn Fn(&RenderContext, &vk::CommandBuffer);
 
 pub struct PassNode {
     layout: vk::PipelineLayout,
@@ -11,7 +12,8 @@ pub struct PassNode {
     inputs: Option<Vec<ResourceHandle>>,
     outputs: Option<Vec<ResourceHandle>>,
     // fill_callback: dyn FnMut()
-    fill_callback: FillCallback
+    // fill_callback: FillCallback;
+    fill_callback: Box<FillCallback>
 }
 
 #[derive(Default)]
@@ -22,7 +24,8 @@ pub struct PassNodeBuilder {
     inputs: Option<Vec<ResourceHandle>>,
     outputs: Option<Vec<ResourceHandle>>,
     // fill_callback: Option<dyn FnMut()>
-    fill_callback: Option<FillCallback>
+    // fill_callback: Option<FillCallback>
+    fill_callback: Option<Box<FillCallback>>
 }
 
 impl PassNode {
@@ -32,8 +35,8 @@ impl PassNode {
         }
     }
 
-    pub fn execute(&self) {
-        (self.fill_callback)();
+    pub fn execute(&self, render_context: &RenderContext, command_buffer: &vk::CommandBuffer) {
+        (self.fill_callback)(render_context, command_buffer);
     }
 }
 
@@ -65,7 +68,8 @@ impl PassNodeBuilder {
 
     // pub fn fill_commands<F>(&mut self, mut fill_callback: F) -> &mut Self
     //     where F: FnMut()
-    pub fn fill_commands(&mut self, fill_callback: FillCallback) -> &mut Self
+    // pub fn fill_commands(&mut self, fill_callback: impl Fn(&RenderContext, &vk::CommandBuffer)) -> &mut Self
+    pub fn fill_commands(&mut self, fill_callback: Box<FillCallback>) -> &mut Self
     {
         self.fill_callback = Some(fill_callback);
         self
@@ -84,7 +88,8 @@ impl PassNodeBuilder {
                 renderpass: self.renderpass.unwrap(),
                 inputs: self.inputs.take(),
                 outputs: self.outputs.take(),
-                fill_callback: self.fill_callback.unwrap()
+                // fill_callback: Box::new(self.fill_callback.as_ref().unwrap())
+                fill_callback: self.fill_callback.take().unwrap()
             })
         } else {
             Err("PassNodeBuilder was incomplete before building")
