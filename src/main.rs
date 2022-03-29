@@ -108,12 +108,26 @@ impl VulkanApp {
             Some(surface_wrapper),
             &window);
 
-        let uniform_buffer = render_context.create_uniform_buffer(
-            std::mem::size_of::<OffsetUBO>() as vk::DeviceSize);
+        // let create_info = vk::BufferCreateInfo {
+        //     s_type: vk::StructureType::BUFFER_CREATE_INFO,
+        //     size,
+        //     usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
+        //     sharing_mode: vk::SharingMode::EXCLUSIVE,
+        //     ..Default::default()
+        // };
+        let ubo_create_info = vk::BufferCreateInfo {
+            s_type: vk::StructureType::BUFFER_CREATE_INFO,
+            size: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize,
+            usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
+            sharing_mode: vk::SharingMode::EXCLUSIVE,
+            ..Default::default()
+        };
+        let uniform_buffer = render_context.create_buffer_persistent(&ubo_create_info);
         let ubo_value = OffsetUBO {
             offset: [0.2, 0.1, 0.0]
         };
-        render_context.update_uniform_buffer(&uniform_buffer, |mapped_memory: *mut c_void| {
+        // render_context.update_uniform_buffer(&uniform_buffer, |mapped_memory: *mut c_void| {
+        render_context.update_buffer_persistent(&uniform_buffer, |mapped_memory: *mut c_void| {
             println!("Updating uniform buffer");
             unsafe {
                 // *mapped_memory as OffsetUBO = ubo_value;

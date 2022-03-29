@@ -1,12 +1,46 @@
+use std::collections::HashMap;
+use core::ffi::c_void;
 use ash::vk;
 use gpu_allocator::vulkan::*;
 use gpu_allocator::MemoryLocation;
 use crate::api_types::device::PhysicalDeviceWrapper;
 use crate::DeviceWrapper;
 
+#[derive(Clone, Copy, Hash, std::cmp::Eq)]
 pub enum ResourceHandle {
     Transient(u32),
     Persistent(u32)
+}
+
+impl PartialEq for ResourceHandle {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (ResourceHandle::Transient(x), ResourceHandle::Transient(y)) => x == y,
+            (ResourceHandle::Persistent(x), ResourceHandle::Persistent(y)) => x == y,
+            _ => false
+        }
+    }
+}
+
+pub enum ResourceCreateInfo {
+    Buffer(vk::BufferCreateInfo),
+    Image(vk::ImageCreateInfo)
+}
+
+pub enum ResourceType {
+    Buffer(vk::Buffer),
+    Image(vk::Image)
+}
+
+pub struct TransientResource {
+    handle: ResourceHandle,
+    create_info: ResourceCreateInfo
+}
+
+pub struct PersistentResource {
+    pub handle: ResourceHandle,
+    pub resource: ResourceType,
+    pub allocation: Allocation
 }
 
 pub struct ResolvedBuffer {
@@ -15,7 +49,10 @@ pub struct ResolvedBuffer {
 }
 
 pub struct ResourceManager {
-    allocator: Allocator
+    next_handle: u32,
+    allocator: Allocator,
+    transient_resource_map: HashMap<ResourceHandle, TransientResource>,
+    persistent_resource_map: HashMap<ResourceHandle, PersistentResource>
 }
 
 impl ResolvedBuffer {
@@ -38,25 +75,97 @@ impl ResourceManager {
         }).expect("Failed to create GPU memory allocator");
 
         ResourceManager {
-            allocator
+            next_handle: 0,
+            allocator,
+            transient_resource_map: HashMap::new(),
+            persistent_resource_map: HashMap::new()
         }
     }
 
-    pub fn create_uniform_buffer(
+    pub fn create_buffer_transient(
+        &mut self,
+        create_info: &vk::BufferCreateInfo
+    ) -> ResourceHandle {
+        let ret_handle = ResourceHandle::Transient(self.next_handle);
+        self.next_handle += 1;
+
+        self.transient_resource_map.insert(ret_handle, TransientResource {
+            handle: ret_handle,
+            create_info: ResourceCreateInfo::Buffer(create_info.clone())
+        });
+
+        ret_handle
+    }
+
+    pub fn create_buffer_persistent(
         &mut self,
         device: &DeviceWrapper,
-        size: vk::DeviceSize
+        create_info: &vk::BufferCreateInfo
+    ) -> ResourceHandle {
+        let ret_handle = ResourceHandle::Persistent(self.next_handle);
+        self.next_handle += 1;
+
+        let resolved_buffer = self.create_uniform_buffer(device, create_info);
+
+        self.persistent_resource_map.insert(ret_handle, PersistentResource {
+            handle: ret_handle,
+            resource: ResourceType::Buffer(resolved_buffer.buffer),
+            allocation: resolved_buffer.allocation
+        });
+
+        ret_handle
+    }
+
+    pub fn update_buffer<F>(
+        &mut self,
+        device: &DeviceWrapper,
+        buffer: &ResourceHandle,
+        mut fill_callback: F)
+        where F: FnMut(*mut c_void)
+    {
+        match buffer {
+            ResourceHandle::Transient(_) => panic!("Can't update transient buffer"),
+            ResourceHandle::Persistent(handle) => {
+                let find = self.persistent_resource_map.get(buffer);
+                match find {
+                    None => panic!("Buffer doesn't exist"),
+                    Some(resolved_buffer) => {
+                        let alloc = &resolved_buffer.allocation;
+                        if alloc.mapped_ptr().is_some() {
+                            fill_callback(alloc.mapped_ptr().unwrap().as_ptr());
+                        } else {
+                            unsafe {
+                                let mapped_memory = device.get().map_memory(
+                                    alloc.memory(),
+                                    alloc.offset(),
+                                    alloc.size(),
+                                    vk::MemoryMapFlags::empty() )
+                                    .expect("Failed to map buffer");
+                                fill_callback(mapped_memory);
+                                device.get().unmap_memory(alloc.memory());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn create_uniform_buffer(
+        &mut self,
+        device: &DeviceWrapper,
+        create_info: &vk::BufferCreateInfo
     ) -> ResolvedBuffer {
-        let create_info = vk::BufferCreateInfo {
-            s_type: vk::StructureType::BUFFER_CREATE_INFO,
-            size,
-            usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
-            sharing_mode: vk::SharingMode::EXCLUSIVE,
-            ..Default::default()
-        };
+        // let create_info = vk::BufferCreateInfo {
+        //     s_type: vk::StructureType::BUFFER_CREATE_INFO,
+        //     size,
+        //     usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
+        //     sharing_mode: vk::SharingMode::EXCLUSIVE,
+        //     ..Default::default()
+        // };
 
         let buffer = unsafe {
-            device.get().create_buffer(&create_info, None)
+            device.get().create_buffer(create_info, None)
                 .expect("Failed to create uniform buffer")
         };
         let requirements = unsafe {

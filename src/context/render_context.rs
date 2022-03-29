@@ -18,7 +18,7 @@ use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper};
 use crate::api_types::swapchain::SwapchainWrapper;
 use crate::api_types::image::ImageWrapper;
 use crate::api_types::surface::SurfaceCapabilities;
-use crate::resource::resource_manager::{ResolvedBuffer, ResourceManager};
+use crate::resource::resource_manager::{ResolvedBuffer, ResourceManager, ResourceHandle};
 
 pub struct RenderContext {
     graphics_queue: vk::Queue,
@@ -552,30 +552,17 @@ impl RenderContext {
 
     pub fn get_swapchain_image_views(&self) -> &Option<Vec<vk::ImageView>> { &self.swapchain_image_views }
 
-    pub fn create_uniform_buffer(&mut self, size: vk::DeviceSize) -> ResolvedBuffer {
-        self.resource_manager.create_uniform_buffer(&self.device, size)
+    // pub fn create_uniform_buffer(&mut self, size: vk::DeviceSize) -> ResolvedBuffer {
+    //     self.resource_manager.create_uniform_buffer(&self.device, size)
+    // }
+    pub fn create_buffer_persistent(&mut self, create_info: &vk::BufferCreateInfo) -> ResourceHandle {
+        self.resource_manager.create_buffer_persistent(&self.device, create_info)
     }
 
-    pub fn update_uniform_buffer<F>(&self, buffer: &ResolvedBuffer, mut fill_callback: F)
+    pub fn update_buffer_persistent<F>(&mut self, buffer_handle: &ResourceHandle, mut fill_callback: F)
         where F: FnMut(*mut c_void)
     {
-        unsafe {
-            let buffer_alloc = buffer.get_allocation();
-
-            // Certain buffer usages will be already mapped (such as CPU-to-GPU)
-            if buffer_alloc.mapped_ptr().is_some() {
-                fill_callback(buffer_alloc.mapped_ptr().unwrap().as_ptr());
-            } else {
-                let mapped_memory = self.device.get().map_memory(
-                    buffer_alloc.memory(),
-                    buffer_alloc.offset(),
-                    buffer_alloc.size(),
-                    vk::MemoryMapFlags::empty())
-                    .expect("Failed to map Uniform Buffer memory");
-                fill_callback(mapped_memory);
-                self.device.get().unmap_memory(buffer_alloc.memory());
-            }
-        }
+        self.resource_manager.update_buffer(&self.device, buffer_handle, fill_callback);
     }
 }
 
