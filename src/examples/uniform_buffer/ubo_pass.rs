@@ -13,17 +13,12 @@ use untitled::{
     utility::share,
 };
 
-struct OffsetUBO {
-    offset: [f32; 3]
+pub struct OffsetUBO {
+    pub offset: [f32; 3]
 }
 
 pub struct UBOPass {
-    // render_pass: vk::RenderPass,
-    // pipeline_layout: vk::PipelineLayout,
-    // graphics_pipeline: vk::Pipeline,
-    // uniform_buffer: ResourceHandle,
-    // descriptor_sets: Vec<vk::DescriptorSet>,
-    // pass_node: Option<PassNode<'lifetime>>
+    pub pass_node: PassNode
 }
 
 impl UBOPass {
@@ -292,16 +287,7 @@ impl UBOPass {
             .expect("Failed to create PassNode");
 
         UBOPass {
-            // render_pass,
-            // pipeline_layout,
-            // graphics_pipeline: graphics_pipelines[0],
-            // uniform_buffer,
-            // descriptor_sets,
-            // pass_node: None
+            pass_node
         }
-    }
-
-    pub fn init(&mut self)
-    {
     }
 }

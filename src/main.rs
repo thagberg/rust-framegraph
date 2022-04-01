@@ -27,16 +27,12 @@ use crate::framegraph::frame_graph::{FrameGraph};
 use crate::resource::resource_manager::{ResolvedResource, ResourceType};
 
 mod examples;
-use crate::examples::uniform_buffer::ubo_pass::{UBOPass};
+use crate::examples::uniform_buffer::ubo_pass::{UBOPass, OffsetUBO};
 
 
 // Constants
 const WINDOW_TITLE: &'static str = "15.Hello Triangle";
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
-
-struct OffsetUBO {
-    offset: [f32; 3]
-}
 
 struct SyncObjects {
     image_available_semaphores: Vec<vk::Semaphore>,
@@ -200,95 +196,38 @@ impl VulkanApp {
                 .expect("Failed to allocate descriptor sets")
         };
 
-        // let descriptor_buffer = vk::DescriptorBufferInfo {
-        //     buffer: uniform_buffer.get(),
-        //     offset: 0,
-        //     range: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize
-        // };
-        //
-        // let descriptor_write = vk::WriteDescriptorSet {
-        //     s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
-        //     p_next: ptr::null(),
-        //     dst_set: descriptor_sets[0],
-        //     dst_binding: 0,
-        //     dst_array_element: 0,
-        //     descriptor_count: 1,
-        //     descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-        //     p_buffer_info: &descriptor_buffer,
-        //     ..Default::default()
-        // };
-        // let descriptor_write_sets = [descriptor_write];
-        //
-        // unsafe {
-        //     render_context.get_device().update_descriptor_sets(&descriptor_write_sets, &[]);
-        // }
-
         assert!(render_context.get_swapchain().is_some(), "Can't continue without valid swapchain");
-        let swapchain = &render_context.get_swapchain().as_ref().unwrap();
-        assert!(render_context.get_swapchain_image_views().is_some(), "Can't continue without image views");
-        let image_views = &render_context.get_swapchain_image_views().as_ref().unwrap();
+        let (swapchain_extent, swapchain_format) = {
+            let swapchain = &render_context.get_swapchain().as_ref().unwrap();
+            (swapchain.get_extent(), swapchain.get_format())
+        };
 
         let render_pass = VulkanApp::create_render_pass(
             render_context.get_device(),
-            swapchain.get_format());
+            swapchain_format);
         // swapchain_stuff.swapchain_format);
         let (graphics_pipeline, pipeline_layout) = share::v1::create_graphics_pipeline(
             render_context.get_device(),
             render_pass,
-            swapchain.get_extent()
-            // swapchain_stuff.swapchain_extent,
-        );
-        let swapchain_framebuffers = share::v1::create_framebuffers(
-            render_context.get_device(),
-            render_pass,
-            image_views,
-            // &swapchain_imageviews,
-            swapchain.get_extent(),
-        );
+            swapchain_extent);
+        let swapchain_framebuffers = {
+            assert!(render_context.get_swapchain_image_views().is_some(), "Can't continue without image views");
+            let image_views = &render_context.get_swapchain_image_views().as_ref().unwrap();
+            share::v1::create_framebuffers(
+                render_context.get_device(),
+                render_pass,
+                image_views,
+                // &swapchain_imageviews,
+                swapchain_extent)
+        };
 
-        // try creating a PassNode
-        // let pass_node = PassNode::builder()
-        //     .renderpass(render_pass)
-        //     .layout(pipeline_layout)
-        //     .pipeline(graphics_pipeline)
-        //     .inputs(vec![uniform_buffer])
-        //     .fill_commands(Box::new(|render_context: &RenderContext, command_buffer: &vk::CommandBuffer, inputs: &Vec<ResolvedResource>| {
-        //         println!("I'm doing something!");
-        //         match inputs[0].resource {
-        //             ResourceType::Buffer(buffer) => {
-        //                 let descriptor_buffer = vk::DescriptorBufferInfo {
-        //                     buffer,
-        //                     offset: 0,
-        //                     range: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize
-        //                 };
-        //
-        //                 let descriptor_write = vk::WriteDescriptorSet {
-        //                     s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
-        //                     p_next: ptr::null(),
-        //                     dst_set: descriptor_sets[0],
-        //                     dst_binding: 0,
-        //                     dst_array_element: 0,
-        //                     descriptor_count: 1,
-        //                     descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-        //                     p_buffer_info: &descriptor_buffer,
-        //                     ..Default::default()
-        //                 };
-        //                 let descriptor_write_sets = [descriptor_write];
-        //
-        //                 unsafe {
-        //                     render_context.get_device().update_descriptor_sets(&descriptor_write_sets, &[]);
-        //                 }
-        //             },
-        //             _ => {}
-        //         }
-        //     }))
-        //     .build()
-        //     .expect("Failed to create PassNode");
-        //
-        // let mut framegraph = FrameGraph::new();
-        // framegraph.start();
-        // framegraph.add_node(&pass_node);
-        // framegraph.end(&render_context, &vk::CommandBuffer::null());
+        let ubo_pass = UBOPass::new(&mut render_context, render_pass);
+
+        let mut framegraph = FrameGraph::new();
+        framegraph.start();
+        framegraph.add_node(&ubo_pass.pass_node);
+        framegraph.end(&render_context, &vk::CommandBuffer::null());
+
 
         // let command_pool = share::v1::create_command_pool(
         //     render_context.get_device(),
@@ -299,11 +238,11 @@ impl VulkanApp {
             graphics_pipeline,
             &swapchain_framebuffers,
             render_pass,
-            swapchain.get_extent(),
+            swapchain_extent,
             &descriptor_sets,
-            pipeline_layout
-        );
-        let sync_ojbects = VulkanApp::create_sync_objects(render_context.get_device());
+            pipeline_layout);
+        let sync_ojbects = VulkanApp::create_sync_objects(
+            render_context.get_device());
 
         // cleanup(); the 'drop' function will take care of it.
 
