@@ -18,7 +18,7 @@ use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper};
 use crate::api_types::swapchain::SwapchainWrapper;
 use crate::api_types::image::ImageWrapper;
 use crate::api_types::surface::SurfaceCapabilities;
-use crate::resource::resource_manager::{ResolvedBuffer, ResourceManager, ResourceHandle};
+use crate::resource::resource_manager::{ResolvedBuffer, ResourceManager, ResourceHandle, ResolvedResource};
 
 pub struct RenderContext {
     graphics_queue: vk::Queue,
@@ -28,6 +28,7 @@ pub struct RenderContext {
     swapchain_image_views: Option<Vec<vk::ImageView>>,
     surface: Option<SurfaceWrapper>,
     graphics_command_pool: vk::CommandPool,
+    descriptor_pool: vk::DescriptorPool,
     resource_manager: ResourceManager,
     device: DeviceWrapper,
     physical_device: PhysicalDeviceWrapper,
@@ -509,6 +510,30 @@ impl RenderContext {
             }
         };
 
+        let ubo_pool_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::UNIFORM_BUFFER,
+            descriptor_count: 8
+        };
+        let image_pool_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::INPUT_ATTACHMENT,
+            descriptor_count: 8
+        };
+        let descriptor_pool_sizes = [ubo_pool_size, image_pool_size];
+        let descriptor_pool_create = vk::DescriptorPoolCreateInfo {
+            s_type: vk::StructureType::DESCRIPTOR_POOL_CREATE_INFO,
+            p_next: std::ptr::null(),
+            flags: vk::DescriptorPoolCreateFlags::empty(),
+            max_sets: 8,
+            pool_size_count: descriptor_pool_sizes.len() as u32,
+            p_pool_sizes: descriptor_pool_sizes.as_ptr()
+        };
+        let descriptor_pool = unsafe {
+            logical_device.get().create_descriptor_pool(
+                &descriptor_pool_create,
+                None)
+                .expect("Failed to create descriptor pool")
+        };
+
         let resource_manager = ResourceManager::new(
             instance_wrapper.get(),
             &logical_device,
@@ -526,6 +551,7 @@ impl RenderContext {
             graphics_command_pool,
             swapchain,
             swapchain_image_views,
+            descriptor_pool,
             resource_manager
         }
     }
@@ -562,7 +588,32 @@ impl RenderContext {
     pub fn update_buffer_persistent<F>(&mut self, buffer_handle: &ResourceHandle, mut fill_callback: F)
         where F: FnMut(*mut c_void)
     {
+
         self.resource_manager.update_buffer(&self.device, buffer_handle, fill_callback);
+    }
+
+    pub fn resolve_resource(&self, handle: &ResourceHandle) -> ResolvedResource {
+        self.resource_manager.resolve_resource(handle)
+    }
+
+    pub fn create_descriptor_sets(
+        &self,
+        layouts: &[vk::DescriptorSetLayout]) -> Vec<vk::DescriptorSet> {
+
+        let alloc_info = vk::DescriptorSetAllocateInfo {
+            s_type: vk::StructureType::DESCRIPTOR_SET_ALLOCATE_INFO,
+            p_next: std::ptr::null(),
+            descriptor_pool: self.descriptor_pool,
+            descriptor_set_count: layouts.len() as u32,
+            p_set_layouts: layouts.as_ptr()
+        };
+
+        let descriptor_sets = unsafe {
+            self.device.get().allocate_descriptor_sets(&alloc_info )
+                .expect("Failed to allocate descriptor sets")
+        };
+
+        descriptor_sets
     }
 }
 

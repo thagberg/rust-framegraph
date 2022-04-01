@@ -273,8 +273,7 @@ pub fn create_graphics_pipeline(
             .expect("Failed to create pipeline layout!")
     };
 
-    let graphic_pipeline_create_infos = [vk::GraphicsPipelineCreateInfo {
-        s_type: vk::StructureType::GRAPHICS_PIPELINE_CREATE_INFO,
+    let graphic_pipeline_create_infos = [vk::GraphicsPipelineCreateInfo { s_type: vk::StructureType::GRAPHICS_PIPELINE_CREATE_INFO,
         p_next: ptr::null(),
         flags: vk::PipelineCreateFlags::empty(),
         stage_count: shader_stages.len() as u32,

@@ -24,6 +24,11 @@ use crate::api_types::device::DeviceWrapper;
 use crate::api_types::instance::InstanceWrapper;
 use crate::framegraph::pass_node::{PassNodeBuilder, PassNode};
 use crate::framegraph::frame_graph::{FrameGraph};
+use crate::resource::resource_manager::{ResolvedResource, ResourceType};
+
+mod examples;
+use crate::examples::uniform_buffer::ubo_pass::{UBOPass};
+
 
 // Constants
 const WINDOW_TITLE: &'static str = "15.Hello Triangle";
@@ -195,28 +200,28 @@ impl VulkanApp {
                 .expect("Failed to allocate descriptor sets")
         };
 
-        let descriptor_buffer = vk::DescriptorBufferInfo {
-            buffer: uniform_buffer.get(),
-            offset: 0,
-            range: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize
-        };
-
-        let descriptor_write = vk::WriteDescriptorSet {
-            s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
-            p_next: ptr::null(),
-            dst_set: descriptor_sets[0],
-            dst_binding: 0,
-            dst_array_element: 0,
-            descriptor_count: 1,
-            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-            p_buffer_info: &descriptor_buffer,
-            ..Default::default()
-        };
-        let descriptor_write_sets = [descriptor_write];
-
-        unsafe {
-            render_context.get_device().update_descriptor_sets(&descriptor_write_sets, &[]);
-        }
+        // let descriptor_buffer = vk::DescriptorBufferInfo {
+        //     buffer: uniform_buffer.get(),
+        //     offset: 0,
+        //     range: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize
+        // };
+        //
+        // let descriptor_write = vk::WriteDescriptorSet {
+        //     s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
+        //     p_next: ptr::null(),
+        //     dst_set: descriptor_sets[0],
+        //     dst_binding: 0,
+        //     dst_array_element: 0,
+        //     descriptor_count: 1,
+        //     descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+        //     p_buffer_info: &descriptor_buffer,
+        //     ..Default::default()
+        // };
+        // let descriptor_write_sets = [descriptor_write];
+        //
+        // unsafe {
+        //     render_context.get_device().update_descriptor_sets(&descriptor_write_sets, &[]);
+        // }
 
         assert!(render_context.get_swapchain().is_some(), "Can't continue without valid swapchain");
         let swapchain = &render_context.get_swapchain().as_ref().unwrap();
@@ -242,20 +247,48 @@ impl VulkanApp {
         );
 
         // try creating a PassNode
-        let pass_node = PassNode::builder()
-            .renderpass(render_pass)
-            .layout(pipeline_layout)
-            .pipeline(graphics_pipeline)
-            .fill_commands(Box::new(|render_context: &RenderContext, command_buffer: &vk::CommandBuffer| {
-                println!("I'm doing something!");
-            }))
-            .build()
-            .expect("Failed to create PassNode");
-
-        let mut framegraph = FrameGraph::new();
-        framegraph.start();
-        framegraph.add_node(&pass_node);
-        framegraph.end(&render_context, &vk::CommandBuffer::null());
+        // let pass_node = PassNode::builder()
+        //     .renderpass(render_pass)
+        //     .layout(pipeline_layout)
+        //     .pipeline(graphics_pipeline)
+        //     .inputs(vec![uniform_buffer])
+        //     .fill_commands(Box::new(|render_context: &RenderContext, command_buffer: &vk::CommandBuffer, inputs: &Vec<ResolvedResource>| {
+        //         println!("I'm doing something!");
+        //         match inputs[0].resource {
+        //             ResourceType::Buffer(buffer) => {
+        //                 let descriptor_buffer = vk::DescriptorBufferInfo {
+        //                     buffer,
+        //                     offset: 0,
+        //                     range: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize
+        //                 };
+        //
+        //                 let descriptor_write = vk::WriteDescriptorSet {
+        //                     s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
+        //                     p_next: ptr::null(),
+        //                     dst_set: descriptor_sets[0],
+        //                     dst_binding: 0,
+        //                     dst_array_element: 0,
+        //                     descriptor_count: 1,
+        //                     descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+        //                     p_buffer_info: &descriptor_buffer,
+        //                     ..Default::default()
+        //                 };
+        //                 let descriptor_write_sets = [descriptor_write];
+        //
+        //                 unsafe {
+        //                     render_context.get_device().update_descriptor_sets(&descriptor_write_sets, &[]);
+        //                 }
+        //             },
+        //             _ => {}
+        //         }
+        //     }))
+        //     .build()
+        //     .expect("Failed to create PassNode");
+        //
+        // let mut framegraph = FrameGraph::new();
+        // framegraph.start();
+        // framegraph.add_node(&pass_node);
+        // framegraph.end(&render_context, &vk::CommandBuffer::null());
 
         // let command_pool = share::v1::create_command_pool(
         //     render_context.get_device(),

@@ -27,6 +27,7 @@ pub enum ResourceCreateInfo {
     Image(vk::ImageCreateInfo)
 }
 
+#[derive(Clone, Copy)]
 pub enum ResourceType {
     Buffer(vk::Buffer),
     Image(vk::Image)
@@ -41,6 +42,12 @@ pub struct PersistentResource {
     pub handle: ResourceHandle,
     pub resource: ResourceType,
     pub allocation: Allocation
+}
+
+#[derive(Clone, Copy)]
+pub struct ResolvedResource {
+    pub handle: ResourceHandle,
+    pub resource: ResourceType
 }
 
 pub struct ResolvedBuffer {
@@ -79,6 +86,22 @@ impl ResourceManager {
             allocator,
             transient_resource_map: HashMap::new(),
             persistent_resource_map: HashMap::new()
+        }
+    }
+
+    pub fn resolve_resource(&self, handle: &ResourceHandle) -> ResolvedResource {
+        match handle {
+            ResourceHandle::Transient(_) => {
+                panic!("Need to implement this for transient resources");
+            },
+            ResourceHandle::Persistent(_) => {
+                let resolved = self.persistent_resource_map.get(handle)
+                    .expect("Need to handle not found resources");
+                ResolvedResource {
+                    handle: handle.clone(),
+                    resource: resolved.resource
+                }
+            }
         }
     }
 
