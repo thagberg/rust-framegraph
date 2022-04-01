@@ -226,6 +226,7 @@ impl VulkanApp {
         let mut framegraph = FrameGraph::new();
         framegraph.start();
         framegraph.add_node(&ubo_pass.pass_node);
+        framegraph.compile();
         framegraph.end(&render_context, &vk::CommandBuffer::null());
 
 

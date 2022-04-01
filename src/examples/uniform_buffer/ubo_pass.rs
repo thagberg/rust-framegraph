@@ -194,6 +194,25 @@ impl UBOPass {
             blend_constants: [0.0, 0.0, 0.0, 0.0],
         };
 
+        let dynamic_states = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+        let dynamic_state = vk::PipelineDynamicStateCreateInfo {
+            s_type: vk::StructureType::PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+            p_next: std::ptr::null(),
+            flags: vk::PipelineDynamicStateCreateFlags::empty(),
+            dynamic_state_count: dynamic_states.len() as u32,
+            p_dynamic_states: dynamic_states.as_ptr()
+        };
+        
+        let viewport_state = vk::PipelineViewportStateCreateInfo {
+            s_type: vk::StructureType::PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+            p_next: std::ptr::null(),
+            flags: vk::PipelineViewportStateCreateFlags::empty(),
+            viewport_count: 1,
+            p_viewports: std::ptr::null(),
+            scissor_count: 1,
+            p_scissors: std::ptr::null()
+        };
+
         let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo {
             s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
             p_next: std::ptr::null(),
@@ -220,12 +239,12 @@ impl UBOPass {
             p_input_assembly_state: &vertex_input_assembly_state_info,
             p_tessellation_state: std::ptr::null(),
             // p_viewport_state: &viewport_state_create_info,
-            p_viewport_state: std::ptr::null(),
+            p_viewport_state: &viewport_state,
             p_rasterization_state: &rasterization_statue_create_info,
             p_multisample_state: &multisample_state_create_info,
             p_depth_stencil_state: &depth_state_create_info,
             p_color_blend_state: &color_blend_state,
-            p_dynamic_state: std::ptr::null(),
+            p_dynamic_state: &dynamic_state,
             layout: pipeline_layout,
             render_pass,
             subpass: 0,
