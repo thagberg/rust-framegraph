@@ -34,7 +34,7 @@ impl<'a> FrameGraph<'a> {
         self.compiled = true;
     }
 
-    pub fn end(&mut self, render_context: &RenderContext, command_buffer: &vk::CommandBuffer) {
+    pub fn end(&mut self, render_context: &RenderContext, command_buffer: vk::CommandBuffer) {
         assert!(self.frame_started, "Can't end frame before it's been started");
         assert!(self.compiled, "Can't end frame before it's been compiled");
         let mut next = self.nodes.pop();

@@ -272,7 +272,7 @@ impl UBOPass {
             .pipeline(graphics_pipelines[0])
             // .inputs(vec![self.uniform_buffer])
             .inputs(vec![uniform_buffer])
-            .fill_commands(Box::new(move |render_context: &RenderContext, command_buffer: &vk::CommandBuffer, inputs: &[ResolvedResource]| {
+            .fill_commands(Box::new(move |render_context: &RenderContext, command_buffer: vk::CommandBuffer, inputs: &[ResolvedResource]| {
                 println!("I'm doing something!");
                 match inputs[0].resource {
                     ResourceType::Buffer(buffer) => {
@@ -296,7 +296,15 @@ impl UBOPass {
                         let descriptor_write_sets = [descriptor_write];
 
                         unsafe {
-                            render_context.get_device().update_descriptor_sets(&descriptor_write_sets, &[]);
+                            let device = render_context.get_device();
+                            device.update_descriptor_sets(&descriptor_write_sets, &[]);
+                            device.cmd_bind_descriptor_sets(
+                                command_buffer,
+                                vk::PipelineBindPoint::GRAPHICS,
+                                pipeline_layout,
+                                0,
+                                &descriptor_sets,
+                                &[]);
                         }
                     },
                     _ => {}

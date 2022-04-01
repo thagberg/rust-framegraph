@@ -13,6 +13,7 @@ use winit::event_loop::{EventLoop, ControlFlow};
 
 use std::ptr;
 use ash::extensions::khr::Surface;
+use ash::vk::CommandBuffer;
 
 mod context;
 mod api_types;
@@ -40,7 +41,7 @@ struct SyncObjects {
     inflight_fences: Vec<vk::Fence>,
 }
 
-struct VulkanApp {
+struct VulkanApp<'a> {
     window: winit::window::Window,
     // vulkan stuff
     // _entry: ash::Entry,
@@ -57,6 +58,9 @@ struct VulkanApp {
 
     // graphics_queue: vk::Queue,
     // present_queue: vk::Queue,
+
+    frame_graph: FrameGraph<'a>,
+    ubo_pass: UBOPass,
 
     // swapchain_loader: ash::extensions::khr::Swapchain,
     // swapchain: vk::SwapchainKHR,
@@ -79,8 +83,8 @@ struct VulkanApp {
     current_frame: usize,
 }
 
-impl VulkanApp {
-    pub fn new(event_loop: &winit::event_loop::EventLoop<()>) -> VulkanApp {
+impl<'a> VulkanApp<'a> {
+    pub fn new(event_loop: &winit::event_loop::EventLoop<()>) -> VulkanApp<'a> {
 
         let window = utility::window::init_window(event_loop, WINDOW_TITLE, WINDOW_WIDTH, WINDOW_HEIGHT);
 
@@ -223,11 +227,11 @@ impl VulkanApp {
 
         let ubo_pass = UBOPass::new(&mut render_context, render_pass);
 
-        let mut framegraph = FrameGraph::new();
-        framegraph.start();
-        framegraph.add_node(&ubo_pass.pass_node);
-        framegraph.compile();
-        framegraph.end(&render_context, &vk::CommandBuffer::null());
+        let mut frame_graph = FrameGraph::new();
+        // framegraph.start();
+        // framegraph.add_node(&ubo_pass.pass_node);
+        // framegraph.compile();
+        // framegraph.end(&render_context, &vk::CommandBuffer::null());
 
 
         // let command_pool = share::v1::create_command_pool(
@@ -263,6 +267,8 @@ impl VulkanApp {
             //
             // graphics_queue,
             // present_queue,
+            frame_graph,
+            ubo_pass,
 
             // swapchain_loader: swapchain_stuff.swapchain_loader,
             // swapchain: swapchain_stuff.swapchain,
@@ -306,6 +312,74 @@ impl VulkanApp {
                 )
                 .expect("Failed to acquire next image.")
         };
+
+        let command_buffer = self.command_buffers[image_index as usize];
+        unsafe {
+            self.render_context.get_device().reset_command_buffer(
+                command_buffer,
+                vk::CommandBufferResetFlags::empty());
+
+            let command_buffer_begin_info = vk::CommandBufferBeginInfo {
+                s_type: vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
+                p_next: ptr::null(),
+                p_inheritance_info: ptr::null(),
+                flags: vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,
+            };
+            self.render_context.get_device().begin_command_buffer(command_buffer, &command_buffer_begin_info)
+                .expect("Failed to begin recording command buffer");
+        }
+
+        let surface_extent = self.render_context.get_swapchain().as_ref().unwrap().get_extent();
+        {
+            let ubo_pass = &self.ubo_pass.pass_node;
+
+            let mut frame_graph = FrameGraph::new();
+            frame_graph.start();
+            frame_graph.add_node(ubo_pass);
+            frame_graph.compile();
+
+
+            let clear_values = [vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [0.0, 0.0, 0.0, 1.0],
+                },
+            }];
+
+            let render_pass_begin_info = vk::RenderPassBeginInfo {
+                s_type: vk::StructureType::RENDER_PASS_BEGIN_INFO,
+                p_next: ptr::null(),
+                render_pass: self.render_pass,
+                framebuffer: self.swapchain_framebuffers[image_index as usize],
+                render_area: vk::Rect2D {
+                    offset: vk::Offset2D { x: 0, y: 0 },
+                    extent: surface_extent,
+                },
+                clear_value_count: clear_values.len() as u32,
+                p_clear_values: clear_values.as_ptr(),
+            };
+
+            unsafe {
+                let device = self.render_context.get_device();
+                device.cmd_begin_render_pass(
+                    command_buffer,
+                    &render_pass_begin_info,
+                    vk::SubpassContents::INLINE);
+                device.cmd_bind_pipeline(
+                    command_buffer,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.graphics_pipeline);
+            }
+
+            frame_graph.end(&self.render_context, command_buffer);
+        }
+
+        unsafe {
+            let device = self.render_context.get_device();
+            device.cmd_end_render_pass(command_buffer);
+            device.end_command_buffer(command_buffer)
+                .expect("Failed to record command buffer");
+        }
+
 
         let wait_semaphores = [self.image_available_semaphores[self.current_frame]];
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
@@ -473,7 +547,7 @@ impl VulkanApp {
     }
 }
 
-impl Drop for VulkanApp {
+impl Drop for VulkanApp<'_> {
     fn drop(&mut self) {
         unsafe {
             let device = self.render_context.get_device();
@@ -513,7 +587,7 @@ impl Drop for VulkanApp {
 }
 
 // Fix content -------------------------------------------------------------------------------
-impl VulkanApp {
+impl VulkanApp<'static> {
 
     pub fn main_loop(mut self, event_loop: EventLoop<()>) {
 

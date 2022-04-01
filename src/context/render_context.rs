@@ -268,7 +268,7 @@ fn create_command_pool(
     let create_info = vk::CommandPoolCreateInfo {
         s_type: vk::StructureType::COMMAND_POOL_CREATE_INFO,
         p_next: std::ptr::null(),
-        flags: vk::CommandPoolCreateFlags::empty(),
+        flags: vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
         queue_family_index
     };
 
