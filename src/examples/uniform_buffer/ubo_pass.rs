@@ -305,6 +305,7 @@ impl UBOPass {
                                 0,
                                 &descriptor_sets,
                                 &[]);
+                            device.cmd_draw(command_buffer, 3, 1, 0, 0);
                         }
                     },
                     _ => {}
