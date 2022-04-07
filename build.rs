@@ -2,7 +2,6 @@ extern crate glob;
 
 use std::process::Command;
 use std::env;
-use std::path::Path;
 
 use glob::glob;
 
@@ -11,7 +10,8 @@ fn main() {
     println!("Compiling shaders");
     let out_dir = env::var("OUT_DIR").unwrap();
 
-    std::fs::create_dir_all(&format!("{}/shaders", out_dir));
+    std::fs::create_dir_all(&format!("{}/shaders", out_dir))
+        .expect("Failed to create shader output directory");
     println!("Placing shaders at {}", out_dir);
 
     for entry in glob("shaders/*.vert")
@@ -32,7 +32,10 @@ fn main() {
                     .status()
                     .expect("Error compiling shader");
             },
-            Err(e) => {}
+            Err(e) => {
+                println!("Failed to compile shaders");
+                panic!("{}", e);
+            }
         }
     }
 }
