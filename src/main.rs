@@ -29,6 +29,7 @@ use crate::resource::resource_manager::{ResolvedResource, ResourceType};
 
 mod examples;
 use crate::examples::uniform_buffer::ubo_pass::{UBOPass, OffsetUBO};
+use crate::examples::uniform_buffer::transient_input_pass::TransientInputPass;
 
 
 // Constants
@@ -226,6 +227,7 @@ impl<'a> VulkanApp<'a> {
         };
 
         let ubo_pass = UBOPass::new(&mut render_context, render_pass);
+        let transient_input_pass = TransientInputPass::new(&mut render_context, render_pass);
 
         let mut frame_graph = FrameGraph::new();
         // framegraph.start();
