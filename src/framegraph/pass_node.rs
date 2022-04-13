@@ -1,10 +1,15 @@
+use std::collections::HashMap;
 use ash::vk;
-use crate::resource::resource_manager::{ResourceHandle};
+use crate::resource::resource_manager::{ResourceHandle, TransientResource, TransientResourceMap};
 use crate::context::render_context::{RenderContext};
 use crate::ResolvedResource;
 
 //type FillCallback = fn(&RenderContext, &vk::CommandBuffer);
-type FillCallback = dyn Fn(&RenderContext, vk::CommandBuffer, &[ResolvedResource]);
+// type FillCallback = dyn Fn(&RenderContext, vk::CommandBuffer, &[ResolvedResource]);
+type FillCallback = dyn (
+    Fn(&RenderContext, vk::CommandBuffer, &TransientResourceMap)
+);
+// HashMap<ResourceHandle, TransientResource>
 
 pub struct PassNode {
     layout: vk::PipelineLayout,
@@ -25,8 +30,6 @@ pub struct PassNodeBuilder {
     layout: Option<vk::PipelineLayout>,
     pipeline: Option<vk::Pipeline>,
     renderpass: Option<vk::RenderPass>,
-    // inputs: Option<Vec<ResourceHandle>>,
-    // outputs: Option<Vec<ResourceHandle>>,
     inputs: Option<Vec<ResourceHandle>>,
     outputs: Option<Vec<ResourceHandle>>,
     // fill_callback: Option<dyn FnMut()>
@@ -46,7 +49,8 @@ impl PassNode {
         &self,
         render_context: &RenderContext,
         command_buffer: vk::CommandBuffer,
-        resolved_inputs: &[ResolvedResource])
+        resolved_inputs: &TransientResourceMap)
+        // resolved_inputs: &[ResolvedResource])
     {
         (self.fill_callback)(render_context, command_buffer, resolved_inputs);
     }
@@ -90,7 +94,8 @@ impl PassNodeBuilder {
     //     where F: FnMut()
     // pub fn fill_commands(&mut self, fill_callback: impl Fn(&RenderContext, &vk::CommandBuffer)) -> &mut Self
     // pub fn fill_commands(&mut self, fill_callback: Box<FillCallback>) -> &mut Self
-    pub fn fill_commands(&mut self, fill_callback: Box<dyn Fn(&RenderContext, vk::CommandBuffer, &[ResolvedResource])>) -> &mut Self
+    // pub fn fill_commands(&mut self, fill_callback: Box<dyn Fn(&RenderContext, vk::CommandBuffer, &[ResolvedResource])>) -> &mut Self
+    pub fn fill_commands(&mut self, fill_callback: Box<FillCallback>) -> &mut Self
     {
         self.fill_callback = Some(fill_callback);
         self
