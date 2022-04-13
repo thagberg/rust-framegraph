@@ -518,7 +518,11 @@ impl RenderContext {
             ty: vk::DescriptorType::INPUT_ATTACHMENT,
             descriptor_count: 8
         };
-        let descriptor_pool_sizes = [ubo_pool_size, image_pool_size];
+        let combined_sampler_pool_size = vk::DescriptorPoolSize::builder()
+            .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(8)
+            .build();
+        let descriptor_pool_sizes = [ubo_pool_size, image_pool_size, combined_sampler_pool_size];
         let descriptor_pool_create = vk::DescriptorPoolCreateInfo {
             s_type: vk::StructureType::DESCRIPTOR_POOL_CREATE_INFO,
             p_next: std::ptr::null(),

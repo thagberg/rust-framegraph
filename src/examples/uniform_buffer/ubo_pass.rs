@@ -4,7 +4,7 @@ use ash::vk;
 
 use crate::context::render_context::RenderContext;
 use crate::framegraph::pass_node::{PassNodeBuilder, PassNode};
-use crate::resource::resource_manager::{ResourceType, ResourceHandle, ResolvedResource};
+use crate::resource::resource_manager::{ResourceType, ResourceHandle, ResolvedResource, TransientResourceMap};
 
 use untitled::{
     utility,
@@ -12,6 +12,7 @@ use untitled::{
     utility::debug::*,
     utility::share,
 };
+use crate::TransientInputPass;
 
 pub struct OffsetUBO {
     pub offset: [f32; 3]
@@ -272,9 +273,10 @@ impl UBOPass {
             .pipeline(graphics_pipelines[0])
             // .inputs(vec![self.uniform_buffer])
             .inputs(vec![uniform_buffer])
-            .fill_commands(Box::new(move |render_context: &RenderContext, command_buffer: vk::CommandBuffer, inputs: &[ResolvedResource]| {
+            .fill_commands(Box::new(move |render_context: &RenderContext, command_buffer: vk::CommandBuffer, inputs: &TransientResourceMap| {
                 println!("I'm doing something!");
-                match inputs[0].resource {
+                let ubo = inputs.get(&uniform_buffer).expect("No resolved UBO");
+                match ubo.resource {
                     ResourceType::Buffer(buffer) => {
                         let descriptor_buffer = vk::DescriptorBufferInfo {
                             buffer,

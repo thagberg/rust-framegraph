@@ -1,6 +1,7 @@
+use std::collections::HashMap;
 use ash::vk;
 use crate::{PassNode, PassNodeBuilder, RenderContext};
-use crate::resource::resource_manager::{ResolvedResource, ResourceHandle};
+use crate::resource::resource_manager::{ResolvedResource, ResourceHandle, TransientResourceMap};
 
 pub struct FrameGraph<'a> {
     nodes: Vec<&'a PassNode>,
@@ -40,7 +41,8 @@ impl<'a> FrameGraph<'a> {
         let mut next = self.nodes.pop();
         while next.is_some() {
             let node = next.unwrap();
-            let mut resolved_inputs: Vec<ResolvedResource> = Vec::new();
+            // let mut resolved_inputs: Vec<ResolvedResource> = Vec::new();
+            let mut resolved_inputs = TransientResourceMap::new();
             let mut resolved_outputs: Vec<ResolvedResource>= Vec::new();
             // let inputs = node.get_inputs().as_ref().unwrap();
             // let outputs = node.get_outputs().as_ref().unwrap();
@@ -48,7 +50,8 @@ impl<'a> FrameGraph<'a> {
             let outputs = node.get_outputs().as_ref();
             for input in inputs {
                 let resolved = render_context.resolve_resource(input);
-                resolved_inputs.push(resolved);
+                // resolved_inputs.push(resolved);
+                resolved_inputs.insert(input.clone(), resolved.clone());
             }
             node.execute(render_context, command_buffer, &resolved_inputs);
             next = self.nodes.pop();

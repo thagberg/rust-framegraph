@@ -62,6 +62,8 @@ pub struct ResourceManager {
     persistent_resource_map: HashMap<ResourceHandle, PersistentResource>
 }
 
+pub type TransientResourceMap = HashMap<ResourceHandle, ResolvedResource>;
+
 impl ResolvedBuffer {
     pub fn get(&self) -> vk::Buffer { self.buffer }
     pub fn get_allocation(&self) -> &Allocation { &self.allocation }
