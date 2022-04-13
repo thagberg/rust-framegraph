@@ -13,7 +13,11 @@ pub struct TransientInputPass {
 }
 
 impl TransientInputPass {
-    pub fn new(render_context: &mut RenderContext, render_pass: vk::RenderPass) -> Self {
+    pub fn new(
+        render_context: &mut RenderContext,
+        render_pass: vk::RenderPass,
+        texture_handle: ResourceHandle) -> Self
+    {
         // create descriptor set layouts
         let texture_binding = vk::DescriptorSetLayoutBinding::builder()
             .binding(0)

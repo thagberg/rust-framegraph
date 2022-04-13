@@ -55,6 +55,11 @@ pub struct ResolvedBuffer {
     allocation: Allocation
 }
 
+pub struct ResolvedImage {
+    image: vk::Image,
+    allocation: Allocation
+}
+
 pub struct ResourceManager {
     next_handle: u32,
     allocator: Allocator,
@@ -109,14 +114,30 @@ impl ResourceManager {
 
     pub fn create_buffer_transient(
         &mut self,
-        create_info: &vk::BufferCreateInfo
+        create_info: vk::BufferCreateInfo
     ) -> ResourceHandle {
         let ret_handle = ResourceHandle::Transient(self.next_handle);
         self.next_handle += 1;
 
         self.transient_resource_map.insert(ret_handle, TransientResource {
             handle: ret_handle,
-            create_info: ResourceCreateInfo::Buffer(create_info.clone())
+            create_info: ResourceCreateInfo::Buffer(create_info)
+        });
+
+        ret_handle
+    }
+
+    pub fn create_image_transient(
+        &mut self,
+        create_info: vk::ImageCreateInfo
+    ) -> ResourceHandle
+    {
+        let ret_handle = ResourceHandle::Transient(self.next_handle);
+        self.next_handle += 1;
+
+        self.transient_resource_map.insert(ret_handle, TransientResource {
+            handle: ret_handle,
+            create_info: ResourceCreateInfo::Image(create_info)
         });
 
         ret_handle
@@ -176,19 +197,46 @@ impl ResourceManager {
         }
     }
 
+    fn create_image(
+        &mut self,
+        device: &DeviceWrapper,
+        create_info: &vk::ImageCreateInfo
+    ) -> ResolvedImage
+    {
+        let image = unsafe {
+            device.get().create_image(create_info, None)
+                .expect("Failed to create image")
+        };
+        let requirements = unsafe {
+            device.get().get_image_memory_requirements(image)
+        };
+
+        let image_alloc = self.allocator.allocate(&AllocationCreateDesc {
+            name: "Image allocation",
+            requirements,
+            location: MemoryLocation::GpuOnly,
+            linear: true // TODO: I think this is required for render targets?
+        }).expect("Failed to allocate memory for image");
+
+        unsafe {
+            device.get().bind_image_memory(
+                image,
+                image_alloc.memory(),
+                image_alloc.offset()
+            ).expect("Faileed to bind image to memory")
+        };
+
+        ResolvedImage {
+            image,
+            allocation: image_alloc
+        }
+    }
+
     fn create_uniform_buffer(
         &mut self,
         device: &DeviceWrapper,
         create_info: &vk::BufferCreateInfo
     ) -> ResolvedBuffer {
-        // let create_info = vk::BufferCreateInfo {
-        //     s_type: vk::StructureType::BUFFER_CREATE_INFO,
-        //     size,
-        //     usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
-        //     sharing_mode: vk::SharingMode::EXCLUSIVE,
-        //     ..Default::default()
-        // };
-
         let buffer = unsafe {
             device.get().create_buffer(create_info, None)
                 .expect("Failed to create uniform buffer")
