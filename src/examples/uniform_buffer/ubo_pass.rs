@@ -271,8 +271,7 @@ impl UBOPass {
             .renderpass(render_pass)
             .layout(pipeline_layout)
             .pipeline(graphics_pipelines[0])
-            // .inputs(vec![self.uniform_buffer])
-            .inputs(vec![uniform_buffer])
+            .read(vec![uniform_buffer])
             .fill_commands(Box::new(move |render_context: &RenderContext, command_buffer: vk::CommandBuffer, inputs: &TransientResourceMap| {
                 println!("I'm doing something!");
                 let ubo = inputs.get(&uniform_buffer).expect("No resolved UBO");

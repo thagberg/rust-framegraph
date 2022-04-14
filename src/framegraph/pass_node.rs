@@ -19,6 +19,7 @@ pub struct PassNode {
     // outputs: Option<Vec<ResourceHandle>>,
     inputs: Vec<ResourceHandle>,
     outputs: Vec<ResourceHandle>,
+    creates: Vec<ResourceHandle>,
     // fill_callback: dyn FnMut()
     // fill_callback: FillCallback;
     fill_callback: Box<FillCallback>
@@ -32,6 +33,7 @@ pub struct PassNodeBuilder {
     renderpass: Option<vk::RenderPass>,
     inputs: Option<Vec<ResourceHandle>>,
     outputs: Option<Vec<ResourceHandle>>,
+    creates: Option<Vec<ResourceHandle>>,
     // fill_callback: Option<dyn FnMut()>
     // fill_callback: Option<FillCallback>
     fill_callback: Option<Box<FillCallback>>
@@ -80,13 +82,18 @@ impl PassNodeBuilder {
         self
     }
 
-    pub fn inputs(mut self, inputs: Vec<ResourceHandle>) -> Self {
+    pub fn read(mut self, inputs: Vec<ResourceHandle>) -> Self {
         self.inputs = Some(inputs);
         self
     }
 
-    pub fn outputs(mut self, outputs: Vec<ResourceHandle>) -> Self {
+    pub fn write(mut self, outputs: Vec<ResourceHandle>) -> Self {
         self.outputs = Some(outputs);
+        self
+    }
+
+    pub fn create(mut self, creates: Vec<ResourceHandle>) -> Self {
+        self.creates = Some(creates);
         self
     }
 
@@ -118,6 +125,11 @@ impl PassNodeBuilder {
                 _ => {Vec::new()}
             };
 
+            let creates = match &self.creates {
+                Some(o) => { self.creates.take().unwrap()},
+                _ => {Vec::new()}
+            };
+
             Ok(PassNode {
                 layout: self.layout.unwrap(),
                 pipeline: self.pipeline.unwrap(),
@@ -126,6 +138,7 @@ impl PassNodeBuilder {
                 // outputs: self.outputs.take(),
                 inputs: inputs,
                 outputs: outputs,
+                creates: creates,
                 // fill_callback: Box::new(self.fill_callback.as_ref().unwrap())
                 fill_callback: self.fill_callback.take().unwrap()
             })
