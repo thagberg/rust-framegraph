@@ -25,7 +25,7 @@ use crate::api_types::device::DeviceWrapper;
 use crate::api_types::instance::InstanceWrapper;
 use crate::framegraph::pass_node::{PassNodeBuilder, PassNode};
 use crate::framegraph::frame_graph::{FrameGraph};
-use crate::resource::resource_manager::{ResolvedResource, ResourceType};
+use crate::resource::resource_manager::{ResolvedResource, ResourceType, ResourceHandle};
 
 mod examples;
 use crate::examples::uniform_buffer::ubo_pass::{UBOPass, OffsetUBO};
@@ -227,7 +227,7 @@ impl<'a> VulkanApp<'a> {
         };
 
         let ubo_pass = UBOPass::new(&mut render_context, render_pass);
-        let transient_input_pass = TransientInputPass::new(&mut render_context, render_pass);
+        let transient_input_pass = TransientInputPass::new(&mut render_context, render_pass, ResourceHandle::Transient(0));
 
         let mut frame_graph = FrameGraph::new();
         // framegraph.start();

@@ -147,7 +147,7 @@ impl TransientInputPass {
             .renderpass(render_pass)
             .layout(pipeline_layout)
             .pipeline(graphics_pipelines[0])
-            .inputs(vec![])
+            .read(vec![])
             .fill_commands(Box::new(move |render_context: &RenderContext, command_buffer: vk::CommandBuffer, inputs: &TransientResourceMap| {
             }))
             .build()
