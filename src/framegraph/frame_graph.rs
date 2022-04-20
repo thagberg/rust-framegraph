@@ -43,17 +43,32 @@ impl<'a> FrameGraph<'a> {
             let node = next.unwrap();
             // let mut resolved_inputs: Vec<ResolvedResource> = Vec::new();
             let mut resolved_inputs = TransientResourceMap::new();
-            let mut resolved_outputs: Vec<ResolvedResource>= Vec::new();
+            let mut resolved_outputs = TransientResourceMap::new();
+            let mut resolved_creates = TransientResourceMap::new();
             // let inputs = node.get_inputs().as_ref().unwrap();
             // let outputs = node.get_outputs().as_ref().unwrap();
             let inputs = node.get_inputs().as_ref();
             let outputs = node.get_outputs().as_ref();
+            let creates = node.get_creates().as_ref();
             for input in inputs {
                 let resolved = render_context.resolve_resource(input);
                 // resolved_inputs.push(resolved);
                 resolved_inputs.insert(input.clone(), resolved.clone());
             }
-            node.execute(render_context, command_buffer, &resolved_inputs);
+            for output in outputs {
+                let resolved = render_context.resolve_resource(output);
+                resolved_outputs.insert(output.clone(), resolved.clone());
+            }
+            for create in creates {
+                let resolved = render_context.resolve_resource(create);
+                resolved_creates.insert(create.clone(), resolved.clone());
+            }
+            node.execute(
+                render_context,
+                command_buffer,
+                &resolved_inputs,
+                &resolved_outputs,
+                &resolved_creates);
             next = self.nodes.pop();
         }
     }

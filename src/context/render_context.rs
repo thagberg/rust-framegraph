@@ -18,7 +18,13 @@ use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper};
 use crate::api_types::swapchain::SwapchainWrapper;
 use crate::api_types::image::ImageWrapper;
 use crate::api_types::surface::SurfaceCapabilities;
-use crate::resource::resource_manager::{ResolvedBuffer, ResourceManager, ResourceHandle, ResolvedResource};
+use crate::resource::resource_manager::{
+    ResolvedBuffer,
+    ResourceManager,
+    ResourceHandle,
+    ResolvedResource,
+    ResourceCreateInfo
+};
 
 pub struct RenderContext {
     graphics_queue: vk::Queue,
@@ -594,6 +600,16 @@ impl RenderContext {
     {
 
         self.resource_manager.update_buffer(&self.device, buffer_handle, fill_callback);
+    }
+
+    pub fn create_transient_buffer(&mut self, create_info: vk::BufferCreateInfo) -> ResourceHandle
+    {
+        self.resource_manager.create_buffer_transient(create_info)
+    }
+
+    pub fn create_transient_image(&mut self, create_info: vk::ImageCreateInfo) -> ResourceHandle
+    {
+        self.resource_manager.create_image_transient(create_info)
     }
 
     pub fn resolve_resource(&self, handle: &ResourceHandle) -> ResolvedResource {

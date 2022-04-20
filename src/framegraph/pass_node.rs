@@ -7,7 +7,13 @@ use crate::ResolvedResource;
 //type FillCallback = fn(&RenderContext, &vk::CommandBuffer);
 // type FillCallback = dyn Fn(&RenderContext, vk::CommandBuffer, &[ResolvedResource]);
 type FillCallback = dyn (
-    Fn(&RenderContext, vk::CommandBuffer, &TransientResourceMap)
+    Fn(
+        &RenderContext,
+        vk::CommandBuffer,
+        &TransientResourceMap,
+        &TransientResourceMap,
+        &TransientResourceMap
+    )
 );
 // HashMap<ResourceHandle, TransientResource>
 
@@ -19,6 +25,7 @@ pub struct PassNode {
     // outputs: Option<Vec<ResourceHandle>>,
     inputs: Vec<ResourceHandle>,
     outputs: Vec<ResourceHandle>,
+    // creates: Vec<TransientResource>,
     creates: Vec<ResourceHandle>,
     // fill_callback: dyn FnMut()
     // fill_callback: FillCallback;
@@ -33,6 +40,7 @@ pub struct PassNodeBuilder {
     renderpass: Option<vk::RenderPass>,
     inputs: Option<Vec<ResourceHandle>>,
     outputs: Option<Vec<ResourceHandle>>,
+    // creates: Option<Vec<TransientResource>>,
     creates: Option<Vec<ResourceHandle>>,
     // fill_callback: Option<dyn FnMut()>
     // fill_callback: Option<FillCallback>
@@ -51,10 +59,16 @@ impl PassNode {
         &self,
         render_context: &RenderContext,
         command_buffer: vk::CommandBuffer,
-        resolved_inputs: &TransientResourceMap)
-        // resolved_inputs: &[ResolvedResource])
+        resolved_inputs: &TransientResourceMap,
+        resolved_outputs: &TransientResourceMap,
+        resolved_creates: &TransientResourceMap)
     {
-        (self.fill_callback)(render_context, command_buffer, resolved_inputs);
+        (self.fill_callback)(
+            render_context,
+            command_buffer,
+            resolved_inputs,
+            resolved_outputs,
+            resolved_creates);
     }
 
     pub fn get_inputs(&self) -> &[ResourceHandle] {
@@ -64,6 +78,8 @@ impl PassNode {
     pub fn get_outputs(&self) -> &[ResourceHandle] {
         &self.outputs
     }
+
+    pub fn get_creates(&self) -> &[ResourceHandle] { &self.creates }
 }
 
 impl PassNodeBuilder {
