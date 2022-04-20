@@ -148,7 +148,7 @@ impl TransientInputPass {
             .layout(pipeline_layout)
             .pipeline(graphics_pipelines[0])
             .read(vec![])
-            .fill_commands(Box::new(move |render_context: &RenderContext, command_buffer: vk::CommandBuffer, inputs: &TransientResourceMap| {
+            .fill_commands(Box::new(move |render_context: &RenderContext, command_buffer: vk::CommandBuffer, inputs: &TransientResourceMap, outputs: &TransientResourceMap, creates: &TransientResourceMap| {
             }))
             .build()
             .expect("Failed ot create transient input PassNode");

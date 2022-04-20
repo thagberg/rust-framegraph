@@ -4,7 +4,7 @@ use ash::vk;
 
 use crate::context::render_context::RenderContext;
 use crate::framegraph::pass_node::{PassNodeBuilder, PassNode};
-use crate::resource::resource_manager::{ResourceType, ResourceHandle, ResolvedResource, TransientResourceMap};
+use crate::resource::resource_manager::{ResourceType, ResourceHandle, ResolvedResource, TransientResourceMap, TransientResource};
 
 use untitled::{
     utility,
@@ -266,13 +266,24 @@ impl UBOPass {
             render_context.get_device().destroy_shader_module(frag_shader_module, None);
         }
 
+        // let render_target = TransientResource
+        let render_target = render_context.create_transient_image(
+            vk::ImageCreateInfo::builder()
+                .image_type(vk::ImageType::TYPE_2D)
+                .format(vk::Format::R8G8B8A8_SRGB)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                .build()
+        );
+
         // let pass_node = PassNode::builder()
         let pass_node =PassNode::builder()
             .renderpass(render_pass)
             .layout(pipeline_layout)
             .pipeline(graphics_pipelines[0])
             .read(vec![uniform_buffer])
-            .fill_commands(Box::new(move |render_context: &RenderContext, command_buffer: vk::CommandBuffer, inputs: &TransientResourceMap| {
+            .create(vec![render_target])
+            .fill_commands(Box::new(move |render_context: &RenderContext, command_buffer: vk::CommandBuffer, inputs: &TransientResourceMap, outputs: &TransientResourceMap, creates: &TransientResourceMap| {
                 println!("I'm doing something!");
                 let ubo = inputs.get(&uniform_buffer).expect("No resolved UBO");
                 match ubo.resource {
