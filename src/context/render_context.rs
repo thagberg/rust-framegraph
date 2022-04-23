@@ -612,7 +612,7 @@ impl RenderContext {
         self.resource_manager.create_image_transient(create_info)
     }
 
-    pub fn resolve_resource(&self, handle: &ResourceHandle) -> ResolvedResource {
+    pub fn resolve_resource(&mut self, handle: &ResourceHandle) -> ResolvedResource {
         self.resource_manager.resolve_resource(handle)
     }
 

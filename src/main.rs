@@ -372,7 +372,7 @@ impl<'a> VulkanApp<'a> {
                     self.graphics_pipeline);
             }
 
-            frame_graph.end(&self.render_context, command_buffer);
+            frame_graph.end(&mut self.render_context, command_buffer);
         }
 
         unsafe {
