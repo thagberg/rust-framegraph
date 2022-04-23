@@ -64,6 +64,7 @@ pub struct ResourceManager {
     next_handle: u32,
     allocator: Allocator,
     transient_resource_map: HashMap<ResourceHandle, TransientResource>,
+    resolved_resource_map: HashMap<ResourceHandle, ResolvedResource>,
     persistent_resource_map: HashMap<ResourceHandle, PersistentResource>
 }
 
@@ -92,14 +93,32 @@ impl ResourceManager {
             next_handle: 0,
             allocator,
             transient_resource_map: HashMap::new(),
+            resolved_resource_map: HashMap::new(),
             persistent_resource_map: HashMap::new()
         }
     }
 
-    pub fn resolve_resource(&self, handle: &ResourceHandle) -> ResolvedResource {
+    pub fn resolve_resource(&mut self, handle: &ResourceHandle) -> ResolvedResource {
         match handle {
             ResourceHandle::Transient(_) => {
-                panic!("Need to implement this for transient resources");
+                let resolved = self.resolved_resource_map.get(handle);
+                match resolved {
+                    Some(found) => { found.clone() },
+                    None => {
+                        let transient = self.transient_resource_map.get(handle)
+                            .expect("No transient resource found");
+                        match transient.create_info {
+                            ResourceCreateInfo::Buffer(buffer_create) => {
+                                panic!("Add buffer create");
+                            },
+                            ResourceCreateInfo::Image(image_create) => {
+                                panic!("Add image create");
+                            }
+                        }
+                    }
+                }
+                // let resolved = self.transient_resource_map.get(handle)
+                //     .expect("Transient resource was not added");
             },
             ResourceHandle::Persistent(_) => {
                 let resolved = self.persistent_resource_map.get(handle)
