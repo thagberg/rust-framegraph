@@ -4,7 +4,7 @@ use ash::vk;
 
 use crate::context::render_context::RenderContext;
 use crate::framegraph::pass_node::{PassNodeBuilder, PassNode};
-use crate::resource::resource_manager::{ResourceType, ResourceHandle, ResolvedResource, TransientResourceMap, TransientResource};
+use crate::resource::resource_manager::{ResourceType, ResourceHandle, ResolvedResource, ResolvedResourceMap, TransientResource};
 
 use untitled::{
     utility,
@@ -23,7 +23,53 @@ pub struct UBOPass {
 }
 
 impl UBOPass {
-    pub fn new(render_context: &mut RenderContext, render_pass: vk::RenderPass) -> Self {
+    fn generate_renderpass(render_context: &mut RenderContext) -> vk::RenderPass {
+        let color_attachment = vk::AttachmentDescription::builder()
+            .format(vk::Format::R8G8B8A8_SRGB)
+            .flags(vk::AttachmentDescriptionFlags::empty())
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .final_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+
+        let color_attachment_ref = vk::AttachmentReference::builder()
+            .attachment(0)
+            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+
+        // TODO: update vulkan so I can ignore subpasses
+        let subpass = vk::SubpassDescription::builder()
+            .color_attachments(std::slice::from_ref(&color_attachment_ref))
+            .flags(vk::SubpassDescriptionFlags::empty())
+            .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS);
+
+        let subpass_dependency = vk::SubpassDependency::builder()
+            .src_subpass(vk::SUBPASS_EXTERNAL)
+            .dst_subpass(0)
+            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .src_access_mask(vk::AccessFlags::empty())
+            .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+            .dependency_flags(vk::DependencyFlags::empty());
+
+        let render_pass_create_info = vk::RenderPassCreateInfo::builder()
+            .flags(vk::RenderPassCreateFlags::empty())
+            .attachments(std::slice::from_ref(&color_attachment))
+            .subpasses(std::slice::from_ref(&subpass))
+            .dependencies(std::slice::from_ref(&subpass_dependency));
+
+        let render_pass = unsafe {
+            render_context.get_device().create_render_pass(&render_pass_create_info, None)
+                .expect("Failed to create renderpass for UBO Pass")
+        };
+
+        render_pass
+    }
+
+    pub fn new(render_context: &mut RenderContext) -> Self {
+        let render_pass = Self::generate_renderpass(render_context);
         let ubo_create_info = vk::BufferCreateInfo {
             s_type: vk::StructureType::BUFFER_CREATE_INFO,
             size: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize,
@@ -272,7 +318,13 @@ impl UBOPass {
                 .image_type(vk::ImageType::TYPE_2D)
                 .format(vk::Format::R8G8B8A8_SRGB)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE)
-                .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                // .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                .initial_layout(vk::ImageLayout::UNDEFINED)
+                .samples(vk::SampleCountFlags::TYPE_1)
+                .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                .extent(vk::Extent3D::builder().height(100).width(100).depth(1).build())
+                .mip_levels(1)
+                .array_layers(1)
                 .build()
         );
 
@@ -283,11 +335,20 @@ impl UBOPass {
             .pipeline(graphics_pipelines[0])
             .read(vec![uniform_buffer])
             .create(vec![render_target])
-            .fill_commands(Box::new(move |render_context: &RenderContext, command_buffer: vk::CommandBuffer, inputs: &TransientResourceMap, outputs: &TransientResourceMap, creates: &TransientResourceMap| {
+            .fill_commands(Box::new(move |render_context: &RenderContext, command_buffer: vk::CommandBuffer, inputs: &ResolvedResourceMap, outputs: &ResolvedResourceMap, creates: &ResolvedResourceMap| {
                 println!("I'm doing something!");
-                let ubo = inputs.get(&uniform_buffer).expect("No resolved UBO");
-                match ubo.resource {
-                    ResourceType::Buffer(buffer) => {
+                let render_target = creates.get(&render_target)
+                    .expect("No resolved render target");
+                let ubo = inputs.get(&uniform_buffer)
+                    .expect("No resolved UBO");
+                match (render_target.resource, ubo.resource) {
+                    (ResourceType::Image(rt), ResourceType::Buffer(buffer)) => {
+                        let framebuffer = render_context.create_framebuffers(
+                            render_pass,
+                            &vk::Extent2D::builder().width(100).height(100),
+                            std::slice::from_ref(&rt)
+                        );
+
                         let descriptor_buffer = vk::DescriptorBufferInfo {
                             buffer,
                             offset: 0,

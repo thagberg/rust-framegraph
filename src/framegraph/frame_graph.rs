@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use ash::vk;
 use crate::{PassNode, PassNodeBuilder, RenderContext};
-use crate::resource::resource_manager::{ResolvedResource, ResourceHandle, TransientResourceMap};
+use crate::resource::resource_manager::{ResolvedResource, ResourceHandle, ResolvedResourceMap};
 
 pub struct FrameGraph<'a> {
     nodes: Vec<&'a PassNode>,
@@ -42,25 +42,28 @@ impl<'a> FrameGraph<'a> {
         while next.is_some() {
             let node = next.unwrap();
             // let mut resolved_inputs: Vec<ResolvedResource> = Vec::new();
-            let mut resolved_inputs = TransientResourceMap::new();
-            let mut resolved_outputs = TransientResourceMap::new();
-            let mut resolved_creates = TransientResourceMap::new();
+            let mut resolved_inputs = ResolvedResourceMap::new();
+            let mut resolved_outputs = ResolvedResourceMap::new();
+            let mut resolved_creates = ResolvedResourceMap::new();
             // let inputs = node.get_inputs().as_ref().unwrap();
             // let outputs = node.get_outputs().as_ref().unwrap();
             let inputs = node.get_inputs().as_ref();
             let outputs = node.get_outputs().as_ref();
             let creates = node.get_creates().as_ref();
             for input in inputs {
-                let resolved = render_context.resolve_resource(input);
+                let resolved = render_context.resolve_resource(
+                    input);
                 // resolved_inputs.push(resolved);
                 resolved_inputs.insert(input.clone(), resolved.clone());
             }
             for output in outputs {
-                let resolved = render_context.resolve_resource(output);
+                let resolved = render_context.resolve_resource(
+                    output);
                 resolved_outputs.insert(output.clone(), resolved.clone());
             }
             for create in creates {
-                let resolved = render_context.resolve_resource(create);
+                let resolved = render_context.resolve_resource(
+                    create);
                 resolved_creates.insert(create.clone(), resolved.clone());
             }
             node.execute(

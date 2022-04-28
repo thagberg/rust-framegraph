@@ -31,7 +31,6 @@ pub struct RenderContext {
     present_queue: vk::Queue,
     compute_queue: vk::Queue,
     swapchain: Option<SwapchainWrapper>,
-    swapchain_image_views: Option<Vec<vk::ImageView>>,
     surface: Option<SurfaceWrapper>,
     graphics_command_pool: vk::CommandPool,
     descriptor_pool: vk::DescriptorPool,
@@ -405,12 +404,12 @@ fn create_swapchain(
 
 fn create_image_view(
     device: &DeviceWrapper,
-    image: &ImageWrapper,
+    image: &mut ImageWrapper,
     format: vk::Format,
     image_view_flags: vk::ImageViewCreateFlags,
     aspect_flags: vk::ImageAspectFlags,
-    mip_levels: u32
-) -> vk::ImageView {
+    mip_levels: u32)
+{
     let create_info = vk::ImageViewCreateInfo {
         s_type: vk::StructureType::IMAGE_VIEW_CREATE_INFO,
         p_next: std::ptr::null(),
@@ -433,10 +432,10 @@ fn create_image_view(
         image: image.get()
     };
 
-    unsafe {
+    image.view = Some(unsafe {
         device.get().create_image_view(&create_info, None)
             .expect("Failed to create image view.")
-    }
+    });
 }
 
 impl RenderContext {
@@ -497,24 +496,19 @@ impl RenderContext {
             }
         };
 
-        let swapchain_image_views: Option<Vec<vk::ImageView>> = {
-            match &swapchain {
-                Some(swapchain) => {
-                    Some(swapchain.get_images().iter()
-                        .map(|image| {
-                            create_image_view(
-                                &logical_device,
-                                image,
-                                swapchain.get_format(),
-                                vk::ImageViewCreateFlags::empty(),
-                                vk::ImageAspectFlags::COLOR,
-                                1)
-                        })
-                        .collect())
-                },
-                _ => { None }
+        if let Option::Some(s) = swapchain
+        {
+            for image in s.get_images().iter_mut()
+            {
+                create_image_view(
+                    &logical_device,
+                    image,
+                    s.get_format(),
+                    vk::ImageViewCreateFlags::empty(),
+                    vk::ImageAspectFlags::COLOR,
+                    1);
             }
-        };
+        }
 
         let ubo_pool_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::UNIFORM_BUFFER,
@@ -560,7 +554,6 @@ impl RenderContext {
             compute_queue,
             graphics_command_pool,
             swapchain,
-            swapchain_image_views,
             descriptor_pool,
             resource_manager
         }
@@ -569,6 +562,8 @@ impl RenderContext {
     pub fn get_instance(&self) -> &ash::Instance {
         &self.instance.get()
     }
+
+    pub fn get_device_wrapper(&self) -> &DeviceWrapper { &self.device }
 
     pub fn get_device(&self) -> &ash::Device { &self.device.get() }
 
@@ -586,11 +581,6 @@ impl RenderContext {
 
     pub fn get_swapchain(&self) -> &Option<SwapchainWrapper> { &self.swapchain }
 
-    pub fn get_swapchain_image_views(&self) -> &Option<Vec<vk::ImageView>> { &self.swapchain_image_views }
-
-    // pub fn create_uniform_buffer(&mut self, size: vk::DeviceSize) -> ResolvedBuffer {
-    //     self.resource_manager.create_uniform_buffer(&self.device, size)
-    // }
     pub fn create_buffer_persistent(&mut self, create_info: &vk::BufferCreateInfo) -> ResourceHandle {
         self.resource_manager.create_buffer_persistent(&self.device, create_info)
     }
@@ -613,7 +603,7 @@ impl RenderContext {
     }
 
     pub fn resolve_resource(&mut self, handle: &ResourceHandle) -> ResolvedResource {
-        self.resource_manager.resolve_resource(handle)
+        self.resource_manager.resolve_resource(&self.device, handle)
     }
 
     pub fn create_descriptor_sets(
@@ -635,6 +625,40 @@ impl RenderContext {
 
         descriptor_sets
     }
+
+    pub fn create_framebuffers(
+        &self,
+        render_pass: vk::RenderPass,
+        extent: &vk::Extent2D,
+        images: &[ImageWrapper]) -> Vec<vk::Framebuffer>
+    {
+        let mut framebuffers = vec![];
+
+        // TODO: this shouldn't need to iterate over images twice
+        let image_views: Vec<vk::ImageView> = images.iter().filter(
+            |i| {
+                assert!(i.view.is_some(), "Attempting to create framebuffer without valid image view");
+                i.view.is_some()
+            }).map(|i| i.view.unwrap()).collect();
+        for view in image_views.iter()
+        {
+            let create_info = vk::FramebufferCreateInfo::builder()
+                .render_pass(render_pass)
+                .attachments(std::slice::from_ref(view))
+                .width(extent.width)
+                .height(extent.height)
+                .layers(1);
+
+            let framebuffer = unsafe {
+                self.device.get().create_framebuffer(&create_info, None)
+                    .expect("Failed to create framebuffer")
+            };
+
+            framebuffers.push(framebuffer);
+        }
+
+        framebuffers
+    }
 }
 
 impl Drop for RenderContext {
@@ -642,11 +666,11 @@ impl Drop for RenderContext {
         unsafe {
             self.device.get().destroy_command_pool(self.graphics_command_pool, None);
 
-            if self.swapchain_image_views.is_some() {
-                for &imageview in self.swapchain_image_views.as_ref().unwrap().iter() {
-                    self.device.get().destroy_image_view(imageview, None);
-                }
-            }
+            // if self.swapchain_image_views.is_some() {
+            //     for &imageview in self.swapchain_image_views.as_ref().unwrap().iter() {
+            //         self.device.get().destroy_image_view(imageview, None);
+            //     }
+            // }
         }
     }
 }

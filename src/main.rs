@@ -226,7 +226,7 @@ impl<'a> VulkanApp<'a> {
                 swapchain_extent)
         };
 
-        let ubo_pass = UBOPass::new(&mut render_context, render_pass);
+        let ubo_pass = UBOPass::new(&mut render_context);
         let transient_input_pass = TransientInputPass::new(&mut render_context, render_pass, ResourceHandle::Transient(0));
 
         let mut frame_graph = FrameGraph::new();
