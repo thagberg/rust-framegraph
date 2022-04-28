@@ -2,7 +2,7 @@ use ash::vk;
 
 use crate::context::render_context::RenderContext;
 use crate::framegraph::pass_node::{PassNodeBuilder, PassNode};
-use crate::resource::resource_manager::{ResourceType, ResourceHandle, ResolvedResource, TransientResourceMap};
+use crate::resource::resource_manager::{ResourceType, ResourceHandle, ResolvedResource, ResolvedResourceMap};
 
 use untitled::{
     utility::share,
@@ -148,7 +148,7 @@ impl TransientInputPass {
             .layout(pipeline_layout)
             .pipeline(graphics_pipelines[0])
             .read(vec![])
-            .fill_commands(Box::new(move |render_context: &RenderContext, command_buffer: vk::CommandBuffer, inputs: &TransientResourceMap, outputs: &TransientResourceMap, creates: &TransientResourceMap| {
+            .fill_commands(Box::new(move |render_context: &RenderContext, command_buffer: vk::CommandBuffer, inputs: &ResolvedResourceMap, outputs: &ResolvedResourceMap, creates: &ResolvedResourceMap| {
             }))
             .build()
             .expect("Failed ot create transient input PassNode");

@@ -4,7 +4,8 @@ use ash::vk;
 use gpu_allocator::vulkan::*;
 use gpu_allocator::MemoryLocation;
 use crate::api_types::device::PhysicalDeviceWrapper;
-use crate::DeviceWrapper;
+use crate::{DeviceWrapper, RenderContext};
+use crate::api_types::image::ImageWrapper;
 
 #[derive(Clone, Copy, Hash, std::cmp::Eq)]
 pub enum ResourceHandle {
@@ -27,10 +28,11 @@ pub enum ResourceCreateInfo {
     Image(vk::ImageCreateInfo)
 }
 
-#[derive(Clone, Copy)]
+// #[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum ResourceType {
     Buffer(vk::Buffer),
-    Image(vk::Image)
+    Image(ImageWrapper)
 }
 
 pub struct TransientResource {
@@ -44,7 +46,8 @@ pub struct PersistentResource {
     pub allocation: Allocation
 }
 
-#[derive(Clone, Copy)]
+// #[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct ResolvedResource {
     pub handle: ResourceHandle,
     pub resource: ResourceType
@@ -56,19 +59,19 @@ pub struct ResolvedBuffer {
 }
 
 pub struct ResolvedImage {
-    image: vk::Image,
+    image: ImageWrapper,
     allocation: Allocation
 }
+
+pub type ResolvedResourceMap = HashMap<ResourceHandle, ResolvedResource>;
 
 pub struct ResourceManager {
     next_handle: u32,
     allocator: Allocator,
     transient_resource_map: HashMap<ResourceHandle, TransientResource>,
-    resolved_resource_map: HashMap<ResourceHandle, ResolvedResource>,
+    resolved_resource_map: ResolvedResourceMap,
     persistent_resource_map: HashMap<ResourceHandle, PersistentResource>
 }
-
-pub type TransientResourceMap = HashMap<ResourceHandle, ResolvedResource>;
 
 impl ResolvedBuffer {
     pub fn get(&self) -> vk::Buffer { self.buffer }
@@ -98,7 +101,11 @@ impl ResourceManager {
         }
     }
 
-    pub fn resolve_resource(&mut self, handle: &ResourceHandle) -> ResolvedResource {
+    pub fn resolve_resource(
+        &mut self,
+        device: &DeviceWrapper,
+        handle: &ResourceHandle) -> ResolvedResource
+    {
         match handle {
             ResourceHandle::Transient(_) => {
                 let resolved = self.resolved_resource_map.get(handle);
@@ -107,14 +114,25 @@ impl ResourceManager {
                     None => {
                         let transient = self.transient_resource_map.get(handle)
                             .expect("No transient resource found");
+                        let resolved_resource: Option<ResolvedResource>;
                         match transient.create_info {
                             ResourceCreateInfo::Buffer(buffer_create) => {
-                                panic!("Add buffer create");
+                                let resolved_buffer = self.create_resolved_buffer(device, &buffer_create);
+                                resolved_resource = Some(ResolvedResource {
+                                    handle: handle.clone(),
+                                    resource: ResourceType::Buffer(resolved_buffer.buffer)
+                                });
                             },
                             ResourceCreateInfo::Image(image_create) => {
-                                panic!("Add image create");
+                                let resolved_image = self.create_resolved_image(device, &image_create);
+                                resolved_resource = Some(ResolvedResource {
+                                    handle: handle.clone(),
+                                    resource: ResourceType::Image(resolved_image.image)
+                                });
                             }
                         }
+                        resolved_resource
+                            .expect("Failed to create transient resource")
                     }
                 }
                 // let resolved = self.transient_resource_map.get(handle)
@@ -160,6 +178,22 @@ impl ResourceManager {
         });
 
         ret_handle
+    }
+
+    fn create_resolved_image(
+        &mut self,
+        device: &DeviceWrapper,
+        create_info: &vk::ImageCreateInfo
+    ) -> ResolvedImage {
+        self.create_image(device, create_info)
+    }
+
+    fn create_resolved_buffer(
+        &mut self,
+        device: &DeviceWrapper,
+        create_info: &vk::BufferCreateInfo
+    ) -> ResolvedBuffer {
+       self.create_uniform_buffer(device, create_info)
     }
 
     pub fn create_buffer_persistent(
@@ -222,24 +256,18 @@ impl ResourceManager {
         create_info: &vk::ImageCreateInfo
     ) -> ResolvedImage
     {
-        let image = unsafe {
-            device.get().create_image(create_info, None)
-                .expect("Failed to create image")
-        };
-        let requirements = unsafe {
-            device.get().get_image_memory_requirements(image)
-        };
+        let (image, requirements) = device.create_image(create_info);
 
         let image_alloc = self.allocator.allocate(&AllocationCreateDesc {
             name: "Image allocation",
             requirements,
-            location: MemoryLocation::GpuOnly,
+            location: MemoryLocation::GpuOnly, // TODO: Parameterized eventually?
             linear: true // TODO: I think this is required for render targets?
         }).expect("Failed to allocate memory for image");
 
         unsafe {
             device.get().bind_image_memory(
-                image,
+                image.image,
                 image_alloc.memory(),
                 image_alloc.offset()
             ).expect("Faileed to bind image to memory")

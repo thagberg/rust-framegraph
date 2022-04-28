@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use ash::vk;
-use crate::resource::resource_manager::{ResourceHandle, TransientResource, TransientResourceMap};
+use crate::resource::resource_manager::{ResourceHandle, TransientResource, ResolvedResourceMap};
 use crate::context::render_context::{RenderContext};
 use crate::ResolvedResource;
 
@@ -10,9 +10,9 @@ type FillCallback = dyn (
     Fn(
         &RenderContext,
         vk::CommandBuffer,
-        &TransientResourceMap,
-        &TransientResourceMap,
-        &TransientResourceMap
+        &ResolvedResourceMap,
+        &ResolvedResourceMap,
+        &ResolvedResourceMap
     )
 );
 // HashMap<ResourceHandle, TransientResource>
@@ -59,9 +59,9 @@ impl PassNode {
         &self,
         render_context: &RenderContext,
         command_buffer: vk::CommandBuffer,
-        resolved_inputs: &TransientResourceMap,
-        resolved_outputs: &TransientResourceMap,
-        resolved_creates: &TransientResourceMap)
+        resolved_inputs: &ResolvedResourceMap,
+        resolved_outputs: &ResolvedResourceMap,
+        resolved_creates: &ResolvedResourceMap)
     {
         (self.fill_callback)(
             render_context,
