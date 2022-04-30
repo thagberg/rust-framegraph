@@ -19,7 +19,8 @@ pub struct OffsetUBO {
 }
 
 pub struct UBOPass {
-    pub pass_node: PassNode
+    pub pass_node: PassNode,
+    pub render_target: ResourceHandle
 }
 
 impl UBOPass {
@@ -448,7 +449,8 @@ impl UBOPass {
             .expect("Failed to create PassNode");
 
         UBOPass {
-            pass_node
+            pass_node,
+            render_target
         }
     }
 }
