@@ -256,22 +256,35 @@ impl ResourceManager {
         create_info: &vk::ImageCreateInfo
     ) -> ResolvedImage
     {
-        let (image, requirements) = device.create_image(create_info);
+        let mut image_alloc: Allocation = Default::default();
+        let image = device.create_image(
+            create_info,
+            Box::new(|memory_requirements: vk::MemoryRequirements| -> (vk::DeviceMemory, vk::DeviceSize) {
+                unsafe {
+                    image_alloc = self.allocator.allocate(&AllocationCreateDesc {
+                        name: "Image allocation",
+                        requirements: memory_requirements,
+                        location: MemoryLocation::GpuOnly, // TODO: Parameterized eventually?
+                        linear: true // TODO: I think this is required for render targets?
+                    }).expect("Failed to allocate memory for image");
+                    (image_alloc.memory(), image_alloc.offset())
+                }
+        }));
 
-        let image_alloc = self.allocator.allocate(&AllocationCreateDesc {
-            name: "Image allocation",
-            requirements,
-            location: MemoryLocation::GpuOnly, // TODO: Parameterized eventually?
-            linear: true // TODO: I think this is required for render targets?
-        }).expect("Failed to allocate memory for image");
+        // let image_alloc = self.allocator.allocate(&AllocationCreateDesc {
+        //     name: "Image allocation",
+        //     requirements,
+        //     location: MemoryLocation::GpuOnly, // TODO: Parameterized eventually?
+        //     linear: true // TODO: I think this is required for render targets?
+        // }).expect("Failed to allocate memory for image");
 
-        unsafe {
-            device.get().bind_image_memory(
-                image.image,
-                image_alloc.memory(),
-                image_alloc.offset()
-            ).expect("Faileed to bind image to memory")
-        };
+        // unsafe {
+        //     device.get().bind_image_memory(
+        //         image.image,
+        //         image_alloc.memory(),
+        //         image_alloc.offset()
+        //     ).expect("Faileed to bind image to memory")
+        // };
 
         ResolvedImage {
             image,
