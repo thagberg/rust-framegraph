@@ -52,42 +52,63 @@ impl DeviceWrapper {
     }
     pub fn get_queue_family_indices(&self) -> &QueueFamilies { &self.queue_family_indices }
 
+    pub fn create_image_view(
+        &self,
+        image: vk::Image,
+        format: vk::Format,
+        image_view_flags: vk::ImageViewCreateFlags,
+        aspect_flags: vk::ImageAspectFlags,
+        mip_levels: u32) -> vk::ImageView
+    {
+        let create_info = vk::ImageViewCreateInfo {
+            s_type: vk::StructureType::IMAGE_VIEW_CREATE_INFO,
+            p_next: std::ptr::null(),
+            flags: image_view_flags,
+            view_type: vk::ImageViewType::TYPE_2D,
+            format,
+            components: vk::ComponentMapping {
+                r: vk::ComponentSwizzle::IDENTITY,
+                g: vk::ComponentSwizzle::IDENTITY,
+                b: vk::ComponentSwizzle::IDENTITY,
+                a: vk::ComponentSwizzle::IDENTITY
+            },
+            subresource_range: vk::ImageSubresourceRange {
+                aspect_mask: aspect_flags,
+                base_mip_level: 0,
+                level_count: mip_levels,
+                base_array_layer: 0,
+                layer_count: 1
+            },
+            image: image
+        };
+
+        unsafe {
+            self.device.create_image_view(&create_info, None)
+                .expect("Failed to create image view.")
+        }
+    }
+
     pub fn create_image(&self, create_info: &vk::ImageCreateInfo) -> (ImageWrapper, vk::MemoryRequirements)
     {
 
-        let mut image = ImageWrapper::new(unsafe {
-            self.device.create_image(create_info, None)
-                .expect("Failed to create image")
-        });
+        let image_wrapper = {
+            let image = unsafe {
+                self.device.create_image(create_info, None)
+                    .expect("Failed to create image")
+            };
+            let image_view = self.create_image_view(
+                image,
+                vk::Format::R8G8B8A8_SRGB,
+                vk::ImageViewCreateFlags::empty(),
+                vk::ImageAspectFlags::COLOR,
+                1);
+            ImageWrapper::new(image, image_view)
+        };
 
         let memory_requirements = unsafe {
-            self.device.get_image_memory_requirements(image.image)
+            self.device.get_image_memory_requirements(image_wrapper.image)
         };
 
-        let image_view = unsafe {
-            self.device.create_image_view(
-                &vk::ImageViewCreateInfo::builder()
-                    .format(vk::Format::R8G8B8A8_SRGB)
-                    .view_type(vk::ImageViewType::TYPE_2D)
-                    .components(vk::ComponentMapping::builder()
-                        .r(vk::ComponentSwizzle::IDENTITY)
-                        .g(vk::ComponentSwizzle::IDENTITY)
-                        .b(vk::ComponentSwizzle::IDENTITY)
-                        .a(vk::ComponentSwizzle::IDENTITY)
-                        .build())
-                    .subresource_range(vk::ImageSubresourceRange::builder()
-                        .aspect_mask(vk::ImageAspectFlags::COLOR)
-                        .base_mip_level(0)
-                        .level_count(1)
-                        .base_array_layer(0)
-                        .layer_count(1)
-                        .build())
-                    .image(image.image),
-            None)
-                .expect("Failed to create image view")
-        };
-        image.view = Some(image_view);
-
-        (image, memory_requirements)
+        (image_wrapper, memory_requirements)
     }
 }

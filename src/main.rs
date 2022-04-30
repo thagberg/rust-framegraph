@@ -13,7 +13,7 @@ use winit::event_loop::{EventLoop, ControlFlow};
 
 use std::ptr;
 use ash::extensions::khr::Surface;
-use ash::vk::CommandBuffer;
+use ash::vk::{CommandBuffer, ImageView};
 
 mod context;
 mod api_types;
@@ -216,12 +216,16 @@ impl<'a> VulkanApp<'a> {
             render_pass,
             swapchain_extent);
         let swapchain_framebuffers = {
-            assert!(render_context.get_swapchain_image_views().is_some(), "Can't continue without image views");
-            let image_views = &render_context.get_swapchain_image_views().as_ref().unwrap();
+            // assert!(render_context.get_swapchain_image_views().is_some(), "Can't continue without image views");
+            assert!(render_context.get_swapchain().is_some(), "Can't continue without swapchain");
+            let swapchain = render_context.get_swapchain().as_ref().unwrap();
+            let image_views: Vec<vk::ImageView> = swapchain.get_images().iter()
+                .map(|s| s.view).collect();
+            // let image_views = &render_context.get_swapchain_image_views().as_ref().unwrap();
             share::v1::create_framebuffers(
                 render_context.get_device(),
                 render_pass,
-                image_views,
+                &image_views,
                 // &swapchain_imageviews,
                 swapchain_extent)
         };
@@ -243,7 +247,8 @@ impl<'a> VulkanApp<'a> {
             render_context.get_device(),
             render_context.get_graphics_command_pool(),
             graphics_pipeline,
-            &swapchain_framebuffers,
+            2,
+            // &swapchain_framebuffers,
             render_pass,
             swapchain_extent,
             &descriptor_sets,

@@ -341,7 +341,7 @@ impl UBOPass {
                     .expect("No resolved render target");
                 let ubo = inputs.get(&uniform_buffer)
                     .expect("No resolved UBO");
-                match (render_target.resource, ubo.resource) {
+                match (&render_target.resource, &ubo.resource) {
                     (ResourceType::Image(rt), ResourceType::Buffer(buffer)) => {
                         let framebuffer = render_context.create_framebuffers(
                             render_pass,
@@ -350,7 +350,7 @@ impl UBOPass {
                         );
 
                         let descriptor_buffer = vk::DescriptorBufferInfo {
-                            buffer,
+                            buffer: *buffer,
                             offset: 0,
                             range: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize
                         };

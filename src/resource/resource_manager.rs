@@ -143,7 +143,7 @@ impl ResourceManager {
                     .expect("Need to handle not found resources");
                 ResolvedResource {
                     handle: handle.clone(),
-                    resource: resolved.resource
+                    resource: resolved.resource.clone()
                 }
             }
         }
