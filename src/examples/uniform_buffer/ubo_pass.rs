@@ -329,7 +329,7 @@ impl UBOPass {
         );
 
         // let pass_node = PassNode::builder()
-        let pass_node =PassNode::builder()
+        let pass_node = PassNode::builder()
             .renderpass(render_pass)
             .layout(pipeline_layout)
             .pipeline(graphics_pipelines[0])
@@ -368,6 +368,37 @@ impl UBOPass {
                         };
                         let descriptor_write_sets = [descriptor_write];
 
+                        // TODO: move this into framegraph? Not sure how to bind framebuffer first?
+                        // begin renderpass
+                        unsafe {
+                            let clear_value = vk::ClearValue {
+                                color: vk::ClearColorValue {
+                                    float32: [0.1, 0.1, 0.1, 1.0]
+                                }
+                            };
+
+
+                            let render_pass_begin = vk::RenderPassBeginInfo::builder()
+                                .render_pass(render_pass)
+                                .framebuffer(framebuffer[0])
+                                .render_area(vk::Rect2D::builder()
+                                                 .offset(vk::Offset2D{x: 0, y: 0})
+                                                 .extent(vk::Extent2D::builder().width(100).height(100).build())
+                                                 .build())
+                                .clear_values(std::slice::from_ref(&clear_value));
+
+                            render_context.get_device().cmd_begin_render_pass(
+                                command_buffer,
+                                &render_pass_begin,
+                                vk::SubpassContents::INLINE);
+
+                            render_context.get_device().cmd_bind_pipeline(
+                                command_buffer,
+                                vk::PipelineBindPoint::GRAPHICS,
+                                graphics_pipelines[0])
+                        }
+
+                        // Draw calls
                         unsafe {
                             let device = render_context.get_device();
                             device.update_descriptor_sets(&descriptor_write_sets, &[]);
@@ -379,6 +410,12 @@ impl UBOPass {
                                 &descriptor_sets,
                                 &[]);
                             device.cmd_draw(command_buffer, 3, 1, 0, 0);
+                        }
+
+                        // TODO: move this to framegraph?
+                        // End renderpass
+                        unsafe {
+                            render_context.get_device().cmd_end_render_pass(command_buffer);
                         }
                     },
                     _ => {}

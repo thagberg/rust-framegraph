@@ -4,8 +4,6 @@ use crate::resource::resource_manager::{ResourceHandle, TransientResource, Resol
 use crate::context::render_context::{RenderContext};
 use crate::ResolvedResource;
 
-//type FillCallback = fn(&RenderContext, &vk::CommandBuffer);
-// type FillCallback = dyn Fn(&RenderContext, vk::CommandBuffer, &[ResolvedResource]);
 type FillCallback = dyn (
     Fn(
         &RenderContext,
@@ -15,22 +13,15 @@ type FillCallback = dyn (
         &ResolvedResourceMap
     )
 );
-// HashMap<ResourceHandle, TransientResource>
 
 pub struct PassNode {
     layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
     renderpass: vk::RenderPass,
-    // inputs: Option<Vec<ResourceHandle>>,
-    // outputs: Option<Vec<ResourceHandle>>,
     inputs: Vec<ResourceHandle>,
     outputs: Vec<ResourceHandle>,
-    // creates: Vec<TransientResource>,
     creates: Vec<ResourceHandle>,
-    // fill_callback: dyn FnMut()
-    // fill_callback: FillCallback;
     fill_callback: Box<FillCallback>
-    // fill_callback: Box<dyn Fn(&RenderContext, &vk::CommandBuffer, &[ResolvedResource]) + 'lifetime>
 }
 
 #[derive(Default)]
@@ -40,12 +31,8 @@ pub struct PassNodeBuilder {
     renderpass: Option<vk::RenderPass>,
     inputs: Option<Vec<ResourceHandle>>,
     outputs: Option<Vec<ResourceHandle>>,
-    // creates: Option<Vec<TransientResource>>,
     creates: Option<Vec<ResourceHandle>>,
-    // fill_callback: Option<dyn FnMut()>
-    // fill_callback: Option<FillCallback>
     fill_callback: Option<Box<FillCallback>>
-    // fill_callback: Option<Box<dyn Fn(&RenderContext, &vk::CommandBuffer, &[ResolvedResource])>>
 }
 
 impl PassNode {
@@ -70,6 +57,10 @@ impl PassNode {
             resolved_outputs,
             resolved_creates);
     }
+
+    pub fn get_pipeline(&self) -> vk::Pipeline { self.pipeline }
+
+    pub fn get_renderpass(&self) -> vk::RenderPass { self.renderpass }
 
     pub fn get_inputs(&self) -> &[ResourceHandle] {
         &self.inputs
@@ -113,11 +104,6 @@ impl PassNodeBuilder {
         self
     }
 
-    // pub fn fill_commands<F>(&mut self, mut fill_callback: F) -> &mut Self
-    //     where F: FnMut()
-    // pub fn fill_commands(&mut self, fill_callback: impl Fn(&RenderContext, &vk::CommandBuffer)) -> &mut Self
-    // pub fn fill_commands(&mut self, fill_callback: Box<FillCallback>) -> &mut Self
-    // pub fn fill_commands(&mut self, fill_callback: Box<dyn Fn(&RenderContext, vk::CommandBuffer, &[ResolvedResource])>) -> &mut Self
     pub fn fill_commands(&mut self, fill_callback: Box<FillCallback>) -> &mut Self
     {
         self.fill_callback = Some(fill_callback);
@@ -150,12 +136,9 @@ impl PassNodeBuilder {
                 layout: self.layout.unwrap(),
                 pipeline: self.pipeline.unwrap(),
                 renderpass: self.renderpass.unwrap(),
-                // inputs: self.inputs.take(),
-                // outputs: self.outputs.take(),
                 inputs: inputs,
                 outputs: outputs,
                 creates: creates,
-                // fill_callback: Box::new(self.fill_callback.as_ref().unwrap())
                 fill_callback: self.fill_callback.take().unwrap()
             })
         } else {
