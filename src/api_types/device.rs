@@ -1,6 +1,11 @@
 use ash::vk;
 use crate::api_types::image::ImageWrapper;
 
+// bind_callback: dyn Fn(vk::MemoryRequirements) -> (vk::DeviceMemory, vk::DeviceSize)) -> ImageWrapper
+type MemoryBindCallback = dyn (
+    FnMut(vk::MemoryRequirements) -> (vk::DeviceMemory, vk::DeviceSize)
+);
+
 pub struct QueueFamilies {
     pub graphics: Option<u32>,
     pub compute: Option<u32>,
@@ -88,7 +93,12 @@ impl DeviceWrapper {
         }
     }
 
-    pub fn create_image(&self, create_info: &vk::ImageCreateInfo) -> (ImageWrapper, vk::MemoryRequirements)
+    // pub fn create_image(&self, create_info: &vk::ImageCreateInfo, bind_callback: &MemoryBindingCallback) -> ImageWrapper
+    // pub fn create_image(&self, create_info: &vk::ImageCreateInfo, bind_callback: fn(vk::MemoryRequirements) -> (vk::DeviceMemory, vk::DeviceSize)) -> ImageWrapper
+    pub fn create_image(
+        &self,
+        create_info: &vk::ImageCreateInfo,
+        mut bind_callback: Box<MemoryBindCallback>) -> ImageWrapper
     {
 
         let image_wrapper = {
@@ -96,6 +106,17 @@ impl DeviceWrapper {
                 self.device.create_image(create_info, None)
                     .expect("Failed to create image")
             };
+
+            let memory_requirements = unsafe {
+                self.device.get_image_memory_requirements(image)
+            };
+
+            let (memory, offset) = bind_callback(memory_requirements);
+            unsafe {
+                self.device.bind_image_memory(image, memory, offset)
+                    .expect("Failed to bind image to memory");
+            }
+
             let image_view = self.create_image_view(
                 image,
                 vk::Format::R8G8B8A8_SRGB,
@@ -105,10 +126,6 @@ impl DeviceWrapper {
             ImageWrapper::new(image, image_view)
         };
 
-        let memory_requirements = unsafe {
-            self.device.get_image_memory_requirements(image_wrapper.image)
-        };
-
-        (image_wrapper, memory_requirements)
+        image_wrapper
     }
 }
