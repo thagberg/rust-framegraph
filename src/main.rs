@@ -365,24 +365,24 @@ impl<'a> VulkanApp<'a> {
                 p_clear_values: clear_values.as_ptr(),
             };
 
-            unsafe {
-                let device = self.render_context.get_device();
-                device.cmd_begin_render_pass(
-                    command_buffer,
-                    &render_pass_begin_info,
-                    vk::SubpassContents::INLINE);
-                device.cmd_bind_pipeline(
-                    command_buffer,
-                    vk::PipelineBindPoint::GRAPHICS,
-                    self.graphics_pipeline);
-            }
+            // unsafe {
+            //     let device = self.render_context.get_device();
+            //     device.cmd_begin_render_pass(
+            //         command_buffer,
+            //         &render_pass_begin_info,
+            //         vk::SubpassContents::INLINE);
+            //     device.cmd_bind_pipeline(
+            //         command_buffer,
+            //         vk::PipelineBindPoint::GRAPHICS,
+            //         self.graphics_pipeline);
+            // }
 
             frame_graph.end(&mut self.render_context, command_buffer);
         }
 
         unsafe {
             let device = self.render_context.get_device();
-            device.cmd_end_render_pass(command_buffer);
+            // device.cmd_end_render_pass(command_buffer);
             device.end_command_buffer(command_buffer)
                 .expect("Failed to record command buffer");
         }
