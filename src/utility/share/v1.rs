@@ -315,7 +315,6 @@ pub fn create_graphics_pipeline(
 pub fn create_framebuffers(
     device: &ash::Device,
     render_pass: vk::RenderPass,
-    // image_views: &Vec<vk::ImageView>,
     image_views: &Vec<vk::ImageView>,
     swapchain_extent: vk::Extent2D,
 ) -> Vec<vk::Framebuffer> {
@@ -372,7 +371,8 @@ pub fn create_command_buffers(
     device: &ash::Device,
     command_pool: vk::CommandPool,
     graphics_pipeline: vk::Pipeline,
-    framebuffers: &Vec<vk::Framebuffer>,
+    // framebuffers: &Vec<vk::Framebuffer>,
+    num_command_buffers: u32,
     render_pass: vk::RenderPass,
     surface_extent: vk::Extent2D,
     descriptor_sets: &[vk::DescriptorSet],
@@ -381,7 +381,7 @@ pub fn create_command_buffers(
     let command_buffer_allocate_info = vk::CommandBufferAllocateInfo {
         s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
         p_next: ptr::null(),
-        command_buffer_count: framebuffers.len() as u32,
+        command_buffer_count: num_command_buffers,
         command_pool,
         level: vk::CommandBufferLevel::PRIMARY,
     };

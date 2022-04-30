@@ -8,6 +8,7 @@ use ash::vk;
 use ash::vk::{Image, ImageView, PresentModeKHR, SwapchainImageUsageFlagsANDROID};
 use winapi::um::wingdi::wglSwapMultipleBuffers;
 use untitled::utility::share::find_queue_family;
+use untitled::utility::share::v1::create_image;
 
 use crate::{
     InstanceWrapper,
@@ -389,7 +390,14 @@ fn create_swapchain(
             .iter()
             .map(|image| {
                 // image is just a handle type
-                ImageWrapper::new(image.clone())
+                ImageWrapper::new(
+                    image.clone(),
+                    device.create_image_view(
+                        *image,
+                        swapchain_format.format,
+                        vk::ImageViewCreateFlags::empty(),
+                        vk::ImageAspectFlags::COLOR,
+                        1))
             })
             .collect()
     };
@@ -400,42 +408,6 @@ fn create_swapchain(
         swapchain_images,
         swapchain_format.format,
         swapchain_extent)
-}
-
-fn create_image_view(
-    device: &DeviceWrapper,
-    image: &mut ImageWrapper,
-    format: vk::Format,
-    image_view_flags: vk::ImageViewCreateFlags,
-    aspect_flags: vk::ImageAspectFlags,
-    mip_levels: u32)
-{
-    let create_info = vk::ImageViewCreateInfo {
-        s_type: vk::StructureType::IMAGE_VIEW_CREATE_INFO,
-        p_next: std::ptr::null(),
-        flags: image_view_flags,
-        view_type: vk::ImageViewType::TYPE_2D,
-        format,
-        components: vk::ComponentMapping {
-            r: vk::ComponentSwizzle::IDENTITY,
-            g: vk::ComponentSwizzle::IDENTITY,
-            b: vk::ComponentSwizzle::IDENTITY,
-            a: vk::ComponentSwizzle::IDENTITY
-        },
-        subresource_range: vk::ImageSubresourceRange {
-            aspect_mask: aspect_flags,
-            base_mip_level: 0,
-            level_count: mip_levels,
-            base_array_layer: 0,
-            layer_count: 1
-        },
-        image: image.get()
-    };
-
-    image.view = Some(unsafe {
-        device.get().create_image_view(&create_info, None)
-            .expect("Failed to create image view.")
-    });
 }
 
 impl RenderContext {
@@ -495,20 +467,6 @@ impl RenderContext {
                 None
             }
         };
-
-        if let Option::Some(s) = swapchain
-        {
-            for image in s.get_images().iter_mut()
-            {
-                create_image_view(
-                    &logical_device,
-                    image,
-                    s.get_format(),
-                    vk::ImageViewCreateFlags::empty(),
-                    vk::ImageAspectFlags::COLOR,
-                    1);
-            }
-        }
 
         let ubo_pool_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::UNIFORM_BUFFER,
@@ -635,11 +593,7 @@ impl RenderContext {
         let mut framebuffers = vec![];
 
         // TODO: this shouldn't need to iterate over images twice
-        let image_views: Vec<vk::ImageView> = images.iter().filter(
-            |i| {
-                assert!(i.view.is_some(), "Attempting to create framebuffer without valid image view");
-                i.view.is_some()
-            }).map(|i| i.view.unwrap()).collect();
+        let image_views: Vec<vk::ImageView> = images.iter().map(|i| i.view).collect();
         for view in image_views.iter()
         {
             let create_info = vk::FramebufferCreateInfo::builder()

@@ -1,18 +1,19 @@
 use ash::vk;
 
+#[derive(Clone)]
 pub struct ImageWrapper {
     pub image: vk::Image,
-    pub view: Option<vk::ImageView>
+    pub view: vk::ImageView
 }
 
 impl ImageWrapper {
-    pub fn new(image: vk::Image) -> ImageWrapper {
+    pub fn new(image: vk::Image, view: vk::ImageView) -> ImageWrapper {
         ImageWrapper {
             image,
-            view: None
+            view: view
         }
     }
 
     pub fn get(&self) -> vk::Image { self.image }
-    pub fn get_view(&self) -> Option<vk::ImageView> { self.view }
+    pub fn get_view(&self) -> vk::ImageView { self.view }
 }
