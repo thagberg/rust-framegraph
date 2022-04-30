@@ -44,38 +44,20 @@ struct SyncObjects {
 
 struct VulkanApp<'a> {
     window: winit::window::Window,
-    // vulkan stuff
-    // _entry: ash::Entry,
-    // instance: ash::Instance,
-    // surface_loader: ash::extensions::khr::Surface,
-    // surface: vk::SurfaceKHR,
     debug_utils_loader: ash::extensions::ext::DebugUtils,
     debug_merssager: vk::DebugUtilsMessengerEXT,
 
-    // _physical_device: vk::PhysicalDevice,
-
     render_context: RenderContext,
-    // device: ash::Device,
-
-    // graphics_queue: vk::Queue,
-    // present_queue: vk::Queue,
 
     frame_graph: FrameGraph<'a>,
     ubo_pass: UBOPass,
 
-    // swapchain_loader: ash::extensions::khr::Swapchain,
-    // swapchain: vk::SwapchainKHR,
-    // _swapchain_images: Vec<vk::Image>,
-    // _swapchain_format: vk::Format,
-    // _swapchain_extent: vk::Extent2D,
-    // swapchain_imageviews: Vec<vk::ImageView>,
     swapchain_framebuffers: Vec<vk::Framebuffer>,
 
     render_pass: vk::RenderPass,
     pipeline_layout: vk::PipelineLayout,
     graphics_pipeline: vk::Pipeline,
 
-    // command_pool: vk::CommandPool,
     command_buffers: Vec<vk::CommandBuffer>,
 
     image_available_semaphores: Vec<vk::Semaphore>,
@@ -97,8 +79,6 @@ impl<'a> VulkanApp<'a> {
             VALIDATION.is_enable,
             &VALIDATION.required_validation_layers.to_vec(),
         );
-        // let surface_stuff =
-        //     share::create_surface(&entry, &instance, &window, WINDOW_WIDTH, WINDOW_HEIGHT);
         let (debug_utils_loader, debug_merssager) =
             setup_debug_utils(VALIDATION.is_enable, &entry, &instance);
 
@@ -114,93 +94,6 @@ impl<'a> VulkanApp<'a> {
             Some(surface_wrapper),
             &window);
 
-        // let create_info = vk::BufferCreateInfo {
-        //     s_type: vk::StructureType::BUFFER_CREATE_INFO,
-        //     size,
-        //     usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
-        //     sharing_mode: vk::SharingMode::EXCLUSIVE,
-        //     ..Default::default()
-        // };
-        let ubo_create_info = vk::BufferCreateInfo {
-            s_type: vk::StructureType::BUFFER_CREATE_INFO,
-            size: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize,
-            usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
-            sharing_mode: vk::SharingMode::EXCLUSIVE,
-            ..Default::default()
-        };
-        let uniform_buffer = render_context.create_buffer_persistent(&ubo_create_info);
-        let ubo_value = OffsetUBO {
-            offset: [0.2, 0.1, 0.0]
-        };
-        // render_context.update_uniform_buffer(&uniform_buffer, |mapped_memory: *mut c_void| {
-        render_context.update_buffer_persistent(&uniform_buffer, |mapped_memory: *mut c_void| {
-            println!("Updating uniform buffer");
-            unsafe {
-                // *mapped_memory as OffsetUBO = ubo_value;
-                core::ptr::copy_nonoverlapping(
-                    &ubo_value,
-                    mapped_memory as *mut OffsetUBO,
-                    std::mem::size_of::<OffsetUBO>());
-            };
-        });
-
-        let ubo_binding = vk::DescriptorSetLayoutBinding {
-            binding: 0,
-            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-            descriptor_count: 1,
-            stage_flags: vk::ShaderStageFlags::ALL_GRAPHICS,
-            p_immutable_samplers: std::ptr::null()
-        };
-        let ubo_bindings = [ubo_binding];
-
-        let ubo_descriptor_size = vk::DescriptorPoolSize {
-            ty: vk::DescriptorType::UNIFORM_BUFFER,
-            descriptor_count: 8
-        };
-        let descriptor_pool_sizes = [ubo_descriptor_size];
-        let descriptor_pool_create = vk::DescriptorPoolCreateInfo {
-            s_type: vk::StructureType::DESCRIPTOR_POOL_CREATE_INFO,
-            p_next: ptr::null(),
-            flags: vk::DescriptorPoolCreateFlags::empty(),
-            max_sets: 8,
-            pool_size_count: descriptor_pool_sizes.len() as u32,
-            p_pool_sizes: descriptor_pool_sizes.as_ptr()
-        };
-        let descriptor_pool = unsafe {
-            render_context.get_device().create_descriptor_pool(
-                &descriptor_pool_create,
-                None)
-                .expect("Failed to create descriptor pool")
-        };
-
-        let descriptor_set_layout_create_info = vk::DescriptorSetLayoutCreateInfo {
-            s_type: vk::StructureType::DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            p_next: ptr::null(),
-            flags: vk::DescriptorSetLayoutCreateFlags::empty(),
-            binding_count: ubo_bindings.len() as u32,
-            p_bindings: ubo_bindings.as_ptr()
-        };
-        let descriptor_set_layout = unsafe {
-            render_context.get_device().create_descriptor_set_layout(
-                &descriptor_set_layout_create_info,
-                None)
-                .expect("Failed to create descriptor set layout")
-        };
-        let descriptor_set_layouts = [descriptor_set_layout];
-
-        let descriptor_set_alloc_info = vk::DescriptorSetAllocateInfo {
-            s_type: vk::StructureType::DESCRIPTOR_SET_ALLOCATE_INFO,
-            p_next: ptr::null(),
-            descriptor_pool,
-            descriptor_set_count: descriptor_set_layouts.len() as u32,
-            p_set_layouts: descriptor_set_layouts.as_ptr()
-        };
-
-        let descriptor_sets = unsafe {
-            render_context.get_device().allocate_descriptor_sets(&descriptor_set_alloc_info)
-                .expect("Failed to allocate descriptor sets")
-        };
-
         assert!(render_context.get_swapchain().is_some(), "Can't continue without valid swapchain");
         let (swapchain_extent, swapchain_format) = {
             let swapchain = &render_context.get_swapchain().as_ref().unwrap();
@@ -210,49 +103,34 @@ impl<'a> VulkanApp<'a> {
         let render_pass = VulkanApp::create_render_pass(
             render_context.get_device(),
             swapchain_format);
-        // swapchain_stuff.swapchain_format);
         let (graphics_pipeline, pipeline_layout) = share::v1::create_graphics_pipeline(
             render_context.get_device(),
             render_pass,
             swapchain_extent);
         let swapchain_framebuffers = {
-            // assert!(render_context.get_swapchain_image_views().is_some(), "Can't continue without image views");
             assert!(render_context.get_swapchain().is_some(), "Can't continue without swapchain");
             let swapchain = render_context.get_swapchain().as_ref().unwrap();
             let image_views: Vec<vk::ImageView> = swapchain.get_images().iter()
                 .map(|s| s.view).collect();
-            // let image_views = &render_context.get_swapchain_image_views().as_ref().unwrap();
             share::v1::create_framebuffers(
                 render_context.get_device(),
                 render_pass,
                 &image_views,
-                // &swapchain_imageviews,
                 swapchain_extent)
         };
 
         let ubo_pass = UBOPass::new(&mut render_context);
-        let transient_input_pass = TransientInputPass::new(&mut render_context, render_pass, ResourceHandle::Transient(0));
+        let transient_input_pass = TransientInputPass::new(
+            &mut render_context,
+            render_pass,
+            ubo_pass.render_target);
 
         let mut frame_graph = FrameGraph::new();
-        // framegraph.start();
-        // framegraph.add_node(&ubo_pass.pass_node);
-        // framegraph.compile();
-        // framegraph.end(&render_context, &vk::CommandBuffer::null());
 
-
-        // let command_pool = share::v1::create_command_pool(
-        //     render_context.get_device(),
-        //     render_context);
         let command_buffers = share::v1::create_command_buffers(
             render_context.get_device(),
             render_context.get_graphics_command_pool(),
-            graphics_pipeline,
-            2,
-            // &swapchain_framebuffers,
-            render_pass,
-            swapchain_extent,
-            &descriptor_sets,
-            pipeline_layout);
+            2);
         let sync_ojbects = VulkanApp::create_sync_objects(
             render_context.get_device());
 
@@ -260,36 +138,19 @@ impl<'a> VulkanApp<'a> {
 
         VulkanApp {
             window,
-            // vulkan stuff
-            // _entry: entry,
-            // instance,
-            // surface: surface_stuff.surface,
-            // surface_loader: surface_stuff.surface_loader,
             debug_utils_loader,
             debug_merssager,
 
-            // _physical_device: physical_device,
             render_context,
-            // device,
-            //
-            // graphics_queue,
-            // present_queue,
             frame_graph,
             ubo_pass,
 
-            // swapchain_loader: swapchain_stuff.swapchain_loader,
-            // swapchain: swapchain_stuff.swapchain,
-            // _swapchain_format: swapchain_stuff.swapchain_format,
-            // _swapchain_images: swapchain_stuff.swapchain_images,
-            // _swapchain_extent: swapchain_stuff.swapchain_extent,
-            // swapchain_imageviews,
             swapchain_framebuffers,
 
             pipeline_layout,
             render_pass,
             graphics_pipeline,
 
-            // command_pool,
             command_buffers,
 
             image_available_semaphores: sync_ojbects.image_available_semaphores,
@@ -436,9 +297,7 @@ impl<'a> VulkanApp<'a> {
         };
 
         unsafe {
-            // self.swapchain_loader
             self.render_context.get_swapchain().as_ref().unwrap().get_loader()
-                // .queue_present(self.present_queue, &present_info)
                 .queue_present(
                     self.render_context.get_present_queue(),
                     &present_info)

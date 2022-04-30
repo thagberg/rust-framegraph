@@ -370,13 +370,7 @@ pub fn create_command_pool(
 pub fn create_command_buffers(
     device: &ash::Device,
     command_pool: vk::CommandPool,
-    graphics_pipeline: vk::Pipeline,
-    // framebuffers: &Vec<vk::Framebuffer>,
-    num_command_buffers: u32,
-    render_pass: vk::RenderPass,
-    surface_extent: vk::Extent2D,
-    descriptor_sets: &[vk::DescriptorSet],
-    pipeline_layout: vk::PipelineLayout
+    num_command_buffers: u32
 ) -> Vec<vk::CommandBuffer> {
     let command_buffer_allocate_info = vk::CommandBufferAllocateInfo {
         s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
