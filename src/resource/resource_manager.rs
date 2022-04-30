@@ -271,21 +271,6 @@ impl ResourceManager {
                 }
         });
 
-        // let image_alloc = self.allocator.allocate(&AllocationCreateDesc {
-        //     name: "Image allocation",
-        //     requirements,
-        //     location: MemoryLocation::GpuOnly, // TODO: Parameterized eventually?
-        //     linear: true // TODO: I think this is required for render targets?
-        // }).expect("Failed to allocate memory for image");
-
-        // unsafe {
-        //     device.get().bind_image_memory(
-        //         image.image,
-        //         image_alloc.memory(),
-        //         image_alloc.offset()
-        //     ).expect("Faileed to bind image to memory")
-        // };
-
         ResolvedImage {
             image,
             allocation: image_alloc
