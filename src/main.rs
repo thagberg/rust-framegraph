@@ -51,6 +51,7 @@ struct VulkanApp<'a> {
 
     frame_graph: FrameGraph<'a>,
     ubo_pass: UBOPass,
+    transient_pass: TransientInputPass,
 
     swapchain_framebuffers: Vec<vk::Framebuffer>,
 
@@ -120,7 +121,7 @@ impl<'a> VulkanApp<'a> {
         };
 
         let ubo_pass = UBOPass::new(&mut render_context);
-        let transient_input_pass = TransientInputPass::new(
+        let transient_pass = TransientInputPass::new(
             &mut render_context,
             render_pass,
             ubo_pass.render_target);
@@ -144,6 +145,7 @@ impl<'a> VulkanApp<'a> {
             render_context,
             frame_graph,
             ubo_pass,
+            transient_pass,
 
             swapchain_framebuffers,
 
@@ -204,6 +206,7 @@ impl<'a> VulkanApp<'a> {
             let mut frame_graph = FrameGraph::new();
             frame_graph.start();
             frame_graph.add_node(ubo_pass);
+            self.transient_pass.add(&mut frame_graph);
             frame_graph.compile();
 
 

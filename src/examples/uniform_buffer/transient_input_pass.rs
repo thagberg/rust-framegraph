@@ -2,17 +2,56 @@ use ash::vk;
 
 use crate::context::render_context::RenderContext;
 use crate::framegraph::pass_node::{PassNodeBuilder, PassNode};
+use crate::framegraph::frame_graph::FrameGraph;
 use crate::resource::resource_manager::{ResourceType, ResourceHandle, ResolvedResource, ResolvedResourceMap};
+use crate::api_types::swapchain::SwapchainWrapper;
+use crate::api_types::image::ImageWrapper;
 
 use untitled::{
     utility::share,
 };
 
 pub struct TransientInputPass {
-    // pub pass_node: PassNode
+    pub pass_node: PassNode
 }
 
 impl TransientInputPass {
+    // fn generate_renderpass(
+    //     render_context: &mut RenderContext,
+    //     swapchain: &SwapchainWrapper) -> vk::RenderPass
+    // {
+    //     // this renderpass need to take an image for reading (the transient input)
+    //     // as well as an image for a rendertarget (probably just the swapchain image)
+    //     // Transient input should begin as vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL
+    //     // and transition it to UNDEFINED maybe?
+    //     // Render target should end as presentable
+    //     let texture_attachment = vk::AttachmentDescription::builder()
+    //         .format(vk::Format::R8G8B8A8_SRGB)
+    //         .samples(vk::SampleCountFlags::TYPE_1)
+    //         .load_op(vk::AttachmentLoadOp::DONT_CARE)
+    //         .store_op(vk::AttachmentStoreOp::DONT_CARE)
+    //         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+    //         .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+    //         .initial_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+    //         .final_layout(vk::ImageLayout::GENERAL);
+    //
+    //     let rt_attachment = vk::AttachmentDescription::builder()
+    //         .format(swapchain.get_format())
+    //         .samples(vk::SampleCountFlags::TYPE_1)
+    //         .load_op(vk::AttachmentLoadOp::DONT_CARE)
+    //         .store_op(vk::AttachmentStoreOp::DONT_CARE)
+    //         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+    //         .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+    //         .initial_layout(vk::ImageLayout::UNDEFINED)
+    //         .final_layout(vk::ImageLayout::PRESENT_SRC_KHR);
+    // }
+
+    // pub fn add(&mut self, framegraph: &mut FrameGraph, rt_image: &ImageWrapper)
+    pub fn add(&mut self, framegraph: & mut FrameGraph)
+    {
+        framegraph.add_node(&self.pass_node);
+    }
+
     pub fn new(
         render_context: &mut RenderContext,
         render_pass: vk::RenderPass,
@@ -151,10 +190,10 @@ impl TransientInputPass {
             .fill_commands(Box::new(move |render_context: &RenderContext, command_buffer: vk::CommandBuffer, inputs: &ResolvedResourceMap, outputs: &ResolvedResourceMap, creates: &ResolvedResourceMap| {
             }))
             .build()
-            .expect("Failed ot create transient input PassNode");
+            .expect("Failed to create transient input PassNode");
 
         TransientInputPass {
-
+            pass_node
         }
     }
 }
