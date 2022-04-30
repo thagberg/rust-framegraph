@@ -321,7 +321,7 @@ impl UBOPass {
                 // .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
                 .initial_layout(vk::ImageLayout::UNDEFINED)
                 .samples(vk::SampleCountFlags::TYPE_1)
-                .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT)
                 .extent(vk::Extent3D::builder().height(100).width(100).depth(1).build())
                 .mip_levels(1)
                 .array_layers(1)
@@ -377,6 +377,19 @@ impl UBOPass {
                                 }
                             };
 
+                            let viewport = vk::Viewport::builder()
+                                .x(0.0)
+                                .y(0.0)
+                                .width(100.0)
+                                .height(100.0)
+                                .min_depth(0.0)
+                                .max_depth(1.0)
+                                .build();
+
+                            let scissor = vk::Rect2D::builder()
+                                .offset(vk::Offset2D{x: 0, y: 0})
+                                .extent(vk::Extent2D::builder().width(100).height(100).build())
+                                .build();
 
                             let render_pass_begin = vk::RenderPassBeginInfo::builder()
                                 .render_pass(render_pass)
@@ -386,6 +399,16 @@ impl UBOPass {
                                                  .extent(vk::Extent2D::builder().width(100).height(100).build())
                                                  .build())
                                 .clear_values(std::slice::from_ref(&clear_value));
+
+                            render_context.get_device().cmd_set_viewport(
+                                command_buffer,
+                                0,
+                                std::slice::from_ref(&viewport));
+
+                            render_context.get_device().cmd_set_scissor(
+                                command_buffer,
+                                0,
+                                std::slice::from_ref(&scissor));
 
                             render_context.get_device().cmd_begin_render_pass(
                                 command_buffer,
