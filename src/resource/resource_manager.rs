@@ -259,7 +259,7 @@ impl ResourceManager {
         let mut image_alloc: Allocation = Default::default();
         let image = device.create_image(
             create_info,
-            Box::new(|memory_requirements: vk::MemoryRequirements| -> (vk::DeviceMemory, vk::DeviceSize) {
+            &mut |memory_requirements: vk::MemoryRequirements| -> (vk::DeviceMemory, vk::DeviceSize) {
                 unsafe {
                     image_alloc = self.allocator.allocate(&AllocationCreateDesc {
                         name: "Image allocation",
@@ -269,7 +269,7 @@ impl ResourceManager {
                     }).expect("Failed to allocate memory for image");
                     (image_alloc.memory(), image_alloc.offset())
                 }
-        }));
+        });
 
         // let image_alloc = self.allocator.allocate(&AllocationCreateDesc {
         //     name: "Image allocation",

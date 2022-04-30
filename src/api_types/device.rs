@@ -2,9 +2,10 @@ use ash::vk;
 use crate::api_types::image::ImageWrapper;
 
 // bind_callback: dyn Fn(vk::MemoryRequirements) -> (vk::DeviceMemory, vk::DeviceSize)) -> ImageWrapper
-type MemoryBindCallback = dyn (
-    FnMut(vk::MemoryRequirements) -> (vk::DeviceMemory, vk::DeviceSize)
-);
+// type MemoryBindCallback = dyn (
+//     FnMut(vk::MemoryRequirements) -> (vk::DeviceMemory, vk::DeviceSize)
+// );
+// type MemoryBindCallback = FnMut(vk::MemoryRequirements) -> (vk::DeviceMemory, vk::DeviceSize);
 
 pub struct QueueFamilies {
     pub graphics: Option<u32>,
@@ -98,7 +99,8 @@ impl DeviceWrapper {
     pub fn create_image(
         &self,
         create_info: &vk::ImageCreateInfo,
-        mut bind_callback: Box<MemoryBindCallback>) -> ImageWrapper
+        // bind_callback: &MemoryBindCallback) -> ImageWrapper
+        bind_callback: &mut dyn FnMut(vk::MemoryRequirements) -> (vk::DeviceMemory, vk::DeviceSize)) -> ImageWrapper
     {
 
         let image_wrapper = {
