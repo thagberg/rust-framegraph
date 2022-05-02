@@ -335,116 +335,122 @@ impl UBOPass {
             .layout(pipeline_layout)
             .pipeline(graphics_pipelines[0])
             .read(vec![uniform_buffer])
-            .create(vec![render_target])
-            .fill_commands(Box::new(move |render_context: &RenderContext, command_buffer: vk::CommandBuffer, inputs: &ResolvedResourceMap, outputs: &ResolvedResourceMap, creates: &ResolvedResourceMap| {
-                println!("I'm doing something!");
-                let render_target = creates.get(&render_target)
-                    .expect("No resolved render target");
-                let ubo = inputs.get(&uniform_buffer)
-                    .expect("No resolved UBO");
-                match (&render_target.resource, &ubo.resource) {
-                    (ResourceType::Image(rt), ResourceType::Buffer(buffer)) => {
-                        let framebuffer = render_context.create_framebuffers(
-                            render_pass,
-                            &vk::Extent2D::builder().width(100).height(100),
-                            std::slice::from_ref(&rt)
-                        );
+            .write(vec![render_target])
+            .fill_commands(Box::new(
+                move |render_context: &RenderContext,
+                      command_buffer: vk::CommandBuffer,
+                      inputs: &ResolvedResourceMap,
+                      outputs: &ResolvedResourceMap|
+                    {
+                        println!("I'm doing something!");
+                        let render_target = outputs.get(&render_target)
+                            .expect("No resolved render target");
+                        let ubo = inputs.get(&uniform_buffer)
+                            .expect("No resolved UBO");
+                        match (&render_target.resource, &ubo.resource) {
+                            (ResourceType::Image(rt), ResourceType::Buffer(buffer)) => {
+                                let framebuffer = render_context.create_framebuffers(
+                                    render_pass,
+                                    &vk::Extent2D::builder().width(100).height(100),
+                                    std::slice::from_ref(&rt)
+                                );
 
-                        let descriptor_buffer = vk::DescriptorBufferInfo {
-                            buffer: *buffer,
-                            offset: 0,
-                            range: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize
-                        };
+                                let descriptor_buffer = vk::DescriptorBufferInfo {
+                                    buffer: *buffer,
+                                    offset: 0,
+                                    range: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize
+                                };
 
-                        let descriptor_write = vk::WriteDescriptorSet {
-                            s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
-                            p_next: std::ptr::null(),
-                            dst_set: descriptor_sets[0],
-                            dst_binding: 0,
-                            dst_array_element: 0,
-                            descriptor_count: 1,
-                            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-                            p_buffer_info: &descriptor_buffer,
-                            ..Default::default()
-                        };
-                        let descriptor_write_sets = [descriptor_write];
+                                let descriptor_write = vk::WriteDescriptorSet {
+                                    s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
+                                    p_next: std::ptr::null(),
+                                    dst_set: descriptor_sets[0],
+                                    dst_binding: 0,
+                                    dst_array_element: 0,
+                                    descriptor_count: 1,
+                                    descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+                                    p_buffer_info: &descriptor_buffer,
+                                    ..Default::default()
+                                };
+                                let descriptor_write_sets = [descriptor_write];
 
-                        // TODO: move this into framegraph? Not sure how to bind framebuffer first?
-                        // begin renderpass
-                        unsafe {
-                            let clear_value = vk::ClearValue {
-                                color: vk::ClearColorValue {
-                                    float32: [0.1, 0.1, 0.1, 1.0]
+                                // TODO: move this into framegraph? Not sure how to bind framebuffer first?
+                                // begin renderpass
+                                unsafe {
+                                    let clear_value = vk::ClearValue {
+                                        color: vk::ClearColorValue {
+                                            float32: [0.1, 0.1, 0.1, 1.0]
+                                        }
+                                    };
+
+                                    let viewport = vk::Viewport::builder()
+                                        .x(0.0)
+                                        .y(0.0)
+                                        .width(100.0)
+                                        .height(100.0)
+                                        .min_depth(0.0)
+                                        .max_depth(1.0)
+                                        .build();
+
+                                    let scissor = vk::Rect2D::builder()
+                                        .offset(vk::Offset2D{x: 0, y: 0})
+                                        .extent(vk::Extent2D::builder().width(100).height(100).build())
+                                        .build();
+
+                                    let render_pass_begin = vk::RenderPassBeginInfo::builder()
+                                        .render_pass(render_pass)
+                                        .framebuffer(framebuffer[0])
+                                        .render_area(vk::Rect2D::builder()
+                                                         .offset(vk::Offset2D{x: 0, y: 0})
+                                                         .extent(vk::Extent2D::builder().width(100).height(100).build())
+                                                         .build())
+                                        .clear_values(std::slice::from_ref(&clear_value));
+
+                                    render_context.get_device().cmd_set_viewport(
+                                        command_buffer,
+                                        0,
+                                        std::slice::from_ref(&viewport));
+
+                                    render_context.get_device().cmd_set_scissor(
+                                        command_buffer,
+                                        0,
+                                        std::slice::from_ref(&scissor));
+
+                                    render_context.get_device().cmd_begin_render_pass(
+                                        command_buffer,
+                                        &render_pass_begin,
+                                        vk::SubpassContents::INLINE);
+
+                                    render_context.get_device().cmd_bind_pipeline(
+                                        command_buffer,
+                                        vk::PipelineBindPoint::GRAPHICS,
+                                        graphics_pipelines[0])
                                 }
-                            };
 
-                            let viewport = vk::Viewport::builder()
-                                .x(0.0)
-                                .y(0.0)
-                                .width(100.0)
-                                .height(100.0)
-                                .min_depth(0.0)
-                                .max_depth(1.0)
-                                .build();
+                                // Draw calls
+                                unsafe {
+                                    let device = render_context.get_device();
+                                    device.update_descriptor_sets(&descriptor_write_sets, &[]);
+                                    device.cmd_bind_descriptor_sets(
+                                        command_buffer,
+                                        vk::PipelineBindPoint::GRAPHICS,
+                                        pipeline_layout,
+                                        0,
+                                        &descriptor_sets,
+                                        &[]);
+                                    device.cmd_draw(command_buffer, 3, 1, 0, 0);
+                                }
 
-                            let scissor = vk::Rect2D::builder()
-                                .offset(vk::Offset2D{x: 0, y: 0})
-                                .extent(vk::Extent2D::builder().width(100).height(100).build())
-                                .build();
-
-                            let render_pass_begin = vk::RenderPassBeginInfo::builder()
-                                .render_pass(render_pass)
-                                .framebuffer(framebuffer[0])
-                                .render_area(vk::Rect2D::builder()
-                                                 .offset(vk::Offset2D{x: 0, y: 0})
-                                                 .extent(vk::Extent2D::builder().width(100).height(100).build())
-                                                 .build())
-                                .clear_values(std::slice::from_ref(&clear_value));
-
-                            render_context.get_device().cmd_set_viewport(
-                                command_buffer,
-                                0,
-                                std::slice::from_ref(&viewport));
-
-                            render_context.get_device().cmd_set_scissor(
-                                command_buffer,
-                                0,
-                                std::slice::from_ref(&scissor));
-
-                            render_context.get_device().cmd_begin_render_pass(
-                                command_buffer,
-                                &render_pass_begin,
-                                vk::SubpassContents::INLINE);
-
-                            render_context.get_device().cmd_bind_pipeline(
-                                command_buffer,
-                                vk::PipelineBindPoint::GRAPHICS,
-                                graphics_pipelines[0])
+                                // TODO: move this to framegraph?
+                                // End renderpass
+                                unsafe {
+                                    render_context.get_device().cmd_end_render_pass(command_buffer);
+                                }
+                            },
+                            _ => {}
                         }
-
-                        // Draw calls
-                        unsafe {
-                            let device = render_context.get_device();
-                            device.update_descriptor_sets(&descriptor_write_sets, &[]);
-                            device.cmd_bind_descriptor_sets(
-                                command_buffer,
-                                vk::PipelineBindPoint::GRAPHICS,
-                                pipeline_layout,
-                                0,
-                                &descriptor_sets,
-                                &[]);
-                            device.cmd_draw(command_buffer, 3, 1, 0, 0);
-                        }
-
-                        // TODO: move this to framegraph?
-                        // End renderpass
-                        unsafe {
-                            render_context.get_device().cmd_end_render_pass(command_buffer);
-                        }
-                    },
-                    _ => {}
                 }
-            }))
+            ))
             .build()
             .expect("Failed to create PassNode");
 

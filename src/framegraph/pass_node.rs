@@ -9,7 +9,6 @@ type FillCallback = dyn (
         &RenderContext,
         vk::CommandBuffer,
         &ResolvedResourceMap,
-        &ResolvedResourceMap,
         &ResolvedResourceMap
     )
 );
@@ -20,7 +19,6 @@ pub struct PassNode {
     renderpass: vk::RenderPass,
     inputs: Vec<ResourceHandle>,
     outputs: Vec<ResourceHandle>,
-    creates: Vec<ResourceHandle>,
     fill_callback: Box<FillCallback>
 }
 
@@ -31,7 +29,6 @@ pub struct PassNodeBuilder {
     renderpass: Option<vk::RenderPass>,
     inputs: Option<Vec<ResourceHandle>>,
     outputs: Option<Vec<ResourceHandle>>,
-    creates: Option<Vec<ResourceHandle>>,
     fill_callback: Option<Box<FillCallback>>
 }
 
@@ -47,15 +44,13 @@ impl PassNode {
         render_context: &RenderContext,
         command_buffer: vk::CommandBuffer,
         resolved_inputs: &ResolvedResourceMap,
-        resolved_outputs: &ResolvedResourceMap,
-        resolved_creates: &ResolvedResourceMap)
+        resolved_outputs: &ResolvedResourceMap)
     {
         (self.fill_callback)(
             render_context,
             command_buffer,
             resolved_inputs,
-            resolved_outputs,
-            resolved_creates);
+            resolved_outputs);
     }
 
     pub fn get_pipeline(&self) -> vk::Pipeline { self.pipeline }
@@ -69,8 +64,6 @@ impl PassNode {
     pub fn get_outputs(&self) -> &[ResourceHandle] {
         &self.outputs
     }
-
-    pub fn get_creates(&self) -> &[ResourceHandle] { &self.creates }
 }
 
 impl PassNodeBuilder {
@@ -99,11 +92,6 @@ impl PassNodeBuilder {
         self
     }
 
-    pub fn create(mut self, creates: Vec<ResourceHandle>) -> Self {
-        self.creates = Some(creates);
-        self
-    }
-
     pub fn fill_commands(&mut self, fill_callback: Box<FillCallback>) -> &mut Self
     {
         self.fill_callback = Some(fill_callback);
@@ -127,18 +115,13 @@ impl PassNodeBuilder {
                 _ => {Vec::new()}
             };
 
-            let creates = match &self.creates {
-                Some(o) => { self.creates.take().unwrap()},
-                _ => {Vec::new()}
-            };
-
             Ok(PassNode {
                 layout: self.layout.unwrap(),
                 pipeline: self.pipeline.unwrap(),
                 renderpass: self.renderpass.unwrap(),
                 inputs: inputs,
                 outputs: outputs,
-                creates: creates,
+                // creates: creates,
                 fill_callback: self.fill_callback.take().unwrap()
             })
         } else {
