@@ -277,6 +277,24 @@ impl ResourceManager {
         }
     }
 
+    pub fn register_image(
+        &mut self,
+        image: &ImageWrapper
+    ) -> ResourceHandle
+    {
+        let ret_handle = ResourceHandle::Persistent(self.next_handle);
+        self.next_handle += 1;
+
+        self.persistent_resource_map.insert(ret_handle, PersistentResource {
+            handle: ret_handle,
+            resource: ResourceType::Image(image.clone()),
+            // allocation: resolved_buffer.allocation
+            allocation: Allocation::default() // TODO: this is really dumb and bad
+        });
+
+        ret_handle
+    }
+
     fn create_uniform_buffer(
         &mut self,
         device: &DeviceWrapper,
