@@ -16,47 +16,54 @@ pub struct TransientInputPass {
 }
 
 impl TransientInputPass {
-    // fn generate_renderpass(
-    //     render_context: &mut RenderContext,
-    //     swapchain: &SwapchainWrapper) -> vk::RenderPass
-    // {
-    //     // this renderpass need to take an image for reading (the transient input)
-    //     // as well as an image for a rendertarget (probably just the swapchain image)
-    //     // Transient input should begin as vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL
-    //     // and transition it to UNDEFINED maybe?
-    //     // Render target should end as presentable
-    //     let texture_attachment = vk::AttachmentDescription::builder()
-    //         .format(vk::Format::R8G8B8A8_SRGB)
-    //         .samples(vk::SampleCountFlags::TYPE_1)
-    //         .load_op(vk::AttachmentLoadOp::DONT_CARE)
-    //         .store_op(vk::AttachmentStoreOp::DONT_CARE)
-    //         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
-    //         .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
-    //         .initial_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-    //         .final_layout(vk::ImageLayout::GENERAL);
-    //
-    //     let rt_attachment = vk::AttachmentDescription::builder()
-    //         .format(swapchain.get_format())
-    //         .samples(vk::SampleCountFlags::TYPE_1)
-    //         .load_op(vk::AttachmentLoadOp::DONT_CARE)
-    //         .store_op(vk::AttachmentStoreOp::DONT_CARE)
-    //         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
-    //         .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
-    //         .initial_layout(vk::ImageLayout::UNDEFINED)
-    //         .final_layout(vk::ImageLayout::PRESENT_SRC_KHR);
-    // }
-
-    // pub fn add(&mut self, framegraph: &mut FrameGraph, rt_image: &ImageWrapper)
-    pub fn add(&mut self, framegraph: & mut FrameGraph)
+    fn generate_renderpass(
+        render_context: &mut RenderContext) -> vk::RenderPass
     {
-        framegraph.add_node(&self.pass_node);
+        let rt_attachment = vk::AttachmentDescription::builder()
+            .format(render_context.get_swapchain().as_ref().unwrap().get_format())
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .store_op(vk::AttachmentStoreOp::DONT_CARE)
+            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR);
+
+        let rt_attachment_ref = vk::AttachmentReference::builder()
+            .attachment(0)
+            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+
+        let subpass = vk::SubpassDescription::builder()
+            .color_attachments(std::slice::from_ref(&rt_attachment_ref))
+            .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS);
+
+        // TODO: Need to refresh on stage access / masks
+        let subpass_dependency = vk::SubpassDependency::builder()
+            .src_subpass(vk::SUBPASS_EXTERNAL)
+            .dst_subpass(0)
+            .src_stage_mask(vk::PipelineStageFlags::TOP_OF_PIPE)
+            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT);
+
+        let render_pass_create_info = vk::RenderPassCreateInfo::builder()
+            .attachments(std::slice::from_ref(&rt_attachment))
+            .subpasses(std::slice::from_ref(&subpass))
+            .dependencies(std::slice::from_ref(&subpass_dependency));
+
+        let render_pass = unsafe {
+            render_context.get_device().create_render_pass(&render_pass_create_info, None)
+                .expect("Failed to create renderpass for Transient Pass")
+        };
+
+        render_pass
     }
 
     pub fn new(
         render_context: &mut RenderContext,
-        render_pass: vk::RenderPass,
+        image_index: usize,
         texture_handle: ResourceHandle) -> Self
     {
+        let render_pass = Self::generate_renderpass(render_context);
+        let backbuffer = &render_context.get_swapchain().as_ref().unwrap().get_images()[image_index];
         // create descriptor set layouts
         let texture_binding = vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
@@ -186,9 +193,17 @@ impl TransientInputPass {
             .renderpass(render_pass)
             .layout(pipeline_layout)
             .pipeline(graphics_pipelines[0])
-            .read(vec![])
-            .fill_commands(Box::new(move |render_context: &RenderContext, command_buffer: vk::CommandBuffer, inputs: &ResolvedResourceMap, outputs: &ResolvedResourceMap, creates: &ResolvedResourceMap| {
-            }))
+            .read(vec![texture_handle])
+            .fill_commands(
+                Box::new(
+                    move |render_context: &RenderContext,
+                          command_buffer: vk::CommandBuffer,
+                          inputs: &ResolvedResourceMap,
+                          outputs: &ResolvedResourceMap|
+                    {
+                        println!("Inside transient pass");
+                    }
+            ))
             .build()
             .expect("Failed to create transient input PassNode");
 

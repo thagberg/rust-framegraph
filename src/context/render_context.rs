@@ -32,6 +32,7 @@ pub struct RenderContext {
     present_queue: vk::Queue,
     compute_queue: vk::Queue,
     swapchain: Option<SwapchainWrapper>,
+    swapchain_handles: Vec<ResourceHandle>,
     surface: Option<SurfaceWrapper>,
     graphics_command_pool: vk::CommandPool,
     descriptor_pool: vk::DescriptorPool,
@@ -435,6 +436,11 @@ impl RenderContext {
             extensions
         );
 
+        let mut resource_manager = ResourceManager::new(
+            instance_wrapper.get(),
+            &logical_device,
+            &physical_device);
+
         let graphics_queue = unsafe {
             logical_device.get().get_device_queue(
                 logical_device.get_queue_family_indices().graphics.unwrap(),
@@ -468,6 +474,16 @@ impl RenderContext {
             }
         };
 
+        // register the swapchain images with the resource manager
+        let mut swapchain_handles = vec![];
+        if let Some(swaps) = &swapchain {
+            for image in swaps.get_images()
+            {
+                let handle = resource_manager.register_image(image);
+                swapchain_handles.push(handle);
+            }
+        }
+
         let ubo_pool_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::UNIFORM_BUFFER,
             descriptor_count: 8
@@ -496,11 +512,6 @@ impl RenderContext {
                 .expect("Failed to create descriptor pool")
         };
 
-        let resource_manager = ResourceManager::new(
-            instance_wrapper.get(),
-            &logical_device,
-            &physical_device);
-
         RenderContext {
             entry,
             instance: instance_wrapper,
@@ -512,6 +523,7 @@ impl RenderContext {
             compute_queue,
             graphics_command_pool,
             swapchain,
+            swapchain_handles,
             descriptor_pool,
             resource_manager
         }
