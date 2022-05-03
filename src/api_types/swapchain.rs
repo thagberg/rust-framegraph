@@ -36,6 +36,49 @@ impl SwapchainWrapper {
     pub fn get_extent(&self) -> vk::Extent2D { self.extent }
 
     pub fn get_loader(&self) -> &ash::extensions::khr::Swapchain { &self.loader }
+
+    fn _acquire_next_image_impl(
+        &self,
+        timeout: u64,
+        semaphore: vk::Semaphore,
+        fence: vk::Fence
+    ) -> (&ImageWrapper, u32)
+    {
+        let (image_index, is_sub_optimal) = unsafe
+        {
+            self.loader.acquire_next_image(
+                self.swapchain,
+                timeout,
+                semaphore,
+                fence)
+            .expect("Failed to acquire next swpachain image")
+        };
+        (&self.images[image_index as usize], image_index)
+    }
+
+    pub fn acquire_next_image(
+        &self,
+        timeout: Option<u64>,
+        semaphore: Option<vk::Semaphore>,
+        fence: Option<vk::Fence>) -> (&ImageWrapper, u32)
+    {
+        let t = match (timeout)
+        {
+            Some(timeout) => timeout,
+            _ => u64::MAX
+        };
+        let s = match (semaphore)
+        {
+            Some(semaphore) => semaphore,
+            _ => vk::Semaphore::null()
+        };
+        let f = match (fence)
+        {
+            Some(fence) => fence,
+            _ => vk::Fence::null()
+        };
+        self._acquire_next_image_impl(t, s, f)
+    }
 }
 
 impl Drop for SwapchainWrapper {

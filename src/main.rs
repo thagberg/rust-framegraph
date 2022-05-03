@@ -22,6 +22,7 @@ mod framegraph;
 use crate::context::render_context::RenderContext;
 use crate::api_types::surface::SurfaceWrapper;
 use crate::api_types::device::DeviceWrapper;
+use crate::api_types::image::ImageWrapper;
 use crate::api_types::instance::InstanceWrapper;
 use crate::framegraph::pass_node::{PassNodeBuilder, PassNode};
 use crate::framegraph::frame_graph::{FrameGraph};
@@ -50,8 +51,8 @@ struct VulkanApp<'a> {
     render_context: RenderContext,
 
     frame_graph: FrameGraph<'a>,
-    ubo_pass: UBOPass,
-    transient_pass: TransientInputPass,
+    // ubo_pass: UBOPass,
+    // transient_pass: TransientInputPass,
 
     swapchain_framebuffers: Vec<vk::Framebuffer>,
 
@@ -120,11 +121,10 @@ impl<'a> VulkanApp<'a> {
                 swapchain_extent)
         };
 
-        let ubo_pass = UBOPass::new(&mut render_context);
-        let transient_pass = TransientInputPass::new(
-            &mut render_context,
-            render_pass,
-            ubo_pass.render_target);
+        // let ubo_pass = UBOPass::new(&mut render_context);
+        // let transient_pass = TransientInputPass::new(
+        //     &mut render_context,
+        //     ubo_pass.render_target);
 
         let mut frame_graph = FrameGraph::new();
 
@@ -144,8 +144,8 @@ impl<'a> VulkanApp<'a> {
 
             render_context,
             frame_graph,
-            ubo_pass,
-            transient_pass,
+            // ubo_pass,
+            // transient_pass,
 
             swapchain_framebuffers,
 
@@ -165,23 +165,17 @@ impl<'a> VulkanApp<'a> {
     fn draw_frame(&mut self) {
         let wait_fences = [self.in_flight_fences[self.current_frame]];
 
-        let (image_index, _is_sub_optimal) = unsafe {
-            // self.device
+        unsafe
+        {
             self.render_context.get_device()
-                .wait_for_fences(&wait_fences, true, std::u64::MAX)
+                .wait_for_fences(&wait_fences, true, u64::MAX)
                 .expect("Failed to wait for Fence!");
+        }
 
-            self.render_context.get_swapchain().as_ref().unwrap().get_loader()
-            // self.swapchain_loader
-                .acquire_next_image(
-                    // self.swapchain,
-                    self.render_context.get_swapchain().as_ref().unwrap().get(),
-                    std::u64::MAX,
-                    self.image_available_semaphores[self.current_frame],
-                    vk::Fence::null(),
-                )
-                .expect("Failed to acquire next image.")
-        };
+        let (swapchain_image, image_index) = self.render_context.get_swapchain().as_ref().unwrap().acquire_next_image(
+            None,
+        Some(self.image_available_semaphores[self.current_frame]),
+        None);
 
         let command_buffer = self.command_buffers[image_index as usize];
         unsafe {
@@ -201,12 +195,18 @@ impl<'a> VulkanApp<'a> {
 
         let surface_extent = self.render_context.get_swapchain().as_ref().unwrap().get_extent();
         {
-            let ubo_pass = &self.ubo_pass.pass_node;
+            // let ubo_pass = &self.ubo_pass.pass_node;
+            // let transient_pass = &self.transient_pass.pass_node;
+            let ubo_pass = UBOPass::new(&mut self.render_context);
+            let transient_pass = TransientInputPass::new(
+                &mut self.render_context,
+                image_index as usize,
+                ubo_pass.render_target);
 
             let mut frame_graph = FrameGraph::new();
             frame_graph.start();
-            frame_graph.add_node(ubo_pass);
-            self.transient_pass.add(&mut frame_graph);
+            frame_graph.add_node(&ubo_pass.pass_node);
+            frame_graph.add_node(&transient_pass.pass_node);
             frame_graph.compile();
 
 
