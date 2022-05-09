@@ -47,12 +47,18 @@ impl UBOPass {
             .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS);
 
         let subpass_dependency = vk::SubpassDependency::builder()
-            .src_subpass(vk::SUBPASS_EXTERNAL)
-            .dst_subpass(0)
-            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            // .src_subpass(vk::SUBPASS_EXTERNAL)
+            .src_subpass(0)
+            // .dst_subpass(0)
+            .dst_subpass(vk::SUBPASS_EXTERNAL)
+            .src_access_mask(vk::AccessFlags::NONE)
+            // .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+            .dst_access_mask(vk::AccessFlags::MEMORY_WRITE)
+            // .dst_access_mask(vk::AccessFlags::SHADER_READ)
+            // .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            // .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .src_stage_mask(vk::PipelineStageFlags::TOP_OF_PIPE)
             .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .src_access_mask(vk::AccessFlags::empty())
-            .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
             .dependency_flags(vk::DependencyFlags::empty());
 
         let render_pass_create_info = vk::RenderPassCreateInfo::builder()
@@ -322,7 +328,7 @@ impl UBOPass {
                 // .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
                 .initial_layout(vk::ImageLayout::UNDEFINED)
                 .samples(vk::SampleCountFlags::TYPE_1)
-                .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT)
+                .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT | vk::ImageUsageFlags::SAMPLED)
                 .extent(vk::Extent3D::builder().height(100).width(100).depth(1).build())
                 .mip_levels(1)
                 .array_layers(1)
@@ -337,7 +343,7 @@ impl UBOPass {
             .read(vec![uniform_buffer])
             .write(vec![render_target])
             .fill_commands(Box::new(
-                move |render_context: &RenderContext,
+                move |render_ctx: &RenderContext,
                       command_buffer: vk::CommandBuffer,
                       inputs: &ResolvedResourceMap,
                       outputs: &ResolvedResourceMap|
@@ -349,7 +355,7 @@ impl UBOPass {
                             .expect("No resolved UBO");
                         match (&render_target.resource, &ubo.resource) {
                             (ResourceType::Image(rt), ResourceType::Buffer(buffer)) => {
-                                let framebuffer = render_context.create_framebuffers(
+                                let framebuffer = render_ctx.create_framebuffers(
                                     render_pass,
                                     &vk::Extent2D::builder().width(100).height(100),
                                     std::slice::from_ref(&rt)
@@ -406,22 +412,22 @@ impl UBOPass {
                                                          .build())
                                         .clear_values(std::slice::from_ref(&clear_value));
 
-                                    render_context.get_device().cmd_set_viewport(
+                                    render_ctx.get_device().cmd_set_viewport(
                                         command_buffer,
                                         0,
                                         std::slice::from_ref(&viewport));
 
-                                    render_context.get_device().cmd_set_scissor(
+                                    render_ctx.get_device().cmd_set_scissor(
                                         command_buffer,
                                         0,
                                         std::slice::from_ref(&scissor));
 
-                                    render_context.get_device().cmd_begin_render_pass(
+                                    render_ctx.get_device().cmd_begin_render_pass(
                                         command_buffer,
                                         &render_pass_begin,
                                         vk::SubpassContents::INLINE);
 
-                                    render_context.get_device().cmd_bind_pipeline(
+                                    render_ctx.get_device().cmd_bind_pipeline(
                                         command_buffer,
                                         vk::PipelineBindPoint::GRAPHICS,
                                         graphics_pipelines[0])
@@ -429,7 +435,7 @@ impl UBOPass {
 
                                 // Draw calls
                                 unsafe {
-                                    let device = render_context.get_device();
+                                    let device = render_ctx.get_device();
                                     device.update_descriptor_sets(&descriptor_write_sets, &[]);
                                     device.cmd_bind_descriptor_sets(
                                         command_buffer,
@@ -444,7 +450,28 @@ impl UBOPass {
                                 // TODO: move this to framegraph?
                                 // End renderpass
                                 unsafe {
-                                    render_context.get_device().cmd_end_render_pass(command_buffer);
+                                    render_ctx.get_device().cmd_end_render_pass(command_buffer);
+                                    let image_transition = vk::ImageMemoryBarrier::builder()
+                                        .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+                                        .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                                        .image(rt.image)
+                                        .old_layout(vk::ImageLayout::UNDEFINED)
+                                        .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                                        .subresource_range(vk::ImageSubresourceRange::builder()
+                                            .aspect_mask(vk::ImageAspectFlags::COLOR)
+                                            .base_mip_level(0)
+                                            .level_count(1)
+                                            .base_array_layer(0)
+                                            .layer_count(1)
+                                            .build());
+                                    render_ctx.get_device().cmd_pipeline_barrier(
+                                        command_buffer,
+                                        vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                                        vk::PipelineStageFlags::FRAGMENT_SHADER,
+                                        vk::DependencyFlags::empty(),
+                                        &[],
+                                        &[],
+                                        std::slice::from_ref(&image_transition));
                                 }
                             },
                             _ => {}

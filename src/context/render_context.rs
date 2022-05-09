@@ -551,6 +551,8 @@ impl RenderContext {
 
     pub fn get_swapchain(&self) -> &Option<SwapchainWrapper> { &self.swapchain }
 
+    pub fn get_swapchain_handles(&self) -> &Vec<ResourceHandle> { &self.swapchain_handles }
+
     pub fn create_buffer_persistent(&mut self, create_info: &vk::BufferCreateInfo) -> ResourceHandle {
         self.resource_manager.create_buffer_persistent(&self.device, create_info)
     }
