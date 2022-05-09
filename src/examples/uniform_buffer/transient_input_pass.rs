@@ -39,8 +39,11 @@ impl TransientInputPass {
 
         // TODO: Need to refresh on stage access / masks
         let subpass_dependency = vk::SubpassDependency::builder()
-            .src_subpass(vk::SUBPASS_EXTERNAL)
-            .dst_subpass(0)
+            .src_subpass(0)
+            // .dst_subpass(0)
+            .dst_subpass(vk::SUBPASS_EXTERNAL)
+            .src_access_mask(vk::AccessFlags::MEMORY_READ)
+            .dst_access_mask(vk::AccessFlags::MEMORY_WRITE)
             .src_stage_mask(vk::PipelineStageFlags::TOP_OF_PIPE)
             .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT);
 
@@ -59,11 +62,11 @@ impl TransientInputPass {
 
     pub fn new(
         render_context: &mut RenderContext,
-        image_index: usize,
+        rendertarget_handle: ResourceHandle,
         texture_handle: ResourceHandle) -> Self
     {
         let render_pass = Self::generate_renderpass(render_context);
-        let backbuffer = &render_context.get_swapchain().as_ref().unwrap().get_images()[image_index];
+        // let backbuffer = &render_context.get_swapchain().as_ref().unwrap().get_images()[image_index];
         // create descriptor set layouts
         let texture_binding = vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
@@ -194,6 +197,7 @@ impl TransientInputPass {
             .layout(pipeline_layout)
             .pipeline(graphics_pipelines[0])
             .read(vec![texture_handle])
+            .write(vec![rendertarget_handle])
             .fill_commands(
                 Box::new(
                     move |render_context: &RenderContext,
@@ -202,6 +206,124 @@ impl TransientInputPass {
                           outputs: &ResolvedResourceMap|
                     {
                         println!("Inside transient pass");
+                        let render_target = outputs.get(&rendertarget_handle)
+                            .expect("No resolved rendertarget");
+                        let texture = inputs.get(&texture_handle)
+                            .expect("No resolved texture");
+                        match (&render_target.resource, &texture.resource)
+                        {
+                            (ResourceType::Image(rt), ResourceType::Image(tex)) => {
+                                let swapchain = render_context.get_swapchain().as_ref().unwrap();
+                                let framebuffer = render_context.create_framebuffers(
+                                    render_pass,
+                                    &swapchain.get_extent(),
+                                    std::slice::from_ref(&rt));
+
+                                let sampler_create = vk::SamplerCreateInfo::builder()
+                                    .mag_filter(vk::Filter::LINEAR)
+                                    .min_filter(vk::Filter::LINEAR)
+                                    .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                                    .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                                    .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                                    .anisotropy_enable(false)
+                                    .max_anisotropy(0.0)
+                                    .border_color(vk::BorderColor::FLOAT_OPAQUE_BLACK)
+                                    .unnormalized_coordinates(false)
+                                    .compare_enable(false)
+                                    .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+                                    .min_lod(0.0)
+                                    .max_lod(0.0);
+
+                                let sampler = unsafe {
+                                    render_context.get_device().create_sampler(
+                                        &sampler_create,
+                                        None)
+                                        .expect("Failed to create sampler")
+                                };
+
+                                let descriptor_image = vk::DescriptorImageInfo::builder()
+                                    .image_view(tex.view)
+                                    .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                                    .sampler(sampler);
+
+                                let descriptor_write = vk::WriteDescriptorSet::builder()
+                                    .dst_set(descriptor_sets[0])
+                                    .dst_binding(0)
+                                    .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                                    .image_info(std::slice::from_ref(&descriptor_image));
+
+                                unsafe {
+                                    let clear_value = vk::ClearValue {
+                                        color: vk::ClearColorValue {
+                                            float32: [0.1, 0.1, 0.1, 1.0]
+                                        }
+                                    };
+
+                                    let viewport = vk::Viewport::builder()
+                                        .x(0.0)
+                                        .y(0.0)
+                                        .width(swapchain.get_extent().width as f32)
+                                        .height(swapchain.get_extent().height as f32)
+                                        .min_depth(0.0)
+                                        .max_depth(1.0);
+
+                                    let scissor = vk::Rect2D::builder()
+                                        .offset(vk::Offset2D{x: 0, y: 0})
+                                        .extent(swapchain.get_extent());
+
+                                    let render_pass_begin = vk::RenderPassBeginInfo::builder()
+                                        .render_pass(render_pass)
+                                        .framebuffer(framebuffer[0])
+                                        .render_area(vk::Rect2D::builder()
+                                            .offset(vk::Offset2D{x: 0, y: 0})
+                                            .extent(swapchain.get_extent())
+                                            .build())
+                                        .clear_values(std::slice::from_ref(&clear_value));
+
+                                    render_context.get_device().cmd_set_viewport(
+                                        command_buffer,
+                                        0,
+                                        std::slice::from_ref(&viewport));
+
+                                    render_context.get_device().cmd_set_scissor(
+                                        command_buffer,
+                                        0,
+                                        std::slice::from_ref(&scissor));
+
+                                    render_context.get_device().cmd_begin_render_pass(
+                                        command_buffer,
+                                        &render_pass_begin,
+                                        vk::SubpassContents::INLINE);
+
+                                    render_context.get_device().cmd_bind_pipeline(
+                                        command_buffer,
+                                        vk::PipelineBindPoint::GRAPHICS,
+                                        graphics_pipelines[0]);
+                                }
+
+                                unsafe {
+                                    let device = render_context.get_device();
+                                    device.update_descriptor_sets(
+                                        std::slice::from_ref(&descriptor_write),
+                                        &[]);
+                                    device.cmd_bind_descriptor_sets(
+                                        command_buffer,
+                                        vk::PipelineBindPoint::GRAPHICS,
+                                        pipeline_layout,
+                                        0,
+                                        &descriptor_sets,
+                                        &[]);
+                                    device.cmd_draw(command_buffer, 4, 0, 0, 0);
+                                }
+
+                                unsafe {
+                                    render_context.get_device().cmd_end_render_pass(command_buffer);
+                                }
+                            },
+                            _ => {
+                                panic!("This shouldn't have happened");
+                            }
+                        }
                     }
             ))
             .build()

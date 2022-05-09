@@ -195,18 +195,19 @@ impl<'a> VulkanApp<'a> {
 
         let surface_extent = self.render_context.get_swapchain().as_ref().unwrap().get_extent();
         {
+            let swapchain_handle = self.render_context.get_swapchain_handles()[image_index as usize];
             // let ubo_pass = &self.ubo_pass.pass_node;
             // let transient_pass = &self.transient_pass.pass_node;
             let ubo_pass = UBOPass::new(&mut self.render_context);
             let transient_pass = TransientInputPass::new(
                 &mut self.render_context,
-                image_index as usize,
+                swapchain_handle,
                 ubo_pass.render_target);
 
             let mut frame_graph = FrameGraph::new();
             frame_graph.start();
-            frame_graph.add_node(&ubo_pass.pass_node);
             frame_graph.add_node(&transient_pass.pass_node);
+            frame_graph.add_node(&ubo_pass.pass_node);
             frame_graph.compile();
 
 
