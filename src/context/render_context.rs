@@ -539,6 +539,11 @@ impl RenderContext {
 
     pub fn get_physical_device(&self) -> vk::PhysicalDevice { self.physical_device.get() }
 
+    pub fn get_graphics_queue_index(&self) -> u32
+    {
+        self.device.get_queue_family_indices().graphics.unwrap()
+    }
+
     pub fn get_graphics_queue(&self) -> vk::Queue {
         self.graphics_queue
     }

@@ -131,8 +131,18 @@ impl ResourceManager {
                                 });
                             }
                         }
-                        resolved_resource
-                            .expect("Failed to create transient resource")
+
+                        match resolved_resource {
+                            Some(rr) => {
+                                self.resolved_resource_map.insert(handle.clone(), rr.clone());
+                                rr
+                            },
+                            None => {
+                                panic!("Failed to find or create resource during resolution");
+                            }
+                        }
+                        // resolved_resource
+                        //     .expect("Failed to create transient resource")
                     }
                 }
                 // let resolved = self.transient_resource_map.get(handle)

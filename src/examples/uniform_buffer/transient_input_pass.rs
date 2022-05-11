@@ -22,8 +22,8 @@ impl TransientInputPass {
         let rt_attachment = vk::AttachmentDescription::builder()
             .format(render_context.get_swapchain().as_ref().unwrap().get_format())
             .samples(vk::SampleCountFlags::TYPE_1)
-            .load_op(vk::AttachmentLoadOp::DONT_CARE)
-            .store_op(vk::AttachmentStoreOp::DONT_CARE)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::STORE)
             .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
             .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
             .initial_layout(vk::ImageLayout::UNDEFINED)
@@ -39,9 +39,9 @@ impl TransientInputPass {
 
         // TODO: Need to refresh on stage access / masks
         let subpass_dependency = vk::SubpassDependency::builder()
-            .src_subpass(0)
+            .src_subpass(vk::SUBPASS_EXTERNAL)
             // .dst_subpass(0)
-            .dst_subpass(vk::SUBPASS_EXTERNAL)
+            .dst_subpass(0)
             .src_access_mask(vk::AccessFlags::MEMORY_READ)
             .dst_access_mask(vk::AccessFlags::MEMORY_WRITE)
             .src_stage_mask(vk::PipelineStageFlags::TOP_OF_PIPE)
@@ -123,6 +123,11 @@ impl TransientInputPass {
         let rasterization_state_create_info = vk::PipelineRasterizationStateCreateInfo::builder()
             .flags(vk::PipelineRasterizationStateCreateFlags::empty())
             .line_width(1.0)
+            .depth_clamp_enable(false)
+            .cull_mode(vk::CullModeFlags::NONE)
+            .rasterizer_discard_enable(false)
+            .front_face(vk::FrontFace::CLOCKWISE)
+            .depth_bias_enable(false)
             .polygon_mode(vk::PolygonMode::FILL);
         let multiasample_state_create_info = vk::PipelineMultisampleStateCreateInfo::builder()
             .rasterization_samples(vk::SampleCountFlags::TYPE_1);
@@ -139,6 +144,7 @@ impl TransientInputPass {
         let color_blend_attachment_states = [
             vk::PipelineColorBlendAttachmentState::builder()
                 .blend_enable(false)
+                .color_write_mask(vk::ColorComponentFlags::RGBA)
                 .build()
         ];
         let color_blend_state_create_info = vk::PipelineColorBlendStateCreateInfo::builder()
@@ -255,7 +261,7 @@ impl TransientInputPass {
                                 unsafe {
                                     let clear_value = vk::ClearValue {
                                         color: vk::ClearColorValue {
-                                            float32: [0.1, 0.1, 0.1, 1.0]
+                                            float32: [0.3, 0.1, 0.1, 1.0]
                                         }
                                     };
 
@@ -313,7 +319,7 @@ impl TransientInputPass {
                                         0,
                                         &descriptor_sets,
                                         &[]);
-                                    device.cmd_draw(command_buffer, 4, 0, 0, 0);
+                                    device.cmd_draw(command_buffer, 6, 1, 0, 0);
                                 }
 
                                 unsafe {
