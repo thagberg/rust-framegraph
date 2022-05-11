@@ -23,6 +23,12 @@ pub struct UBOPass {
     pub render_target: ResourceHandle
 }
 
+impl Drop for UBOPass {
+    fn drop(&mut self) {
+
+    }
+}
+
 impl UBOPass {
     fn generate_renderpass(render_context: &mut RenderContext) -> vk::RenderPass {
         let color_attachment = vk::AttachmentDescription::builder()
@@ -450,28 +456,31 @@ impl UBOPass {
                                 // TODO: move this to framegraph?
                                 // End renderpass
                                 unsafe {
+                                    let graphics_queue_index = render_ctx.get_graphics_queue_index();
                                     render_ctx.get_device().cmd_end_render_pass(command_buffer);
-                                    let image_transition = vk::ImageMemoryBarrier::builder()
-                                        .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
-                                        .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                                        .image(rt.image)
-                                        .old_layout(vk::ImageLayout::UNDEFINED)
-                                        .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                                        .subresource_range(vk::ImageSubresourceRange::builder()
-                                            .aspect_mask(vk::ImageAspectFlags::COLOR)
-                                            .base_mip_level(0)
-                                            .level_count(1)
-                                            .base_array_layer(0)
-                                            .layer_count(1)
-                                            .build());
-                                    render_ctx.get_device().cmd_pipeline_barrier(
-                                        command_buffer,
-                                        vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-                                        vk::PipelineStageFlags::FRAGMENT_SHADER,
-                                        vk::DependencyFlags::empty(),
-                                        &[],
-                                        &[],
-                                        std::slice::from_ref(&image_transition));
+                                    // let image_transition = vk::ImageMemoryBarrier::builder()
+                                    //     .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+                                    //     .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                                    //     .image(rt.image)
+                                    //     .old_layout(vk::ImageLayout::UNDEFINED)
+                                    //     .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                                    //     .src_queue_family_index(graphics_queue_index)
+                                    //     .dst_queue_family_index(graphics_queue_index)
+                                    //     .subresource_range(vk::ImageSubresourceRange::builder()
+                                    //         .aspect_mask(vk::ImageAspectFlags::COLOR)
+                                    //         .base_mip_level(0)
+                                    //         .level_count(1)
+                                    //         .base_array_layer(0)
+                                    //         .layer_count(1)
+                                    //         .build());
+                                    // render_ctx.get_device().cmd_pipeline_barrier(
+                                    //     command_buffer,
+                                    //     vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                                    //     vk::PipelineStageFlags::FRAGMENT_SHADER,
+                                    //     vk::DependencyFlags::empty(),
+                                    //     &[],
+                                    //     &[],
+                                    //     std::slice::from_ref(&image_transition));
                                 }
                             },
                             _ => {}
