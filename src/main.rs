@@ -57,8 +57,8 @@ struct VulkanApp<'a> {
     swapchain_framebuffers: Vec<vk::Framebuffer>,
 
     render_pass: vk::RenderPass,
-    pipeline_layout: vk::PipelineLayout,
-    graphics_pipeline: vk::Pipeline,
+    // pipeline_layout: vk::PipelineLayout,
+    // graphics_pipeline: vk::Pipeline,
 
     command_buffers: Vec<vk::CommandBuffer>,
 
@@ -105,10 +105,10 @@ impl<'a> VulkanApp<'a> {
         let render_pass = VulkanApp::create_render_pass(
             render_context.get_device(),
             swapchain_format);
-        let (graphics_pipeline, pipeline_layout) = share::v1::create_graphics_pipeline(
-            render_context.get_device(),
-            render_pass,
-            swapchain_extent);
+        // let (graphics_pipeline, pipeline_layout) = share::v1::create_graphics_pipeline(
+        //     render_context.get_device(),
+        //     render_pass,
+        //     swapchain_extent);
         let swapchain_framebuffers = {
             assert!(render_context.get_swapchain().is_some(), "Can't continue without swapchain");
             let swapchain = render_context.get_swapchain().as_ref().unwrap();
@@ -149,9 +149,9 @@ impl<'a> VulkanApp<'a> {
 
             swapchain_framebuffers,
 
-            pipeline_layout,
+            // pipeline_layout,
             render_pass,
-            graphics_pipeline,
+            // graphics_pipeline,
 
             command_buffers,
 
@@ -434,8 +434,8 @@ impl Drop for VulkanApp<'_> {
                 device.destroy_framebuffer(framebuffer, None);
             }
 
-            device.destroy_pipeline(self.graphics_pipeline, None);
-           device .destroy_pipeline_layout(self.pipeline_layout, None);
+            // device.destroy_pipeline(self.graphics_pipeline, None);
+           // device .destroy_pipeline_layout(self.pipeline_layout, None);
             device.destroy_render_pass(self.render_pass, None);
 
             // for &imageview in self.swapchain_imageviews.iter() {

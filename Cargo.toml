@@ -15,6 +15,7 @@ num             = "^0.4"
 cgmath          = "^0.18"
 tobj            = "^3.2"
 gpu-allocator   = "^0.17"
+spirv-reflect   = "^0.2"
 
 [build-dependencies]
 glob        = "0.3.0"
