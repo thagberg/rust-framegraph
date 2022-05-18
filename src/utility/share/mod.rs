@@ -484,7 +484,8 @@ pub fn choose_swapchain_extent(
     }
 }
 
-pub fn create_shader_module(device: &ash::Device, code: Vec<u8>) -> vk::ShaderModule {
+// pub fn create_shader_module(device: &ash::Device, code: &Vec<u8>) -> vk::ShaderModule {
+pub fn create_shader_module(device: &ash::Device, code: &[u8]) -> vk::ShaderModule {
     let shader_module_create_info = vk::ShaderModuleCreateInfo {
         s_type: vk::StructureType::SHADER_MODULE_CREATE_INFO,
         p_next: ptr::null(),

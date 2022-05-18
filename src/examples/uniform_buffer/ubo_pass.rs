@@ -1,6 +1,7 @@
 use core::ffi::c_void;
 
 use ash::vk;
+use spirv_reflect::ShaderModule;
 
 use crate::context::render_context::RenderContext;
 use crate::framegraph::pass_node::{PassNodeBuilder, PassNode};
@@ -130,14 +131,24 @@ impl UBOPass {
         ]};
         let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
 
-        let vert_shader_module = share::create_shader_module(
-            render_context.get_device(),
-            include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-vert.spv")).to_vec()
-        );
-        let frag_shader_module = share::create_shader_module(
-            render_context.get_device(),
-            include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-frag.spv")).to_vec()
-        );
+        let (vert_shader_module, vert_shader_reflection) =
+        {
+            let bytes = include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-vert.spv")).to_vec();
+            let module = share::create_shader_module(
+                render_context.get_device(),
+                &bytes);
+            let reflection = ShaderModule::load_u8_data(&bytes);
+            (module, reflection)
+        };
+        let (frag_shader_module, frag_shader_reflection) =
+        {
+            let bytes = include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-frag.spv")).to_vec();
+            let module = share::create_shader_module(
+                render_context.get_device(),
+                &bytes);
+            let reflection = ShaderModule::load_u8_data(&bytes);
+            (module, reflection)
+        };
         let main_function_name = std::ffi::CString::new("main").unwrap();
         let shader_stages = [
             vk::PipelineShaderStageCreateInfo {

@@ -81,14 +81,16 @@ pub fn create_graphics_pipeline(
         //include_bytes!("../../../shaders/spv/09-shader-base.vert.spv").to_vec(),
         // std::fs::read("../../../shaders/spv/09-shader-base.vert.spv").expect("Failed to load vert shader"),
         // std::fs::read(concat!(std::os::env::var("OUT_DIR").unwrap(), "shaders/hello-vert.spv")).expect("Failed to load vert shader"),
-        include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-vert.spv")).to_vec()
+        // include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-vert.spv")).to_vec()
+        include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-vert.spv"))
         // std::fs::read(concat!(env!("OUT_DIR"), "/shaders/hello-vert.spv")).expect("Failed to load vert shader"),
     );
     let frag_shader_module = create_shader_module(
         device,
         //include_bytes!("../../../shaders/spv/09-shader-base.frag.spv").to_vec(),
         // std::fs::read("../../../shaders/spv/09-shader-base.frag.spv").expect("Failed to load frag shader"),
-        include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-frag.spv")).to_vec()
+        // include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-frag.spv")).to_vec()
+        include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-frag.spv"))
         // std::fs::read(concat!(env!("OUT_DIR"), "/shaders/hello-frag.spv")).expect("Failed to load frag shader"),
         //concat!(env!("OUT_DIR"), "/embedded_files.inc"));
     );
