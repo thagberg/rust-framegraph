@@ -91,13 +91,11 @@ impl TransientInputPass {
         // create shader modules
         let vert_shader_module = share::create_shader_module(
             render_context.get_device(),
-            // include_bytes!(concat!(env!("OUT_DIR"), "/shaders/transient_input-vert.spv")).to_vec()
-            include_bytes!(concat!(env!("OUT_DIR"), "/shaders/transient_input-vert.spv"))
+            include_bytes!(concat!(env!("OUT_DIR"), "/shaders/transient_input-vert.spv")).to_vec()
         );
         let frag_shader_module = share::create_shader_module(
             render_context.get_device(),
-            // include_bytes!(concat!(env!("OUT_DIR"), "/shaders/transient_input-frag.spv")).to_vec()
-            include_bytes!(concat!(env!("OUT_DIR"), "/shaders/transient_input-frag.spv"))
+            include_bytes!(concat!(env!("OUT_DIR"), "/shaders/transient_input-frag.spv")).to_vec()
         );
         let main_function_name = std::ffi::CString::new("main").unwrap();
         let shader_stages = [
