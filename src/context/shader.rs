@@ -1,4 +1,4 @@
-// use std::fs;
+use std::fs;
 use std::collections::HashMap;
 use ash::vk;
 use spirv_reflect::ShaderModule as ReflectShaderModule;
@@ -16,7 +16,8 @@ pub struct ShaderModule
 
 pub struct ShaderManager
 {
-    shader_cache: HashMap<str, ShaderModule>
+    // shader_cache: HashMap<str, ShaderModule>
+    shader_cache: HashMap<String, ShaderModule>
 }
 
 fn translate_descriptor_type(reflect_type: ReflectDescriptorType) -> vk::DescriptorType
@@ -39,16 +40,36 @@ fn translate_descriptor_type(reflect_type: ReflectDescriptorType) -> vk::Descrip
     }
 }
 
+fn convert_vec8_to_vec32(mut vec8: Vec<u8>) -> Vec<u32>
+{
+    unsafe {
+        vec8.shrink_to_fit();
+        let mut len = vec8.len();
+
+        let padding = len % 4;
+        for i in 0..padding {
+            vec8.push(0);
+        }
+
+        let ptr = vec8.as_mut_ptr() as *mut u32;
+        let cap = vec8.capacity();
+        len = vec8.len();
+
+        Vec::from_raw_parts(ptr, len / 4, cap / 4)
+    }
+}
+
 fn create_shader_module(render_context: &RenderContext, file_name: &str) -> ShaderModule
 {
+    let mut bytes = fs::read(file_name)
+        .expect(&format!("Unable to load shader at {}", file_name));
     let reflection_module = spirv_reflect::ShaderModule::load_u8_data(&bytes)
         .expect(&format!("Failed to parse shader for reflection data at {}", file_name));
-    // let bytes = fs::read(file_name)
-    //     .expect(&format!("Unable to load shader at {}", file_name));
-    let bytes = reflection_module.get_code();
+    // let bytes = reflection_module.get_code();
+    let bytes32 = convert_vec8_to_vec32(bytes);
 
     let create_info = vk::ShaderModuleCreateInfo::builder()
-        .code(&bytes);
+        .code(&bytes32);
     let shader = unsafe {
         render_context.get_device().create_shader_module(&create_info, None)
             .expect("Failed to create shader")
@@ -118,15 +139,8 @@ impl ShaderManager
 
     pub fn load_shader(&mut self, render_context: &RenderContext, file_name: &str) -> &ShaderModule
     {
-        let found = self.shader_cache.get(file_name);
-        match found
-        {
-            Some(shader) => {
-               shader
-            },
-            _ => {
-
-            }
-        }
+        self.shader_cache.entry(file_name.parse().unwrap()).or_insert(
+            create_shader_module(render_context, file_name)
+        )
     }
 }

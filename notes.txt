@@ -1,0 +1,6 @@
+06 July 2022 - Refreshing my memory on a lot of things. I had been working on the
+shader cache, but it took me a while to figure out why I was working on that.
+Currently, recreating the graph nodes is leaking descriptor sets and eventually 
+will cause a panic when unble to allocate more. The new ShaderModule type uses 
+SPIR-V reflection to build descriptor sets, descriptor set layouts, and the
+pipeline layout, all of which are cached.
