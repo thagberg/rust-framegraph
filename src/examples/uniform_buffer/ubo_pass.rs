@@ -132,11 +132,13 @@ impl UBOPass {
 
         let vert_shader_module = share::create_shader_module(
             render_context.get_device(),
-            include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-vert.spv")).to_vec()
+            // include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-vert.spv")).to_vec()
+            include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-vert.spv"))
         );
         let frag_shader_module = share::create_shader_module(
             render_context.get_device(),
-            include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-frag.spv")).to_vec()
+            // include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-frag.spv")).to_vec()
+            include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-frag.spv"))
         );
         let main_function_name = std::ffi::CString::new("main").unwrap();
         let shader_stages = [
