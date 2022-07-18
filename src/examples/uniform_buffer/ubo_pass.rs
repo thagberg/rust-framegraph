@@ -3,6 +3,7 @@ use core::ffi::c_void;
 use ash::vk;
 
 use crate::context::render_context::RenderContext;
+use crate::context::shader::{ShaderManager, ShaderModule};
 use crate::framegraph::pass_node::{PassNodeBuilder, PassNode};
 use crate::resource::resource_manager::{ResourceType, ResourceHandle, ResolvedResource, ResolvedResourceMap, TransientResource};
 
@@ -81,7 +82,7 @@ impl UBOPass {
         render_pass
     }
 
-    pub fn new(render_context: &mut RenderContext) -> Self {
+    pub fn new(render_context: &mut RenderContext, shader_manager: &mut ShaderManager) -> Self {
         let render_pass = Self::generate_renderpass(render_context);
         let ubo_create_info = vk::BufferCreateInfo {
             s_type: vk::StructureType::BUFFER_CREATE_INFO,
@@ -107,39 +108,47 @@ impl UBOPass {
             };
         });
 
-        let ubo_binding = vk::DescriptorSetLayoutBinding {
-            binding: 0,
-            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-            descriptor_count: 1,
-            stage_flags: vk::ShaderStageFlags::ALL_GRAPHICS,
-            p_immutable_samplers: std::ptr::null()
-        };
-        let ubo_bindings = [ubo_binding];
-        let descriptor_set_layout_create_info = vk::DescriptorSetLayoutCreateInfo {
-            s_type: vk::StructureType::DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            p_next: std::ptr::null(),
-            flags: vk::DescriptorSetLayoutCreateFlags::empty(),
-            binding_count: ubo_bindings.len() as u32,
-            p_bindings: ubo_bindings.as_ptr()
-        };
-        let descriptor_set_layouts = unsafe {[
-            render_context.get_device().create_descriptor_set_layout(
-                &descriptor_set_layout_create_info,
-                None)
-                .expect("Failed to create descriptor set layout")
-        ]};
-        let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
+        // let ubo_binding = vk::DescriptorSetLayoutBinding {
+        //     binding: 0,
+        //     descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+        //     descriptor_count: 1,
+        //     stage_flags: vk::ShaderStageFlags::ALL_GRAPHICS,
+        //     p_immutable_samplers: std::ptr::null()
+        // };
+        // let ubo_bindings = [ubo_binding];
+        // let descriptor_set_layout_create_info = vk::DescriptorSetLayoutCreateInfo {
+        //     s_type: vk::StructureType::DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        //     p_next: std::ptr::null(),
+        //     flags: vk::DescriptorSetLayoutCreateFlags::empty(),
+        //     binding_count: ubo_bindings.len() as u32,
+        //     p_bindings: ubo_bindings.as_ptr()
+        // };
+        // let descriptor_set_layouts = unsafe {[
+        //     render_context.get_device().create_descriptor_set_layout(
+        //         &descriptor_set_layout_create_info,
+        //         None)
+        //         .expect("Failed to create descriptor set layout")
+        // ]};
+        // let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
 
-        let vert_shader_module = share::create_shader_module(
-            render_context.get_device(),
-            // include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-vert.spv")).to_vec()
-            include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-vert.spv"))
-        );
-        let frag_shader_module = share::create_shader_module(
-            render_context.get_device(),
-            // include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-frag.spv")).to_vec()
-            include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-frag.spv"))
-        );
+        // let vert_shader_module = share::create_shader_module(
+        //     render_context.get_device(),
+        //     // include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-vert.spv")).to_vec()
+        //     include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-vert.spv"))
+        // );
+        // let frag_shader_module = share::create_shader_module(
+        //     render_context.get_device(),
+        //     // include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-frag.spv")).to_vec()
+        //     include_bytes!(concat!(env!("OUT_DIR"), "/shaders/hello-frag.spv"))
+        // );
+
+        let vert_shader_module = shader_manager.load_shader(
+            render_context,
+            concat!(env!("OUT_DIR"), "/shaders/hello-vert.spv"));
+        let frag_shader_module = shader_manager.load_shader(
+            render_context,
+            concat!(env!("OUT_DIR"), "/shaders/hello-frag.spv"));
+
         let main_function_name = std::ffi::CString::new("main").unwrap();
         let shader_stages = [
             vk::PipelineShaderStageCreateInfo {
@@ -147,7 +156,7 @@ impl UBOPass {
                 s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
                 p_next: std::ptr::null(),
                 flags: vk::PipelineShaderStageCreateFlags::empty(),
-                module: vert_shader_module,
+                module: vert_shader_module.shader,
                 p_name: main_function_name.as_ptr(),
                 p_specialization_info: std::ptr::null(),
                 stage: vk::ShaderStageFlags::VERTEX,
@@ -157,7 +166,7 @@ impl UBOPass {
                 s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
                 p_next: std::ptr::null(),
                 flags: vk::PipelineShaderStageCreateFlags::empty(),
-                module: frag_shader_module,
+                module: frag_shader_module.shader,
                 p_name: main_function_name.as_ptr(),
                 p_specialization_info: std::ptr::null(),
                 stage: vk::ShaderStageFlags::FRAGMENT,
@@ -275,22 +284,22 @@ impl UBOPass {
             p_scissors: std::ptr::null()
         };
 
-        let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo {
-            s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
-            p_next: std::ptr::null(),
-            flags: vk::PipelineLayoutCreateFlags::empty(),
-            set_layout_count: descriptor_set_layouts.len() as u32,
-            p_set_layouts: descriptor_set_layouts.as_ptr(),
-            push_constant_range_count: 0,
-            p_push_constant_ranges: std::ptr::null(),
-        };
-
-        let pipeline_layout = unsafe {
-            render_context.get_device().create_pipeline_layout(
-                &pipeline_layout_create_info,
-                None
-            ).expect("Failed to create pipeline layout for UBOPass")
-        };
+        // let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo {
+        //     s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
+        //     p_next: std::ptr::null(),
+        //     flags: vk::PipelineLayoutCreateFlags::empty(),
+        //     set_layout_count: descriptor_set_layouts.len() as u32,
+        //     p_set_layouts: descriptor_set_layouts.as_ptr(),
+        //     push_constant_range_count: 0,
+        //     p_push_constant_ranges: std::ptr::null(),
+        // };
+        //
+        // let pipeline_layout = unsafe {
+        //     render_context.get_device().create_pipeline_layout(
+        //         &pipeline_layout_create_info,
+        //         None
+        //     ).expect("Failed to create pipeline layout for UBOPass")
+        // };
 
         let graphics_pipeline_create_infos = [vk::GraphicsPipelineCreateInfo { s_type: vk::StructureType::GRAPHICS_PIPELINE_CREATE_INFO,
             p_next: std::ptr::null(),
@@ -300,14 +309,13 @@ impl UBOPass {
             p_vertex_input_state: &vertex_input_state_create_info,
             p_input_assembly_state: &vertex_input_assembly_state_info,
             p_tessellation_state: std::ptr::null(),
-            // p_viewport_state: &viewport_state_create_info,
             p_viewport_state: &viewport_state,
             p_rasterization_state: &rasterization_statue_create_info,
             p_multisample_state: &multisample_state_create_info,
             p_depth_stencil_state: &depth_state_create_info,
             p_color_blend_state: &color_blend_state,
             p_dynamic_state: &dynamic_state,
-            layout: pipeline_layout,
+            layout: vert_shader_module.pipeline_layout,
             render_pass,
             subpass: 0,
             base_pipeline_handle: vk::Pipeline::null(),
@@ -322,10 +330,10 @@ impl UBOPass {
             ).expect("Failed to create graphics pipeline for UBOPass")
         };
 
-        unsafe {
-            render_context.get_device().destroy_shader_module(vert_shader_module, None);
-            render_context.get_device().destroy_shader_module(frag_shader_module, None);
-        }
+        // unsafe {
+        //     render_context.get_device().destroy_shader_module(vert_shader_module, None);
+        //     render_context.get_device().destroy_shader_module(frag_shader_module, None);
+        // }
 
         // let render_target = TransientResource
         let render_target = render_context.create_transient_image(
@@ -346,7 +354,7 @@ impl UBOPass {
         // let pass_node = PassNode::builder()
         let pass_node = PassNode::builder()
             .renderpass(render_pass)
-            .layout(pipeline_layout)
+            .layout(vert_shader_module.pipeline_layout)
             .pipeline(graphics_pipelines[0])
             .read(vec![uniform_buffer])
             .write(vec![render_target])
@@ -378,7 +386,7 @@ impl UBOPass {
                                 let descriptor_write = vk::WriteDescriptorSet {
                                     s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
                                     p_next: std::ptr::null(),
-                                    dst_set: descriptor_sets[0],
+                                    dst_set: vert_shader_module.descriptor_sets[0],
                                     dst_binding: 0,
                                     dst_array_element: 0,
                                     descriptor_count: 1,
@@ -448,9 +456,9 @@ impl UBOPass {
                                     device.cmd_bind_descriptor_sets(
                                         command_buffer,
                                         vk::PipelineBindPoint::GRAPHICS,
-                                        pipeline_layout,
+                                        vert_shader_module.pipeline_layout,
                                         0,
-                                        &descriptor_sets,
+                                        &vert_shader_module.descriptor_sets,
                                         &[]);
                                     device.cmd_draw(command_buffer, 3, 1, 0, 0);
                                 }
