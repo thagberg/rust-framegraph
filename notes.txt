@@ -23,3 +23,39 @@ creating the pipeline itself. Then if a node is perserved by the framegrpah,
 the framegraph will go to the PipelineManager to either create a pipeline or
 use a cached one. During node execution it should only require the handle for
 a pipeline (which includes the shaders used).
+
+UBO Pass currently looks like this:
+* Create renderpass
+* Create Pipeline
+* Create PassNode 
+	* Pass Pipeline to PassNode -- nothing is done with it here
+	* Pass pipeline layout from shader module
+* Execution
+	* Get rendertarget and UBO buffer from resolved resources passed in by framegraph
+	* Prepare descriptor writes
+	* Prepare viewport / scissor structs
+	* Set viewport / scissor
+	* Begin renderpass
+	* Bind pipeline
+	* Update descriptors
+	* Bind descriptors
+	* Execute draw calls
+	* End renderpass
+
+After refactoring it should look more like this:
+* Create PassNode
+	* Pass PipelineDescription
+	* Pass inputs / outputs
+	* Framegraph uses PipelineDescription and inputs / outputs to generate renderpass
+		(or subpass potentially?)
+	* Framegraph uses PipelineDescription to either generate pipeline or fetch from cache
+* Framegraph calls node execute
+	* Get resolved resources
+	* Prepare descriptor writes
+	* Set viewport / scissor (maybe can remove this?)
+	* Begin renderpass -- passed into execute callback, maybe the framegraph should handle this?
+	* Bind pipeline -- handle passed into execute callback
+	* Update descriptors
+	* Bind descriptors
+	* Execute draw calls
+	* End renderpass (?)
