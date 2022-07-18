@@ -8,15 +8,14 @@ use crate::context::render_context::RenderContext;
 
 pub struct ShaderModule
 {
-    shader: vk::ShaderModule,
-    descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
-    descriptor_sets: Vec<vk::DescriptorSet>,
-    pipeline_layout: vk::PipelineLayout
+    pub shader: vk::ShaderModule,
+    pub descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
+    pub descriptor_sets: Vec<vk::DescriptorSet>,
+    pub pipeline_layout: vk::PipelineLayout
 }
 
 pub struct ShaderManager
 {
-    // shader_cache: HashMap<str, ShaderModule>
     shader_cache: HashMap<String, ShaderModule>
 }
 
@@ -112,18 +111,29 @@ fn create_shader_module(render_context: &RenderContext, file_name: &str) -> Shad
 
     let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
 
-    ShaderModule::new()
+    let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
+        .set_layouts(&descriptor_set_layouts);
+    let pipeline_layout = unsafe {
+        render_context.get_device().create_pipeline_layout(&pipeline_layout_create, None)
+            .expect("Failed to create pipeline layout")
+    };
+
+    ShaderModule::new(shader, descriptor_set_layouts, descriptor_sets, pipeline_layout)
 }
 
 impl ShaderModule
 {
-    pub fn new() -> ShaderModule
+    pub fn new(
+        shader: vk::ShaderModule,
+        descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
+        descriptor_sets: Vec<vk::DescriptorSet>,
+        pipeline_layout: vk::PipelineLayout) -> ShaderModule
     {
         ShaderModule {
-            shader: vk::ShaderModule::null(),
-            descriptor_set_layouts: Vec::new(),
-            descriptor_sets: Vec::new(),
-            pipeline_layout: vk::PipelineLayout::null()
+            shader,
+            descriptor_set_layouts,
+            descriptor_sets,
+            pipeline_layout
         }
     }
 }

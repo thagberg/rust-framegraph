@@ -4,3 +4,15 @@ Currently, recreating the graph nodes is leaking descriptor sets and eventually
 will cause a panic when unble to allocate more. The new ShaderModule type uses 
 SPIR-V reflection to build descriptor sets, descriptor set layouts, and the
 pipeline layout, all of which are cached.
+
+16 July 2022 - Should look into standardizing the various state objects which
+comprise the graphics pipeline:
+	* rasterizer
+	* depth / stencil
+	* viewport
+	* multisample
+	* blend
+	* dynamic state
+If I do that then I can simply provide a string of a pipeline for a pass as well
+as the inputs / outputs and then the framegraph can fetch a cached graphics pipeline
+and provide that to the pass callback.

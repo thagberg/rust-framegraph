@@ -20,6 +20,7 @@ mod api_types;
 mod resource;
 mod framegraph;
 use crate::context::render_context::RenderContext;
+use crate::context::shader::ShaderManager;
 use crate::api_types::surface::SurfaceWrapper;
 use crate::api_types::device::DeviceWrapper;
 use crate::api_types::image::ImageWrapper;
@@ -61,6 +62,8 @@ struct VulkanApp<'a> {
     // graphics_pipeline: vk::Pipeline,
 
     command_buffers: Vec<vk::CommandBuffer>,
+
+    shader_manager: ShaderManager,
 
     image_available_semaphores: Vec<vk::Semaphore>,
     render_finished_semaphores: Vec<vk::Semaphore>,
@@ -128,6 +131,8 @@ impl<'a> VulkanApp<'a> {
 
         let mut frame_graph = FrameGraph::new();
 
+        let mut shader_manager = ShaderManager::new();
+
         let command_buffers = share::v1::create_command_buffers(
             render_context.get_device(),
             render_context.get_graphics_command_pool(),
@@ -154,6 +159,8 @@ impl<'a> VulkanApp<'a> {
             // graphics_pipeline,
 
             command_buffers,
+
+            shader_manager,
 
             image_available_semaphores: sync_ojbects.image_available_semaphores,
             render_finished_semaphores: sync_ojbects.render_finished_semaphores,
