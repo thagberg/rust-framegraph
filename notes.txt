@@ -16,3 +16,10 @@ comprise the graphics pipeline:
 If I do that then I can simply provide a string of a pipeline for a pass as well
 as the inputs / outputs and then the framegraph can fetch a cached graphics pipeline
 and provide that to the pass callback.
+
+19 July 2022 - Need to refactor the Framegraph and how PassNodes are created.
+A PassNode should now be constructed with a PipelineDescription rather than
+creating the pipeline itself. Then if a node is perserved by the framegrpah,
+the framegraph will go to the PipelineManager to either create a pipeline or
+use a cached one. During node execution it should only require the handle for
+a pipeline (which includes the shaders used).
