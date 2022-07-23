@@ -4,7 +4,7 @@ use ash::vk;
 use gpu_allocator::vulkan::*;
 use gpu_allocator::MemoryLocation;
 use crate::api_types::device::PhysicalDeviceWrapper;
-use crate::{DeviceWrapper, RenderContext};
+use crate::DeviceWrapper;
 use crate::api_types::image::ImageWrapper;
 
 #[derive(Clone, Copy, Hash, std::cmp::Eq)]

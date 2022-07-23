@@ -1,11 +1,11 @@
 use std::fs;
 use std::collections::HashMap;
 use ash::vk;
-use spirv_reflect::ShaderModule as ReflectShaderModule;
 use spirv_reflect::types::descriptor::{ReflectDescriptorType};
 
 use crate::context::render_context::RenderContext;
 
+#[derive(Clone)]
 pub struct ShaderModule
 {
     pub shader: vk::ShaderModule,
@@ -147,10 +147,11 @@ impl ShaderManager
         }
     }
 
-    pub fn load_shader(&mut self, render_context: &RenderContext, file_name: &str) -> &ShaderModule
+    pub fn load_shader(&mut self, render_context: &RenderContext, file_name: &str) -> ShaderModule
     {
+        // TODO: can this return a &ShaderModule without a double mutable borrow error in PipelineManager::create_pipeline?
         self.shader_cache.entry(file_name.parse().unwrap()).or_insert(
             create_shader_module(render_context, file_name)
-        )
+        ).clone()
     }
 }

@@ -19,7 +19,7 @@ and provide that to the pass callback.
 
 19 July 2022 - Need to refactor the Framegraph and how PassNodes are created.
 A PassNode should now be constructed with a PipelineDescription rather than
-creating the pipeline itself. Then if a node is perserved by the framegrpah,
+creating the pipeline itself. Then if a node is preserved by the framegrpah,
 the framegraph will go to the PipelineManager to either create a pipeline or
 use a cached one. During node execution it should only require the handle for
 a pipeline (which includes the shaders used).
@@ -59,3 +59,20 @@ After refactoring it should look more like this:
 	* Bind descriptors
 	* Execute draw calls
 	* End renderpass (?)
+
+20 July 2022 - Considering a new "rendertarget" attachment type for PassNode. This
+would allow the framegraph to handle creating the framegraph object for a pass. That
+would then also allow the framegraph to handle beginning and ending the renderpass.
+
+Also starting to think about how to move descriptor updates out of the PassNode
+callback. Descriptor set layouts are available in reflection data from the shader.
+Could either match on name or just enforce the order that writes/reads are provided
+to the PassNode builder. This would also probably necessitate the "rendertarget"
+attachment type being separated from write attachments, as those will not be touched
+by a descriptor update.
+
+23 July 2022 - The Framegraph needs to generate renderpasses so that it can verify
+that edges in the graph are valid and so that it can provide it to the
+PipelineManager when fetching or generating the pipeline for a pass. Potentially
+the Framegraph can inspect the graph during a compile/link phase to determine when 
+and where subpasses are appropriate rather than an entire new renderpass.
