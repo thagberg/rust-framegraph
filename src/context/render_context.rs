@@ -1,14 +1,9 @@
-use std::ptr::{drop_in_place, swap};
-use std::thread::current;
 use std::ffi::CStr;
 use std::ffi::CString;
 use std::os::raw::c_char;
 use core::ffi::c_void;
 use ash::vk;
-use ash::vk::{Image, ImageView, PresentModeKHR, SwapchainImageUsageFlagsANDROID};
-use winapi::um::wingdi::wglSwapMultipleBuffers;
-use untitled::utility::share::find_queue_family;
-use untitled::utility::share::v1::create_image;
+use ash::vk::PresentModeKHR;
 
 use crate::{
     InstanceWrapper,
@@ -18,13 +13,10 @@ use crate::{
 use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper};
 use crate::api_types::swapchain::SwapchainWrapper;
 use crate::api_types::image::ImageWrapper;
-use crate::api_types::surface::SurfaceCapabilities;
 use crate::resource::resource_manager::{
-    ResolvedBuffer,
     ResourceManager,
     ResourceHandle,
     ResolvedResource,
-    ResourceCreateInfo
 };
 
 pub struct RenderContext {

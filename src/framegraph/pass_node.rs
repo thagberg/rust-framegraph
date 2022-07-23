@@ -1,8 +1,7 @@
-use std::collections::HashMap;
 use ash::vk;
-use crate::resource::resource_manager::{ResourceHandle, TransientResource, ResolvedResourceMap};
+use crate::resource::resource_manager::{ResourceHandle, ResolvedResourceMap};
 use crate::context::render_context::{RenderContext};
-use crate::ResolvedResource;
+use crate::context::pipeline::{PipelineDescription};
 
 type FillCallback = dyn (
     Fn(
@@ -14,9 +13,8 @@ type FillCallback = dyn (
 );
 
 pub struct PassNode {
-    layout: vk::PipelineLayout,
-    pipeline: vk::Pipeline,
-    renderpass: vk::RenderPass,
+    pipeline_description: PipelineDescription,
+    render_targets: Vec<ResourceHandle>,
     inputs: Vec<ResourceHandle>,
     outputs: Vec<ResourceHandle>,
     fill_callback: Box<FillCallback>
@@ -24,11 +22,10 @@ pub struct PassNode {
 
 #[derive(Default)]
 pub struct PassNodeBuilder {
-    layout: Option<vk::PipelineLayout>,
-    pipeline: Option<vk::Pipeline>,
-    renderpass: Option<vk::RenderPass>,
-    inputs: Option<Vec<ResourceHandle>>,
-    outputs: Option<Vec<ResourceHandle>>,
+    pipeline_description: Option<PipelineDescription>,
+    render_targets: Vec<ResourceHandle>,
+    inputs: Vec<ResourceHandle>,
+    outputs: Vec<ResourceHandle>,
     fill_callback: Option<Box<FillCallback>>
 }
 
@@ -53,9 +50,7 @@ impl PassNode {
             resolved_outputs);
     }
 
-    pub fn get_pipeline(&self) -> vk::Pipeline { self.pipeline }
-
-    pub fn get_renderpass(&self) -> vk::RenderPass { self.renderpass }
+    pub fn get_pipeline_description(&self) -> &PipelineDescription { &self.pipeline_description }
 
     pub fn get_inputs(&self) -> &[ResourceHandle] {
         &self.inputs
@@ -67,61 +62,45 @@ impl PassNode {
 }
 
 impl PassNodeBuilder {
-    pub fn layout(mut self, layout: vk::PipelineLayout) -> Self {
-        self.layout = Some(layout);
+    pub fn pipeline_description(mut self, pipeline_description: PipelineDescription) -> Self {
+        self.pipeline_description = Some(pipeline_description);
         self
     }
 
-    pub fn pipeline(mut self, pipeline: vk::Pipeline) -> Self {
-        self.pipeline = Some(pipeline);
+    pub fn read(mut self, input: ResourceHandle) -> Self {
+        self.inputs.push(input);
         self
     }
 
-    pub fn renderpass(mut self, renderpass: vk::RenderPass) -> Self {
-        self.renderpass = Some(renderpass);
+    pub fn write(mut self, output: ResourceHandle) -> Self {
+        self.outputs.push(output);
         self
     }
 
-    pub fn read(mut self, inputs: Vec<ResourceHandle>) -> Self {
-        self.inputs = Some(inputs);
+    pub fn render_target(mut self, render_target: ResourceHandle) -> Self {
+        self.render_targets.push(render_target);
         self
     }
 
-    pub fn write(mut self, outputs: Vec<ResourceHandle>) -> Self {
-        self.outputs = Some(outputs);
-        self
-    }
-
-    pub fn fill_commands(&mut self, fill_callback: Box<FillCallback>) -> &mut Self
+    pub fn fill_commands(mut self, fill_callback: Box<FillCallback>) -> Self
     {
         self.fill_callback = Some(fill_callback);
         self
     }
 
-    pub fn build(&mut self) -> Result<PassNode, &'static str> {
-        assert!(self.layout.is_some(), "No layout set");
-        assert!(self.pipeline.is_some(), "No pipeline set");
-        assert!(self.renderpass.is_some(), "No renderpass set");
+    pub fn build(mut self) -> Result<PassNode, &'static str> {
+        assert!(self.pipeline_description.is_some(), "No pipeline set");
         assert!(self.fill_callback.is_some(), "No fill callback set");
 
-        if self.layout.is_some() && self.pipeline.is_some() && self.renderpass.is_some() {
-            let inputs = match &self.inputs {
-                Some(i) => { self.inputs.take().unwrap()},
-                _ => {Vec::new()}
-            };
-
-            let outputs = match &self.outputs {
-                Some(o) => { self.outputs.take().unwrap()},
-                _ => {Vec::new()}
-            };
-
+        if self.pipeline_description.is_some() && self.fill_callback.is_some() {
+            let rt_len = self.render_targets.len();
+            let inputs_len = self.inputs.len();
+            let outputs_len = self.outputs.len();
             Ok(PassNode {
-                layout: self.layout.unwrap(),
-                pipeline: self.pipeline.unwrap(),
-                renderpass: self.renderpass.unwrap(),
-                inputs: inputs,
-                outputs: outputs,
-                // creates: creates,
+                pipeline_description: self.pipeline_description.unwrap(),
+                render_targets: self.render_targets.into_iter().take(rt_len).collect(),
+                inputs: self.inputs.into_iter().take(inputs_len).collect(),
+                outputs: self.outputs.into_iter().take(outputs_len).collect(),
                 fill_callback: self.fill_callback.take().unwrap()
             })
         } else {
@@ -129,34 +108,3 @@ impl PassNodeBuilder {
         }
     }
 }
-
-/*
-subpass requirements
-----------------------
-color attachments
-depth-stencil attachment
-input attachments
-resolve attachments     ---|
-preserve attachments    ---|-- can probably ignore these
-
-src subpass
-dst subpass
-src stage
-dst stage
-src access
-dst access
--- should probably compute all of these while compiling the framegraph?
-
-pipeline requirements
----------------------
-shaders -- shader modules / shader stages
-vertex input state
-vertex assembly state
-rasterization state
-multisample state
-stencil state
-depth state
-color blend states
-descriptor set layouts
-
- */

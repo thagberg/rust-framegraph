@@ -1,12 +1,13 @@
-use std::collections::HashMap;
 use ash::vk;
-use crate::{PassNode, PassNodeBuilder, RenderContext};
-use crate::resource::resource_manager::{ResolvedResource, ResourceHandle, ResolvedResourceMap};
+use crate::{PassNode, RenderContext};
+use crate::resource::resource_manager::{ResolvedResourceMap};
+use crate::context::pipeline::{PipelineManager};
 
 pub struct FrameGraph<'a> {
     nodes: Vec<&'a PassNode>,
     frame_started: bool,
-    compiled: bool
+    compiled: bool,
+    pipeline_manager: PipelineManager
 }
 
 impl<'a> FrameGraph<'a> {
@@ -14,7 +15,8 @@ impl<'a> FrameGraph<'a> {
         FrameGraph {
             nodes: vec![],
             frame_started: false,
-            compiled: false
+            compiled: false,
+            pipeline_manager: PipelineManager::new()
         }
     }
 
@@ -41,6 +43,7 @@ impl<'a> FrameGraph<'a> {
         let mut next = self.nodes.pop();
         while next.is_some() {
             let node = next.unwrap();
+            let pipeline = self.pipeline_manager.create_pipeline(render_context, node.get_pipeline_description());
             // let mut resolved_inputs: Vec<ResolvedResource> = Vec::new();
             let mut resolved_inputs = ResolvedResourceMap::new();
             let mut resolved_outputs = ResolvedResourceMap::new();

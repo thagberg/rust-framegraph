@@ -28,7 +28,7 @@ pub enum RasterizationType
     Standard
 }
 
-#[derive(Hash)]
+// #[derive(Hash)]
 pub struct PipelineDescription
 {
     vertex_input: vk::PipelineVertexInputStateCreateInfo,
@@ -38,6 +38,16 @@ pub struct PipelineDescription
     blend: BlendType,
     vertex_name: String,
     fragment_name: String
+}
+
+impl Hash for PipelineDescription
+{
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // TODO: this is an inadequate hash
+        // will need to actually use some pipeline state for a better hash
+        self.vertex_name.hash(state);
+        self.fragment_name.hash(state);
+    }
 }
 
 pub struct Pipeline
@@ -63,9 +73,9 @@ const STENCIL_STATE_KEEP: vk::StencilOpState = vk::StencilOpState {
 
 fn generate_rasteration_state(rasterization_type: RasterizationType) -> vk::PipelineRasterizationStateCreateInfo
 {
-    match(rasterization_type)
+    match rasterization_type
     {
-        (RasterizationType::Standard) => {
+        RasterizationType::Standard => {
             vk::PipelineRasterizationStateCreateInfo
             {
                 s_type: vk::StructureType::PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
@@ -91,9 +101,9 @@ fn generate_rasteration_state(rasterization_type: RasterizationType) -> vk::Pipe
 
 fn generate_depth_stencil_state(depth_stencil_type: DepthStencilType) -> vk::PipelineDepthStencilStateCreateInfo
 {
-    match (depth_stencil_type)
+    match depth_stencil_type
     {
-        (DepthStencilType::Enable) => {
+        DepthStencilType::Enable => {
             vk::PipelineDepthStencilStateCreateInfo {
                 s_type: vk::StructureType::PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
                 p_next: std::ptr::null(),
@@ -130,9 +140,9 @@ fn generate_depth_stencil_state(depth_stencil_type: DepthStencilType) -> vk::Pip
 
 fn generate_blend_state(blend_type: BlendType) -> vk::PipelineColorBlendStateCreateInfo
 {
-    match (blend_type)
+    match blend_type
     {
-        (BlendType::None) => {
+        BlendType::None => {
             let color_blend_attachment_states = [vk::PipelineColorBlendAttachmentState {
                 blend_enable: vk::FALSE,
                 // color_write_mask: vk::ColorComponentFlags::all(),
@@ -171,6 +181,29 @@ impl Pipeline
     }
 }
 
+impl PipelineDescription
+{
+    pub fn new(
+        vertex_input: vk::PipelineVertexInputStateCreateInfo,
+        dynamic_state: vk::PipelineDynamicStateCreateInfo,
+        rasterization: RasterizationType,
+        depth_stencil: DepthStencilType,
+        blend: BlendType,
+        vertex_name: &str,
+        fragment_name: &str) -> PipelineDescription
+    {
+        PipelineDescription {
+            vertex_input,
+            dynamic_state,
+            rasterization,
+            depth_stencil,
+            blend,
+            vertex_name: vertex_name.to_string(),
+            fragment_name: fragment_name.to_string()
+        }
+    }
+}
+
 impl PipelineManager
 {
     pub fn new() -> PipelineManager
@@ -181,12 +214,7 @@ impl PipelineManager
         }
     }
 
-    // pub fn load_or_create(pipeline_description: PipelineDescription) -> Pipeline
-    // {
-    //
-    // }
-
-    fn create_pipeline(
+    pub fn create_pipeline(
         &mut self,
         render_context: &RenderContext,
         render_pass: vk::RenderPass,
@@ -198,14 +226,14 @@ impl PipelineManager
         pipeline_description.hash(&mut pipeline_hasher);
         let pipeline_key = pipeline_hasher.finish();
         self.pipeline_cache.entry(pipeline_key).or_insert(
-            {
+    {
+                // if self.pipeline_cache.contains_key(&pipeline_key)
                 let vertex_shader_module = self.shader_manager.load_shader(
                     render_context,
                     &pipeline_description.vertex_name);
                 let frag_shader_module = self.shader_manager.load_shader(
                     render_context,
                     &pipeline_description.fragment_name);
-
                 let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo {
                     s_type: vk::StructureType::PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
                     flags: vk::PipelineInputAssemblyStateCreateFlags::empty(),
@@ -244,7 +272,7 @@ impl PipelineManager
                         s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
                         p_next: std::ptr::null(),
                         flags: vk::PipelineShaderStageCreateFlags::empty(),
-                        module: vertex_shader_module.shader,
+                        module: vertex_shader_module.shader.clone(),
                         p_name: main_name.as_ptr(),
                         p_specialization_info: std::ptr::null(),
                         stage: vk::ShaderStageFlags::VERTEX,
@@ -254,7 +282,7 @@ impl PipelineManager
                         s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
                         p_next: std::ptr::null(),
                         flags: vk::PipelineShaderStageCreateFlags::empty(),
-                        module: frag_shader_module.shader,
+                        module: frag_shader_module.shader.clone(),
                         p_name: main_name.as_ptr(),
                         p_specialization_info: std::ptr::null(),
                         stage: vk::ShaderStageFlags::FRAGMENT,
@@ -273,7 +301,8 @@ impl PipelineManager
                     .dynamic_state(&pipeline_description.dynamic_state)
                     .layout(frag_shader_module.pipeline_layout)
                     .render_pass(render_pass)
-                    .subpass(0); // TODO: this shouldn't be static
+                    .subpass(0) // TODO: this shouldn't be static
+                    .build();
 
                 let graphics_pipeline = unsafe {
                     render_context.get_device().create_graphics_pipelines(
@@ -282,7 +311,6 @@ impl PipelineManager
                         None
                     ).expect("Failed to create Graphics Pipeline")
                 };
-
                 Pipeline::new(graphics_pipeline[0])
             }
         )

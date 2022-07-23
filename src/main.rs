@@ -1,5 +1,3 @@
-use std::mem::swap;
-use core::ffi::c_void;
 use untitled::{
     utility, // the mod define some fixed functions that have been learned before.
     utility::constants::*,
@@ -12,8 +10,6 @@ use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEve
 use winit::event_loop::{EventLoop, ControlFlow};
 
 use std::ptr;
-use ash::extensions::khr::Surface;
-use ash::vk::{CommandBuffer, ImageView};
 
 mod context;
 mod api_types;
@@ -23,14 +19,13 @@ use crate::context::render_context::RenderContext;
 use crate::context::shader::ShaderManager;
 use crate::api_types::surface::SurfaceWrapper;
 use crate::api_types::device::DeviceWrapper;
-use crate::api_types::image::ImageWrapper;
 use crate::api_types::instance::InstanceWrapper;
 use crate::framegraph::pass_node::{PassNodeBuilder, PassNode};
-use crate::framegraph::frame_graph::{FrameGraph};
-use crate::resource::resource_manager::{ResolvedResource, ResourceType, ResourceHandle};
+use crate::framegraph::frame_graph::FrameGraph;
+use crate::resource::resource_manager::ResolvedResource;
 
 mod examples;
-use crate::examples::uniform_buffer::ubo_pass::{UBOPass, OffsetUBO};
+use crate::examples::uniform_buffer::ubo_pass::UBOPass;
 use crate::examples::uniform_buffer::transient_input_pass::TransientInputPass;
 
 
@@ -179,7 +174,7 @@ impl<'a> VulkanApp<'a> {
                 .expect("Failed to wait for Fence!");
         }
 
-        let (swapchain_image, image_index) = self.render_context.get_swapchain().as_ref().unwrap().acquire_next_image(
+        let (_, image_index) = self.render_context.get_swapchain().as_ref().unwrap().acquire_next_image(
             None,
         Some(self.image_available_semaphores[self.current_frame]),
         None);
@@ -224,18 +219,18 @@ impl<'a> VulkanApp<'a> {
                 },
             }];
 
-            let render_pass_begin_info = vk::RenderPassBeginInfo {
-                s_type: vk::StructureType::RENDER_PASS_BEGIN_INFO,
-                p_next: ptr::null(),
-                render_pass: self.render_pass,
-                framebuffer: self.swapchain_framebuffers[image_index as usize],
-                render_area: vk::Rect2D {
-                    offset: vk::Offset2D { x: 0, y: 0 },
-                    extent: surface_extent,
-                },
-                clear_value_count: clear_values.len() as u32,
-                p_clear_values: clear_values.as_ptr(),
-            };
+            // let render_pass_begin_info = vk::RenderPassBeginInfo {
+            //     s_type: vk::StructureType::RENDER_PASS_BEGIN_INFO,
+            //     p_next: ptr::null(),
+            //     render_pass: self.render_pass,
+            //     framebuffer: self.swapchain_framebuffers[image_index as usize],
+            //     render_area: vk::Rect2D {
+            //         offset: vk::Offset2D { x: 0, y: 0 },
+            //         extent: surface_extent,
+            //     },
+            //     clear_value_count: clear_values.len() as u32,
+            //     p_clear_values: clear_values.as_ptr(),
+            // };
 
             // unsafe {
             //     let device = self.render_context.get_device();

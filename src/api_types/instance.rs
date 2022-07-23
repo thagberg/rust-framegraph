@@ -1,5 +1,3 @@
-use ash::vk;
-
 pub struct InstanceWrapper {
     instance: ash::Instance
 }

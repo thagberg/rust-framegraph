@@ -1,4 +1,3 @@
-use ash::extensions::khr::Swapchain;
 use ash::vk;
 use crate::api_types::image::ImageWrapper;
 
@@ -62,17 +61,17 @@ impl SwapchainWrapper {
         semaphore: Option<vk::Semaphore>,
         fence: Option<vk::Fence>) -> (&ImageWrapper, u32)
     {
-        let t = match (timeout)
+        let t = match timeout
         {
             Some(timeout) => timeout,
             _ => u64::MAX
         };
-        let s = match (semaphore)
+        let s = match semaphore
         {
             Some(semaphore) => semaphore,
             _ => vk::Semaphore::null()
         };
-        let f = match (fence)
+        let f = match fence
         {
             Some(fence) => fence,
             _ => vk::Fence::null()
