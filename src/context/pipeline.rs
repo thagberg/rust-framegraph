@@ -4,7 +4,7 @@ use std::hash::{Hash, Hasher};
 
 use ash::vk;
 
-use crate::context::shader::{ShaderManager, ShaderModule};
+use crate::context::shader::ShaderManager;
 use crate::context::render_context::RenderContext;
 
 #[derive(Copy, Clone)]
