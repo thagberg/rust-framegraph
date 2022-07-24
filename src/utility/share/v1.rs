@@ -997,7 +997,7 @@ pub fn create_texture_image(
     let image_data = match &image_object {
         image::DynamicImage::ImageBgr8(_)
         | image::DynamicImage::ImageLuma8(_)
-        | image::DynamicImage::ImageRgb8(_) => image_object.to_rgba().into_raw(),
+        | image::DynamicImage::ImageRgb8(_) => image_object.to_rgba8().into_raw(),
         image::DynamicImage::ImageBgra8(_)
         | image::DynamicImage::ImageLumaA8(_)
         // | image::DynamicImage::ImageRgba8(_) => image_object.raw_pixels(),

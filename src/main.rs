@@ -20,9 +20,8 @@ use crate::context::shader::ShaderManager;
 use crate::api_types::surface::SurfaceWrapper;
 use crate::api_types::device::DeviceWrapper;
 use crate::api_types::instance::InstanceWrapper;
-use crate::framegraph::pass_node::{PassNodeBuilder, PassNode};
+use crate::framegraph::pass_node::PassNode;
 use crate::framegraph::frame_graph::FrameGraph;
-use crate::resource::resource_manager::ResolvedResource;
 
 mod examples;
 use crate::examples::uniform_buffer::ubo_pass::UBOPass;
