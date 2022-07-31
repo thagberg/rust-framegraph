@@ -1,34 +1,28 @@
 use std::ffi::CStr;
 use std::ffi::CString;
 use std::os::raw::c_char;
-use core::ffi::c_void;
 use ash::vk;
 use ash::vk::PresentModeKHR;
 
-use crate::{
-    InstanceWrapper,
-    // PhysicalDeviceWrapper,
-    DeviceWrapper,
-    SurfaceWrapper};
-use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper};
+// use crate::{
+//     InstanceWrapper,
+//     // PhysicalDeviceWrapper,
+//     DeviceWrapper,
+//     SurfaceWrapper};
+use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper, DeviceWrapper};
 use crate::api_types::swapchain::SwapchainWrapper;
 use crate::api_types::image::ImageWrapper;
-use crate::resource::resource_manager::{
-    ResourceManager,
-    ResourceHandle,
-    ResolvedResource,
-};
+use crate::api_types::surface::SurfaceWrapper;
+use crate::api_types::instance::InstanceWrapper;
 
 pub struct RenderContext {
     graphics_queue: vk::Queue,
     present_queue: vk::Queue,
     compute_queue: vk::Queue,
     swapchain: Option<SwapchainWrapper>,
-    swapchain_handles: Vec<ResourceHandle>,
     surface: Option<SurfaceWrapper>,
     graphics_command_pool: vk::CommandPool,
     descriptor_pool: vk::DescriptorPool,
-    resource_manager: ResourceManager,
     device: DeviceWrapper,
     physical_device: PhysicalDeviceWrapper,
     instance: InstanceWrapper,
@@ -425,11 +419,6 @@ impl RenderContext {
             extensions
         );
 
-        let mut resource_manager = ResourceManager::new(
-            instance_wrapper.get(),
-            &logical_device,
-            &physical_device);
-
         let graphics_queue = unsafe {
             logical_device.get().get_device_queue(
                 logical_device.get_queue_family_indices().graphics.unwrap(),
@@ -464,14 +453,15 @@ impl RenderContext {
         };
 
         // register the swapchain images with the resource manager
-        let mut swapchain_handles = vec![];
-        if let Some(swaps) = &swapchain {
-            for image in swaps.get_images()
-            {
-                let handle = resource_manager.register_image(image);
-                swapchain_handles.push(handle);
-            }
-        }
+        // let mut swapchain_handles = vec![];
+        // TODO: need to design a different way to register the swapchain
+        // if let Some(swaps) = &swapchain {
+        //     for image in swaps.get_images()
+        //     {
+        //         let handle = resource_manager.register_image(image);
+        //         swapchain_handles.push(handle);
+        //     }
+        // }
 
         let ubo_pool_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::UNIFORM_BUFFER,
@@ -512,9 +502,7 @@ impl RenderContext {
             compute_queue,
             graphics_command_pool,
             swapchain,
-            swapchain_handles,
-            descriptor_pool,
-            resource_manager
+            descriptor_pool
         }
     }
 
@@ -526,7 +514,7 @@ impl RenderContext {
 
     pub fn get_device(&self) -> &ash::Device { &self.device.get() }
 
-    pub fn get_physical_device(&self) -> vk::PhysicalDevice { self.physical_device.get() }
+    pub fn get_physical_device(&self) -> &PhysicalDeviceWrapper { &self.physical_device }
 
     pub fn get_graphics_queue_index(&self) -> u32
     {
@@ -544,33 +532,6 @@ impl RenderContext {
     pub fn get_graphics_command_pool(&self) -> vk::CommandPool { self.graphics_command_pool }
 
     pub fn get_swapchain(&self) -> &Option<SwapchainWrapper> { &self.swapchain }
-
-    pub fn get_swapchain_handles(&self) -> &Vec<ResourceHandle> { &self.swapchain_handles }
-
-    pub fn create_buffer_persistent(&mut self, create_info: &vk::BufferCreateInfo) -> ResourceHandle {
-        self.resource_manager.create_buffer_persistent(&self.device, create_info)
-    }
-
-    pub fn update_buffer_persistent<F>(&mut self, buffer_handle: &ResourceHandle, fill_callback: F)
-        where F: FnMut(*mut c_void)
-    {
-
-        self.resource_manager.update_buffer(&self.device, buffer_handle, fill_callback);
-    }
-
-    pub fn create_transient_buffer(&mut self, create_info: vk::BufferCreateInfo) -> ResourceHandle
-    {
-        self.resource_manager.create_buffer_transient(create_info)
-    }
-
-    pub fn create_transient_image(&mut self, create_info: vk::ImageCreateInfo) -> ResourceHandle
-    {
-        self.resource_manager.create_image_transient(create_info)
-    }
-
-    pub fn resolve_resource(&mut self, handle: &ResourceHandle) -> ResolvedResource {
-        self.resource_manager.resolve_resource(&self.device, handle)
-    }
 
     pub fn create_descriptor_sets(
         &self,

@@ -11,11 +11,8 @@ ash             = {version = "^0.36", features = ["linked"]}
 ash-window      = "^0.9"
 image           = "^0.23"
 memoffset       = "^0.6"
-num             = "^0.4"
 cgmath          = "^0.18"
 tobj            = "^3.2"
-gpu-allocator   = "^0.17"
-spirv-reflect   = "^0.2"
 framegraph      = {path="../framegraph"}
 
 [build-dependencies]

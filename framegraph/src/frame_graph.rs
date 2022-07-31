@@ -3,15 +3,18 @@ use petgraph::{graph, stable_graph, Direction};
 extern crate multimap;
 use multimap::MultiMap;
 
+extern crate context;
+use context::render_context::RenderContext;
+
 use ash::vk;
-use crate::{PassNode, RenderContext};
-use crate::resource::resource_manager::{ResolvedResourceMap, ResourceHandle};
-use crate::context::pipeline::{PipelineManager};
+use crate::pass_node::{PassNode};
+use crate::pipeline::{PipelineManager};
+use crate::resource::resource_manager::{ResolvedResourceMap, ResourceHandle, ResourceManager};
 
 use std::collections::HashMap;
 
 
-pub struct FrameGraph {
+pub struct FrameGraph<'a> {
     // nodes: Dag::<&'a PassNode, u32>,
     // nodes: Vec<&'a PassNode>,
     // nodes: graph::DiGraph<&'a PassNode, u32>,
@@ -20,10 +23,15 @@ pub struct FrameGraph {
     frame_started: bool,
     compiled: bool,
     pipeline_manager: PipelineManager,
+    resource_manager: ResourceManager<'a>
 }
 
-impl FrameGraph {
-    pub fn new() -> FrameGraph {
+impl<'a> FrameGraph<'a> {
+    pub fn new(render_context: &'a RenderContext) -> FrameGraph<'a> {
+        let resource_manager = ResourceManager::new(
+            render_context.get_instance(),
+            render_context.get_device_wrapper(),
+            render_context.get_physical_device());
         FrameGraph {
             // nodes: Dag::new(),
             // nodes: vec![],
@@ -31,7 +39,8 @@ impl FrameGraph {
             // sorted_nodes: vec![],
             frame_started: false,
             compiled: false,
-            pipeline_manager: PipelineManager::new()
+            pipeline_manager: PipelineManager::new(),
+            resource_manager
         }
     }
 
@@ -51,20 +60,16 @@ impl FrameGraph {
         assert!(self.frame_started, "Can't compile FrameGraph before it's been started");
         assert!(!self.compiled, "FrameGraph has already been compiled");
 
-        for i in self.nodes.into_iter() {
-            println!("What is this? {}", i);
-        }
-
         // create input/output maps to detect graph edges
         let mut input_map = MultiMap::new();
         let mut output_map = MultiMap::new();
         for node_index in self.nodes.node_indices() {
             let node = &self.nodes[node_index];
             for input in node.get_inputs() {
-                input_map.insert(input, node_index);
+                input_map.insert(*input, node_index);
             }
             for rt in node.get_rendertargets() {
-                output_map.insert(rt, node_index);
+                output_map.insert(*rt, node_index);
             }
         }
 
@@ -128,32 +133,30 @@ impl FrameGraph {
     pub fn end(&mut self, render_context: &mut RenderContext, command_buffer: vk::CommandBuffer) {
         assert!(self.frame_started, "Can't end frame before it's been started");
         assert!(self.compiled, "Can't end frame before it's been compiled");
-        let mut next = self.nodes.pop();
-        while next.is_some() {
-            let node = next.unwrap();
-            // TODO: determine the actual renderpass to provide
-            let pipeline = self.pipeline_manager.create_pipeline(render_context, vk::RenderPass::null(), node.get_pipeline_description() );
-            // let mut resolved_inputs: Vec<ResolvedResource> = Vec::new();
-            let mut resolved_inputs = ResolvedResourceMap::new();
-            let mut resolved_outputs = ResolvedResourceMap::new();
-            let inputs = node.get_inputs().as_ref();
-            let outputs = node.get_outputs().as_ref();
-            for input in inputs {
-                let resolved = render_context.resolve_resource(
-                    input);
-                resolved_inputs.insert(input.clone(), resolved.clone());
-            }
-            for output in outputs {
-                let resolved = render_context.resolve_resource(
-                    output);
-                resolved_outputs.insert(output.clone(), resolved.clone());
-            }
-            node.execute(
-                render_context,
-                command_buffer,
-                &resolved_inputs,
-                &resolved_outputs);
-            next = self.nodes.pop();
-        }
+        // let mut next = self.nodes.pop();
+        // while next.is_some() {
+        //     let node = next.unwrap();
+        //     // TODO: determine the actual renderpass to provide
+        //     let pipeline = self.pipeline_manager.create_pipeline(render_context, vk::RenderPass::null(), node.get_pipeline_description() );
+        //     // let mut resolved_inputs: Vec<ResolvedResource> = Vec::new();
+        //     let mut resolved_inputs = ResolvedResourceMap::new();
+        //     let mut resolved_outputs = ResolvedResourceMap::new();
+        //     let inputs = node.get_inputs().as_ref();
+        //     let outputs = node.get_outputs().as_ref();
+        //     for input in inputs {
+        //         let resolved = self.resource_manager.resolve_resource(input);
+        //         resolved_inputs.insert(input.clone(), resolved.clone());
+        //     }
+        //     for output in outputs {
+        //         let resolved = self.resource_manager.resolve_resource(output);
+        //         resolved_outputs.insert(output.clone(), resolved.clone());
+        //     }
+        //     node.execute(
+        //         render_context,
+        //         command_buffer,
+        //         &resolved_inputs,
+        //         &resolved_outputs);
+        //     next = self.nodes.pop();
+        // }
     }
 }

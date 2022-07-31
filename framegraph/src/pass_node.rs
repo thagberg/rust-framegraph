@@ -1,7 +1,7 @@
 use ash::vk;
 use crate::resource::resource_manager::{ResourceHandle, ResolvedResourceMap};
-use crate::context::render_context::{RenderContext};
-use crate::context::pipeline::{PipelineDescription};
+use context::render_context::{RenderContext};
+use crate::pipeline::{PipelineDescription};
 
 type FillCallback = dyn (
     Fn(
