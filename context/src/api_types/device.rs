@@ -1,6 +1,7 @@
 use ash::vk;
 use crate::api_types::image::ImageWrapper;
 
+#[derive(Copy, Clone)]
 pub struct QueueFamilies {
     pub graphics: Option<u32>,
     pub compute: Option<u32>,
@@ -13,8 +14,9 @@ impl QueueFamilies {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct PhysicalDeviceWrapper {
-    physical_device: vk::PhysicalDevice
+    physical_device: vk::PhysicalDevice,
 }
 
 impl PhysicalDeviceWrapper {

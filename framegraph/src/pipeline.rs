@@ -4,8 +4,10 @@ use std::hash::{Hash, Hasher};
 
 use ash::vk;
 
-use crate::context::shader::ShaderManager;
-use crate::context::render_context::RenderContext;
+use crate::shader::ShaderManager;
+
+extern crate context;
+use context::render_context::RenderContext;
 
 #[derive(Copy, Clone)]
 pub enum BlendType

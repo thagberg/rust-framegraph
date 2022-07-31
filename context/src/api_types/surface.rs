@@ -1,6 +1,8 @@
 use std::os::raw::c_void;
 use ash::extensions::khr::Win32Surface;
 use ash::vk;
+
+extern crate winapi;
 use winapi::um::libloaderapi::GetModuleHandleW;
 use winit::platform::windows::WindowExtWindows;
 use crate::api_types::device::PhysicalDeviceWrapper;

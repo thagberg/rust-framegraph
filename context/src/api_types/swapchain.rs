@@ -43,7 +43,7 @@ impl SwapchainWrapper {
         fence: vk::Fence
     ) -> (&ImageWrapper, u32)
     {
-        let (image_index, is_sub_optimal) = unsafe
+        let (image_index, _is_sub_optimal) = unsafe
         {
             self.loader.acquire_next_image(
                 self.swapchain,

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use ash::vk;
 use spirv_reflect::types::descriptor::{ReflectDescriptorType};
 
-use crate::context::render_context::RenderContext;
+use context::render_context::RenderContext;
 
 #[derive(Clone)]
 pub struct ShaderModule

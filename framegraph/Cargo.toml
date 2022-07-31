@@ -7,3 +7,6 @@ edition = "2021"
 ash             = {version = "^0.36", features = ["linked"]}
 petgraph        = {version = "^0.6", features = ["stable_graph"]}
 multimap        = "^0.8.0"
+gpu-allocator   = "^0.17"
+spirv-reflect   = "^0.2"
+context         =  {path="../context"}

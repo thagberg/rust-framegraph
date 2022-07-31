@@ -3,9 +3,10 @@ use core::ffi::c_void;
 use ash::vk;
 use gpu_allocator::vulkan::*;
 use gpu_allocator::MemoryLocation;
-use crate::api_types::device::PhysicalDeviceWrapper;
-use crate::DeviceWrapper;
-use crate::api_types::image::ImageWrapper;
+
+extern crate context;
+use context::api_types::device::{PhysicalDeviceWrapper, DeviceWrapper};
+use context::api_types::image::ImageWrapper;
 
 #[derive(Clone, Copy, Hash, std::cmp::Eq)]
 pub enum ResourceHandle {
@@ -65,12 +66,13 @@ pub struct ResolvedImage {
 
 pub type ResolvedResourceMap = HashMap<ResourceHandle, ResolvedResource>;
 
-pub struct ResourceManager {
+pub struct ResourceManager<'a> {
     next_handle: u32,
     allocator: Allocator,
     transient_resource_map: HashMap<ResourceHandle, TransientResource>,
     resolved_resource_map: ResolvedResourceMap,
-    persistent_resource_map: HashMap<ResourceHandle, PersistentResource>
+    persistent_resource_map: HashMap<ResourceHandle, PersistentResource>,
+    device: &'a DeviceWrapper
 }
 
 impl ResolvedBuffer {
@@ -78,12 +80,12 @@ impl ResolvedBuffer {
     pub fn get_allocation(&self) -> &Allocation { &self.allocation }
 }
 
-impl ResourceManager {
+impl<'a> ResourceManager<'a> {
     pub fn new(
         instance: &ash::Instance,
-        device: &DeviceWrapper,
+        device: &'a DeviceWrapper,
         physical_device: &PhysicalDeviceWrapper
-    ) -> ResourceManager {
+    ) -> ResourceManager<'a> {
         let allocator = Allocator::new(&AllocatorCreateDesc {
             instance: instance.clone(),
             device: device.get().clone(),
@@ -97,13 +99,13 @@ impl ResourceManager {
             allocator,
             transient_resource_map: HashMap::new(),
             resolved_resource_map: HashMap::new(),
-            persistent_resource_map: HashMap::new()
+            persistent_resource_map: HashMap::new(),
+            device
         }
     }
 
     pub fn resolve_resource(
         &mut self,
-        device: &DeviceWrapper,
         handle: &ResourceHandle) -> ResolvedResource
     {
         match handle {
@@ -117,14 +119,14 @@ impl ResourceManager {
                         let resolved_resource: Option<ResolvedResource>;
                         match transient.create_info {
                             ResourceCreateInfo::Buffer(buffer_create) => {
-                                let resolved_buffer = self.create_resolved_buffer(device, &buffer_create);
+                                let resolved_buffer = self.create_resolved_buffer(&buffer_create);
                                 resolved_resource = Some(ResolvedResource {
                                     handle: handle.clone(),
                                     resource: ResourceType::Buffer(resolved_buffer.buffer)
                                 });
                             },
                             ResourceCreateInfo::Image(image_create) => {
-                                let resolved_image = self.create_resolved_image(device, &image_create);
+                                let resolved_image = self.create_resolved_image(&image_create);
                                 resolved_resource = Some(ResolvedResource {
                                     handle: handle.clone(),
                                     resource: ResourceType::Image(resolved_image.image)
@@ -192,29 +194,26 @@ impl ResourceManager {
 
     fn create_resolved_image(
         &mut self,
-        device: &DeviceWrapper,
         create_info: &vk::ImageCreateInfo
     ) -> ResolvedImage {
-        self.create_image(device, create_info)
+        self.create_image(create_info)
     }
 
     fn create_resolved_buffer(
         &mut self,
-        device: &DeviceWrapper,
         create_info: &vk::BufferCreateInfo
     ) -> ResolvedBuffer {
-       self.create_uniform_buffer(device, create_info)
+       self.create_uniform_buffer(create_info)
     }
 
     pub fn create_buffer_persistent(
         &mut self,
-        device: &DeviceWrapper,
         create_info: &vk::BufferCreateInfo
     ) -> ResourceHandle {
         let ret_handle = ResourceHandle::Persistent(self.next_handle);
         self.next_handle += 1;
 
-        let resolved_buffer = self.create_uniform_buffer(device, create_info);
+        let resolved_buffer = self.create_uniform_buffer(create_info);
 
         self.persistent_resource_map.insert(ret_handle, PersistentResource {
             handle: ret_handle,
@@ -227,7 +226,6 @@ impl ResourceManager {
 
     pub fn update_buffer<F>(
         &mut self,
-        device: &DeviceWrapper,
         buffer: &ResourceHandle,
         mut fill_callback: F)
         where F: FnMut(*mut c_void)
@@ -244,14 +242,14 @@ impl ResourceManager {
                             fill_callback(alloc.mapped_ptr().unwrap().as_ptr());
                         } else {
                             unsafe {
-                                let mapped_memory = device.get().map_memory(
+                                let mapped_memory = self.device.get().map_memory(
                                     alloc.memory(),
                                     alloc.offset(),
                                     alloc.size(),
                                     vk::MemoryMapFlags::empty() )
                                     .expect("Failed to map buffer");
                                 fill_callback(mapped_memory);
-                                device.get().unmap_memory(alloc.memory());
+                                self.device.get().unmap_memory(alloc.memory());
                             }
                         }
                     }
@@ -262,12 +260,11 @@ impl ResourceManager {
 
     fn create_image(
         &mut self,
-        device: &DeviceWrapper,
         create_info: &vk::ImageCreateInfo
     ) -> ResolvedImage
     {
         let mut image_alloc: Allocation = Default::default();
-        let image = device.create_image(
+        let image = self.device.create_image(
             create_info,
             &mut |memory_requirements: vk::MemoryRequirements| -> (vk::DeviceMemory, vk::DeviceSize) {
                 unsafe {
@@ -307,15 +304,14 @@ impl ResourceManager {
 
     fn create_uniform_buffer(
         &mut self,
-        device: &DeviceWrapper,
         create_info: &vk::BufferCreateInfo
     ) -> ResolvedBuffer {
         let buffer = unsafe {
-            device.get().create_buffer(create_info, None)
+            self.device.get().create_buffer(create_info, None)
                 .expect("Failed to create uniform buffer")
         };
         let requirements = unsafe {
-            device.get().get_buffer_memory_requirements(buffer)
+            self.device.get().get_buffer_memory_requirements(buffer)
         };
 
         let buffer_alloc = self.allocator.allocate(&AllocationCreateDesc {
@@ -326,7 +322,7 @@ impl ResourceManager {
         }).expect("Failed to allocate memory for uniform buffer");
 
         unsafe {
-            device.get().bind_buffer_memory(
+            self.device.get().bind_buffer_memory(
                 buffer,
                 buffer_alloc.memory(),
                 buffer_alloc.offset())
