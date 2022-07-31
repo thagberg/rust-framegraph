@@ -15,11 +15,7 @@ use std::collections::HashMap;
 
 
 pub struct FrameGraph<'a> {
-    // nodes: Dag::<&'a PassNode, u32>,
-    // nodes: Vec<&'a PassNode>,
-    // nodes: graph::DiGraph<&'a PassNode, u32>,
     nodes: stable_graph::StableDiGraph<PassNode, u32>,
-    // sorted_nodes: Vec<&'a PassNode>,
     frame_started: bool,
     compiled: bool,
     pipeline_manager: PipelineManager,
@@ -33,10 +29,7 @@ impl<'a> FrameGraph<'a> {
             render_context.get_device_wrapper(),
             render_context.get_physical_device());
         FrameGraph {
-            // nodes: Dag::new(),
-            // nodes: vec![],
             nodes: stable_graph::StableDiGraph::new(),
-            // sorted_nodes: vec![],
             frame_started: false,
             compiled: false,
             pipeline_manager: PipelineManager::new(),
