@@ -59,6 +59,8 @@ impl PassNode {
     pub fn get_outputs(&self) -> &[ResourceHandle] {
         &self.outputs
     }
+
+    pub fn get_rendertargets(&self) -> &[ResourceHandle] { &self.render_targets }
 }
 
 impl PassNodeBuilder {

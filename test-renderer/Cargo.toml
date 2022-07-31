@@ -1,0 +1,25 @@
+[package]
+name = "test-renderer"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+winit           = "^0.26"
+ash             = {version = "^0.36", features = ["linked"]}
+ash-window      = "^0.9"
+image           = "^0.23"
+memoffset       = "^0.6"
+num             = "^0.4"
+cgmath          = "^0.18"
+tobj            = "^3.2"
+gpu-allocator   = "^0.17"
+spirv-reflect   = "^0.2"
+framegraph      = {path="../framegraph"}
+
+[build-dependencies]
+glob        = "0.3.0"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winapi = { version = "^0.3", features = ["windef", "libloaderapi"] }

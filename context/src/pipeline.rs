@@ -202,6 +202,8 @@ impl PipelineDescription
             fragment_name: fragment_name.to_string()
         }
     }
+
+    pub fn get_name(&self) -> &str { &self.vertex_name }
 }
 
 impl PipelineManager

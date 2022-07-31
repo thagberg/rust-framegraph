@@ -76,3 +76,15 @@ that edges in the graph are valid and so that it can provide it to the
 PipelineManager when fetching or generating the pipeline for a pass. Potentially
 the Framegraph can inspect the graph during a compile/link phase to determine when 
 and where subpasses are appropriate rather than an entire new renderpass.
+
+25 July 22 - Consider refactoring FrameGraph to own PassNodes rather than have
+references to them
+
+Also consider making the FrameGraph own the ResourceManager...
+This would make it easier for the FrameGraph to reason about transient resources
+
+Build DAG
+
+Filter leaf nodes to only those with backbuffer as output
+
+Topological sort?
