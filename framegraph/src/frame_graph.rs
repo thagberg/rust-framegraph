@@ -46,7 +46,6 @@ impl<'a> FrameGraph<'a> {
         assert!(self.frame_started, "Can't add PassNode before frame has been started");
         assert!(!self.compiled, "Can't add PassNode after frame has been compiled");
         let node_index = self.nodes.add_node(node);
-        // self.nodes.push(node);
     }
 
     pub fn compile(&mut self) {
@@ -118,7 +117,17 @@ impl<'a> FrameGraph<'a> {
 
         // unresolved and unused passes have been removed from the graph,
         // so now we can use a topological sort to generate an execution order
-        // let sort_result = daggy::petgraph::algo::toposort(&self.nodes, None);
+        let sort_result = petgraph::algo::toposort(&self.nodes, None);
+        match sort_result {
+            Ok(sorted_list) => {
+                for i in sorted_list {
+                    println!("Node: {:?}", self.nodes.node_weight(i).unwrap());
+                }
+            },
+            Err(cycle_error) => {
+                println!("A cycle was detected in the framegraph: {:?}", cycle_error);
+            }
+        }
 
         self.compiled = true;
     }

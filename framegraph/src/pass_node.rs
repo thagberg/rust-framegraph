@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Formatter};
 use ash::vk;
 use crate::resource::resource_manager::{ResourceHandle, ResolvedResourceMap};
 use context::render_context::{RenderContext};
@@ -27,6 +28,15 @@ pub struct PassNodeBuilder {
     inputs: Vec<ResourceHandle>,
     outputs: Vec<ResourceHandle>,
     fill_callback: Option<Box<FillCallback>>
+}
+
+impl Debug for PassNode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let pipeline_name = self.pipeline_description.get_name();
+        f.debug_struct("PassNode")
+            .field("Name", &pipeline_name.to_string())
+            .finish()
+    }
 }
 
 impl PassNode {
