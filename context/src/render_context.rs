@@ -94,7 +94,7 @@ pub fn are_extensions_supported(
     required_extensions: &[&str]
 ) -> bool {
     // let available_extensions: Vec<&CStr> = unsafe {
-    let mut extension_properties;
+    let extension_properties;
     let mut available_extensions = unsafe {
         extension_properties = instance.get().enumerate_device_extension_properties(physical_device)
         .expect("Failed to enumerate extensions from physical device.");
@@ -128,9 +128,6 @@ fn is_physical_device_suitable(
     surface: &Option<SurfaceWrapper>,
     required_extensions: &[&str] ) -> bool {
 
-    let device_features = unsafe {
-        instance.get().get_physical_device_features(physical_device)
-    };
     let queue_families = get_queue_family_indices(instance, physical_device, surface);
     let extensions_supported = are_extensions_supported(
         instance,
@@ -138,7 +135,7 @@ fn is_physical_device_suitable(
         required_extensions);
 
     match surface {
-        Some(surface) => {
+        Some(_) => {
             queue_families.is_complete() && extensions_supported
         },
         None => {
@@ -376,7 +373,7 @@ fn create_swapchain(
             .expect("Failed to create swapchain.")
     };
 
-    let mut swapchain_images = unsafe {
+    let swapchain_images = unsafe {
         swapchain_loader
             .get_swapchain_images(swapchain)
             .expect("Failed to get swapchain images.")
@@ -554,7 +551,7 @@ impl RenderContext {
         self.resource_manager.create_buffer_persistent(&self.device, create_info)
     }
 
-    pub fn update_buffer_persistent<F>(&mut self, buffer_handle: &ResourceHandle, mut fill_callback: F)
+    pub fn update_buffer_persistent<F>(&mut self, buffer_handle: &ResourceHandle, fill_callback: F)
         where F: FnMut(*mut c_void)
     {
 

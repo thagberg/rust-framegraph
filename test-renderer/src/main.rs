@@ -87,7 +87,7 @@ impl<'a> VulkanApp<'a> {
             &window
         );
 
-        let mut render_context = RenderContext::new(
+        let render_context = RenderContext::new(
             entry,
             instance,
             Some(surface_wrapper),
@@ -123,9 +123,9 @@ impl<'a> VulkanApp<'a> {
         //     &mut render_context,
         //     ubo_pass.render_target);
 
-        let mut frame_graph = FrameGraph::new();
+        let frame_graph = FrameGraph::new();
 
-        let mut shader_manager = ShaderManager::new();
+        let shader_manager = ShaderManager::new();
 
         let command_buffers = share::v1::create_command_buffers(
             render_context.get_device(),
@@ -182,7 +182,8 @@ impl<'a> VulkanApp<'a> {
         unsafe {
             self.render_context.get_device().reset_command_buffer(
                 command_buffer,
-                vk::CommandBufferResetFlags::empty());
+                vk::CommandBufferResetFlags::empty())
+                .expect("Failed to reset command buffer");
 
             let command_buffer_begin_info = vk::CommandBufferBeginInfo {
                 s_type: vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
@@ -194,7 +195,7 @@ impl<'a> VulkanApp<'a> {
                 .expect("Failed to begin recording command buffer");
         }
 
-        let surface_extent = self.render_context.get_swapchain().as_ref().unwrap().get_extent();
+        // let surface_extent = self.render_context.get_swapchain().as_ref().unwrap().get_extent();
         {
             let swapchain_handle = self.render_context.get_swapchain_handles()[image_index as usize];
             // let ubo_pass = &self.ubo_pass.pass_node;
@@ -212,11 +213,11 @@ impl<'a> VulkanApp<'a> {
             frame_graph.compile();
 
 
-            let clear_values = [vk::ClearValue {
-                color: vk::ClearColorValue {
-                    float32: [0.0, 0.0, 1.0, 1.0],
-                },
-            }];
+            // let clear_values = [vk::ClearValue {
+            //     color: vk::ClearColorValue {
+            //         float32: [0.0, 0.0, 1.0, 1.0],
+            //     },
+            // }];
 
             // let render_pass_begin_info = vk::RenderPassBeginInfo {
             //     s_type: vk::StructureType::RENDER_PASS_BEGIN_INFO,

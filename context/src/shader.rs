@@ -60,11 +60,10 @@ fn convert_vec8_to_vec32(mut vec8: Vec<u8>) -> Vec<u32>
 
 fn create_shader_module(render_context: &RenderContext, file_name: &str) -> ShaderModule
 {
-    let mut bytes = fs::read(file_name)
+    let bytes = fs::read(file_name)
         .expect(&format!("Unable to load shader at {}", file_name));
     let reflection_module = spirv_reflect::ShaderModule::load_u8_data(&bytes)
         .expect(&format!("Failed to parse shader for reflection data at {}", file_name));
-    // let bytes = reflection_module.get_code();
     let bytes32 = convert_vec8_to_vec32(bytes);
 
     let create_info = vk::ShaderModuleCreateInfo::builder()
