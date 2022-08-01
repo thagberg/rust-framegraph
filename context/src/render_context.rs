@@ -4,11 +4,6 @@ use std::os::raw::c_char;
 use ash::vk;
 use ash::vk::PresentModeKHR;
 
-// use crate::{
-//     InstanceWrapper,
-//     // PhysicalDeviceWrapper,
-//     DeviceWrapper,
-//     SurfaceWrapper};
 use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper, DeviceWrapper};
 use crate::api_types::swapchain::SwapchainWrapper;
 use crate::api_types::image::ImageWrapper;
