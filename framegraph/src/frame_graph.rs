@@ -7,7 +7,8 @@ extern crate context;
 use context::render_context::RenderContext;
 
 use ash::vk;
-use crate::pass_node::{PassNode};
+use crate::i_pass_node::PassNode;
+// use crate::pass_node::{GraphicsPassNode};
 use crate::pipeline::{PipelineManager};
 use crate::resource::i_resource_manager::ResourceManager;
 use crate::resource::resource_manager::{ResolvedResourceMap, ResourceHandle};
@@ -15,16 +16,17 @@ use crate::resource::resource_manager::{ResolvedResourceMap, ResourceHandle};
 use std::collections::HashMap;
 
 
-pub struct FrameGraph<RMType> {
-    nodes: stable_graph::StableDiGraph<PassNode, u32>,
+pub struct FrameGraph<RMType, PNType> {
+    nodes: stable_graph::StableDiGraph<PNType, u32>,
     frame_started: bool,
     compiled: bool,
     pipeline_manager: PipelineManager,
     resource_manager: RMType
 }
 
-impl<RMType> FrameGraph<RMType> {
-    pub fn new(resource_manager: RMType) -> FrameGraph<RMType> where RMType: ResourceManager {
+impl<RMType, PNType: PassNode> FrameGraph<RMType, PNType> {
+    pub fn new(resource_manager: RMType) -> FrameGraph<RMType, PNType>
+        where RMType: ResourceManager, PNType: PassNode {
         // let resource_manager = ResourceManager::new(
         //     render_context.get_instance(),
         //     render_context.get_device_wrapper(),
@@ -43,7 +45,7 @@ impl<RMType> FrameGraph<RMType> {
         self.frame_started = true;
     }
 
-    pub fn add_node(&mut self, node: PassNode) {
+    pub fn add_node(&mut self, node: PNType) {
         assert!(self.frame_started, "Can't add PassNode before frame has been started");
         assert!(!self.compiled, "Can't add PassNode after frame has been compiled");
         let node_index = self.nodes.add_node(node);
@@ -76,8 +78,8 @@ impl<RMType> FrameGraph<RMType> {
                     // input/output match defines a graph edge
                     for matched_output in matched_outputs {
                         self.nodes.add_edge(
-                            *node_index,
                             *matched_output,
+                            *node_index,
                             0);
                     }
                 },
@@ -104,15 +106,13 @@ impl<RMType> FrameGraph<RMType> {
 
         for unresolved_pass in unresolved_passes {
             println!("Pass has an unresolved input; removing from graph: {}",
-                self.nodes.node_weight(*unresolved_pass).unwrap()
-                    .get_pipeline_description().get_name());
+                self.nodes.node_weight(*unresolved_pass).unwrap().get_name());
             // self.nodes.remove_node(*unresolved_pass);
         }
 
         for unused_pass in unused_passes {
             println!("Pass has an unused output; removing from graph: {}",
-                     self.nodes.node_weight(*unused_pass).unwrap()
-                         .get_pipeline_description().get_name());
+                     self.nodes.node_weight(*unused_pass).unwrap().get_name());
             // self.nodes_remove_node(*unused_pass);
         }
 
@@ -122,7 +122,7 @@ impl<RMType> FrameGraph<RMType> {
         match sort_result {
             Ok(sorted_list) => {
                 for i in sorted_list {
-                    println!("Node: {:?}", self.nodes.node_weight(i).unwrap());
+                    println!("Node: {:?}", self.nodes.node_weight(i).unwrap().get_name());
                 }
             },
             Err(cycle_error) => {
