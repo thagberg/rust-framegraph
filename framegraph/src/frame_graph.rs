@@ -9,25 +9,26 @@ use context::render_context::RenderContext;
 use ash::vk;
 use crate::pass_node::{PassNode};
 use crate::pipeline::{PipelineManager};
-use crate::resource::resource_manager::{ResolvedResourceMap, ResourceHandle, ResourceManager};
+use crate::resource::i_resource_manager::ResourceManager;
+use crate::resource::resource_manager::{ResolvedResourceMap, ResourceHandle};
 
 use std::collections::HashMap;
 
 
-pub struct FrameGraph<'a> {
+pub struct FrameGraph<RMType> {
     nodes: stable_graph::StableDiGraph<PassNode, u32>,
     frame_started: bool,
     compiled: bool,
     pipeline_manager: PipelineManager,
-    resource_manager: ResourceManager<'a>
+    resource_manager: RMType
 }
 
-impl<'a> FrameGraph<'a> {
-    pub fn new(render_context: &'a RenderContext) -> FrameGraph<'a> {
-        let resource_manager = ResourceManager::new(
-            render_context.get_instance(),
-            render_context.get_device_wrapper(),
-            render_context.get_physical_device());
+impl<RMType> FrameGraph<RMType> {
+    pub fn new(resource_manager: RMType) -> FrameGraph<RMType> where RMType: ResourceManager {
+        // let resource_manager = ResourceManager::new(
+        //     render_context.get_instance(),
+        //     render_context.get_device_wrapper(),
+        //     render_context.get_physical_device());
         FrameGraph {
             nodes: stable_graph::StableDiGraph::new(),
             frame_started: false,
