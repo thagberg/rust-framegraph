@@ -45,6 +45,21 @@ impl PassNode for GraphicsPassNode {
     }
 
    fn get_rendertargets(&self) -> &[ResourceHandle] { &self.render_targets }
+
+   fn execute<RenderContext, vk::CommandBuffer>(
+        &self,
+        render_context: &mut RenderContext,
+        command_buffer: vk::CommandBuffer,
+        resolved_inputs: &ResolvedResourceMap,
+        resolved_outputs: &ResolvedResourceMap)
+    {
+        (self.fill_callback)(
+            render_context,
+            command_buffer,
+            resolved_inputs,
+            resolved_outputs);
+    }
+
 }
 
 impl Debug for GraphicsPassNode {
@@ -61,20 +76,6 @@ impl GraphicsPassNode {
         PassNodeBuilder {
             ..Default::default()
         }
-    }
-
-    pub fn execute(
-        &self,
-        render_context: &RenderContext,
-        command_buffer: vk::CommandBuffer,
-        resolved_inputs: &ResolvedResourceMap,
-        resolved_outputs: &ResolvedResourceMap)
-    {
-        (self.fill_callback)(
-            render_context,
-            command_buffer,
-            resolved_inputs,
-            resolved_outputs);
     }
 
     pub fn get_pipeline_description(&self) -> &PipelineDescription { &self.pipeline_description }

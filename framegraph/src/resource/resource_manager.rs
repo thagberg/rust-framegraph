@@ -8,6 +8,8 @@ extern crate context;
 use context::api_types::device::{PhysicalDeviceWrapper, DeviceWrapper};
 use context::api_types::image::ImageWrapper;
 
+use crate::resource::i_resource_manager::{ResourceManager};
+
 #[derive(Clone, Copy, Hash, std::cmp::Eq)]
 pub enum ResourceHandle {
     Transient(u32),
@@ -66,7 +68,7 @@ pub struct ResolvedImage {
 
 pub type ResolvedResourceMap = HashMap<ResourceHandle, ResolvedResource>;
 
-pub struct ResourceManager<'a> {
+pub struct VulkanResourceManager<'a> {
     next_handle: u32,
     allocator: Allocator,
     transient_resource_map: HashMap<ResourceHandle, TransientResource>,
@@ -80,31 +82,8 @@ impl ResolvedBuffer {
     pub fn get_allocation(&self) -> &Allocation { &self.allocation }
 }
 
-impl<'a> ResourceManager<'a> {
-    pub fn new(
-        instance: &ash::Instance,
-        device: &'a DeviceWrapper,
-        physical_device: &PhysicalDeviceWrapper
-    ) -> ResourceManager<'a> {
-        let allocator = Allocator::new(&AllocatorCreateDesc {
-            instance: instance.clone(),
-            device: device.get().clone(),
-            physical_device: physical_device.get(),
-            debug_settings: Default::default(),
-            buffer_device_address: false // TODO: what is this
-        }).expect("Failed to create GPU memory allocator");
-
-        ResourceManager {
-            next_handle: 0,
-            allocator,
-            transient_resource_map: HashMap::new(),
-            resolved_resource_map: HashMap::new(),
-            persistent_resource_map: HashMap::new(),
-            device
-        }
-    }
-
-    pub fn resolve_resource(
+impl ResourceManager for VulkanResourceManager<'_> {
+    fn resolve_resource(
         &mut self,
         handle: &ResourceHandle) -> ResolvedResource
     {
@@ -160,6 +139,32 @@ impl<'a> ResourceManager<'a> {
             }
         }
     }
+}
+
+impl<'a> VulkanResourceManager<'a> {
+    pub fn new(
+        instance: &ash::Instance,
+        device: &'a DeviceWrapper,
+        physical_device: &PhysicalDeviceWrapper
+    ) -> VulkanResourceManager<'a> {
+        let allocator = Allocator::new(&AllocatorCreateDesc {
+            instance: instance.clone(),
+            device: device.get().clone(),
+            physical_device: physical_device.get(),
+            debug_settings: Default::default(),
+            buffer_device_address: false // TODO: what is this
+        }).expect("Failed to create GPU memory allocator");
+
+        VulkanResourceManager {
+            next_handle: 0,
+            allocator,
+            transient_resource_map: HashMap::new(),
+            resolved_resource_map: HashMap::new(),
+            persistent_resource_map: HashMap::new(),
+            device
+        }
+    }
+
 
     pub fn create_buffer_transient(
         &mut self,
