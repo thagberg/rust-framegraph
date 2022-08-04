@@ -5,6 +5,7 @@ pub mod resource;
 pub mod pipeline;
 pub mod shader;
 mod i_pass_node;
+mod pass_node;
 
 #[cfg(test)]
 mod tests
