@@ -1,10 +1,11 @@
 extern crate petgraph;
 use petgraph::{graph, stable_graph, Direction};
+use petgraph::stable_graph::NodeIndex;
 extern crate multimap;
 use multimap::MultiMap;
 
 extern crate context;
-use context::render_context::RenderContext;
+use context::i_render_context::{RenderContext, CommandBuffer};
 
 use ash::vk;
 use crate::i_pass_node::PassNode;
@@ -14,19 +15,23 @@ use crate::resource::i_resource_manager::ResourceManager;
 use crate::resource::resource_manager::{ResolvedResourceMap, ResourceHandle};
 
 use std::collections::HashMap;
+use std::marker::PhantomData;
 
 
-pub struct FrameGraph<RMType, PNType> {
+pub struct FrameGraph<RCType: RenderContext, CBType: CommandBuffer, RMType, PNType> {
     nodes: stable_graph::StableDiGraph<PNType, u32>,
     frame_started: bool,
     compiled: bool,
     pipeline_manager: PipelineManager,
-    resource_manager: RMType
+    resource_manager: RMType,
+    sorted_nodes: Option<Vec<NodeIndex>>,
+
+    phantom_rc: PhantomData<RCType>,
+    phantom_cb: PhantomData<CBType>
 }
 
-impl<RMType, PNType: PassNode> FrameGraph<RMType, PNType> {
-    pub fn new(resource_manager: RMType) -> FrameGraph<RMType, PNType>
-        where RMType: ResourceManager, PNType: PassNode {
+impl<RCType: RenderContext, CBType: CommandBuffer, RMType: ResourceManager, PNType: PassNode<RCType, CBType>> FrameGraph<RCType, CBType, RMType, PNType> {
+    pub fn new(resource_manager: RMType) -> FrameGraph<RCType, CBType, RMType, PNType> {
         // let resource_manager = ResourceManager::new(
         //     render_context.get_instance(),
         //     render_context.get_device_wrapper(),
@@ -36,7 +41,11 @@ impl<RMType, PNType: PassNode> FrameGraph<RMType, PNType> {
             frame_started: false,
             compiled: false,
             pipeline_manager: PipelineManager::new(),
-            resource_manager
+            resource_manager,
+            sorted_nodes: None,
+
+            phantom_rc: PhantomData,
+            phantom_cb: PhantomData
         }
     }
 
@@ -107,13 +116,13 @@ impl<RMType, PNType: PassNode> FrameGraph<RMType, PNType> {
         for unresolved_pass in unresolved_passes {
             println!("Pass has an unresolved input; removing from graph: {}",
                 self.nodes.node_weight(*unresolved_pass).unwrap().get_name());
-            // self.nodes.remove_node(*unresolved_pass);
+            self.nodes.remove_node(*unresolved_pass);
         }
 
         for unused_pass in unused_passes {
             println!("Pass has an unused output; removing from graph: {}",
                      self.nodes.node_weight(*unused_pass).unwrap().get_name());
-            // self.nodes_remove_node(*unused_pass);
+            self.nodes.remove_node(*unused_pass);
         }
 
         // unresolved and unused passes have been removed from the graph,
@@ -121,9 +130,10 @@ impl<RMType, PNType: PassNode> FrameGraph<RMType, PNType> {
         let sort_result = petgraph::algo::toposort(&self.nodes, None);
         match sort_result {
             Ok(sorted_list) => {
-                for i in sorted_list {
-                    println!("Node: {:?}", self.nodes.node_weight(i).unwrap().get_name());
+                for i in &sorted_list {
+                    println!("Node: {:?}", self.nodes.node_weight(*i).unwrap().get_name());
                 }
+                self.sorted_nodes = Some(sorted_list);
             },
             Err(cycle_error) => {
                 println!("A cycle was detected in the framegraph: {:?}", cycle_error);
@@ -133,9 +143,38 @@ impl<RMType, PNType: PassNode> FrameGraph<RMType, PNType> {
         self.compiled = true;
     }
 
-    pub fn end(&mut self, render_context: &mut RenderContext, command_buffer: vk::CommandBuffer) {
+    pub fn end(&mut self, render_context: &mut RCType, command_buffer: &CBType) {
         assert!(self.frame_started, "Can't end frame before it's been started");
         assert!(self.compiled, "Can't end frame before it's been compiled");
+        match &self.sorted_nodes {
+            Some(indices) => {
+                for index in indices {
+                    let node = self.nodes.node_weight(*index).unwrap();
+                    let mut resolved_inputs = ResolvedResourceMap::new();
+                    let mut resolved_outputs = ResolvedResourceMap::new();
+                    let inputs = node.get_inputs().as_ref();
+                    let outputs = node.get_outputs().as_ref();
+                    let render_targets = node.get_rendertargets().as_ref();
+                    for input in inputs {
+                        let resolved = self.resource_manager.resolve_resource(input);
+                        resolved_inputs.insert(input.clone(), resolved.clone());
+                    }
+                    for output in outputs {
+                        let resolved = self.resource_manager.resolve_resource(output);
+                        resolved_outputs.insert(output.clone(), resolved.clone());
+                    }
+
+                    node.execute(
+                        render_context,
+                        command_buffer,
+                        &resolved_inputs,
+                        &resolved_outputs);
+                }
+            },
+            _ => {
+                println!("No nodes in framegraph to traverse");
+            }
+        }
         // let mut next = self.nodes.pop();
         // while next.is_some() {
         //     let node = next.unwrap();
