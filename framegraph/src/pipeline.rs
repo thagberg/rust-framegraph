@@ -7,7 +7,7 @@ use ash::vk;
 use crate::shader::ShaderManager;
 
 extern crate context;
-use context::render_context::RenderContext;
+use context::vulkan_render_context::VulkanRenderContext;
 
 #[derive(Copy, Clone)]
 pub enum BlendType
@@ -220,7 +220,7 @@ impl PipelineManager
 
     pub fn create_pipeline(
         &mut self,
-        render_context: &RenderContext,
+        render_context: &VulkanRenderContext,
         render_pass: vk::RenderPass,
         pipeline_description: &PipelineDescription) -> &Pipeline
     {

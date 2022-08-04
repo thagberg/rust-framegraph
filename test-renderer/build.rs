@@ -6,7 +6,7 @@ use std::env;
 use glob::glob;
 
 fn main() {
-    println!("cargo:rerun-if-changed=shaders");
+    // println!("cargo:rerun-if-changed=shaders");
     println!("Compiling shaders");
     let out_dir = env::var("OUT_DIR").unwrap();
 

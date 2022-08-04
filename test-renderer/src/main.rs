@@ -1,5 +1,5 @@
-use untitled::{
-    utility, // the mod define some fixed functions that have been learned before.
+mod utility;
+use crate::{
     utility::constants::*,
     utility::debug::*,
     utility::share,
@@ -11,17 +11,16 @@ use winit::event_loop::{EventLoop, ControlFlow};
 
 use std::ptr;
 
-mod context;
-mod api_types;
-mod resource;
-mod framegraph;
-use crate::context::render_context::RenderContext;
-use crate::context::shader::ShaderManager;
-use crate::api_types::surface::SurfaceWrapper;
-use crate::api_types::device::DeviceWrapper;
-use crate::api_types::instance::InstanceWrapper;
-use crate::framegraph::pass_node::PassNode;
-use crate::framegraph::frame_graph::FrameGraph;
+extern crate framegraph;
+extern crate context;
+use context::vulkan_render_context::VulkanRenderContext;
+use context::api_types::surface::SurfaceWrapper;
+use context::api_types::device::DeviceWrapper;
+use context::api_types::instance::InstanceWrapper;
+use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
+use framegraph::shader::ShaderManager;
+use framegraph::graphics_pass_node::GraphicsPassNode;
+use framegraph::frame_graph::FrameGraph;
 
 mod examples;
 use crate::examples::uniform_buffer::ubo_pass::UBOPass;
@@ -29,7 +28,7 @@ use crate::examples::uniform_buffer::transient_input_pass::TransientInputPass;
 
 
 // Constants
-const WINDOW_TITLE: &'static str = "15.Hello Triangle";
+const WINDOW_TITLE: &'static str = "Framegraph Renderer";
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
 struct SyncObjects {
@@ -43,9 +42,13 @@ struct VulkanApp<'a> {
     debug_utils_loader: ash::extensions::ext::DebugUtils,
     debug_merssager: vk::DebugUtilsMessengerEXT,
 
-    render_context: RenderContext,
+    render_context: VulkanRenderContext,
 
-    frame_graph: FrameGraph<'a>,
+    frame_graph: FrameGraph<
+        VulkanRenderContext,
+        VulkanCommandBuffer,
+        VulkanRenderContext,
+        GraphicsPassNode<VulkanRenderContext, VulkanCommandBuffer>>,
     // ubo_pass: UBOPass,
     // transient_pass: TransientInputPass,
 
@@ -67,7 +70,6 @@ struct VulkanApp<'a> {
 
 impl<'a> VulkanApp<'a> {
     pub fn new(event_loop: &winit::event_loop::EventLoop<()>) -> VulkanApp<'a> {
-
         let window = utility::window::init_window(event_loop, WINDOW_TITLE, WINDOW_WIDTH, WINDOW_HEIGHT);
 
         // init vulkan stuff
@@ -87,7 +89,7 @@ impl<'a> VulkanApp<'a> {
             &window
         );
 
-        let render_context = RenderContext::new(
+        let render_context = VulkanRenderContext::new(
             entry,
             instance,
             Some(surface_wrapper),

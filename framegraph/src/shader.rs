@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use ash::vk;
 use spirv_reflect::types::descriptor::{ReflectDescriptorType};
 
-use context::render_context::RenderContext;
+use context::vulkan_render_context::VulkanRenderContext;
 
 #[derive(Clone)]
 pub struct ShaderModule
@@ -58,7 +58,7 @@ fn convert_vec8_to_vec32(mut vec8: Vec<u8>) -> Vec<u32>
     }
 }
 
-fn create_shader_module(render_context: &RenderContext, file_name: &str) -> ShaderModule
+fn create_shader_module(render_context: &VulkanRenderContext, file_name: &str) -> ShaderModule
 {
     let bytes = fs::read(file_name)
         .expect(&format!("Unable to load shader at {}", file_name));
@@ -146,7 +146,7 @@ impl ShaderManager
         }
     }
 
-    pub fn load_shader(&mut self, render_context: &RenderContext, file_name: &str) -> ShaderModule
+    pub fn load_shader(&mut self, render_context: &VulkanRenderContext, file_name: &str) -> ShaderModule
     {
         // TODO: can this return a &ShaderModule without a double mutable borrow error in PipelineManager::create_pipeline?
         self.shader_cache.entry(file_name.parse().unwrap()).or_insert(

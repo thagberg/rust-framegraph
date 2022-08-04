@@ -2,9 +2,9 @@ use core::ffi::c_void;
 
 use ash::vk;
 
-use crate::context::render_context::RenderContext;
+use crate::context::vulkan_render_context::VulkanRenderContext;
 use crate::context::pipeline::{PipelineDescription, RasterizationType, DepthStencilType, BlendType};
-use crate::framegraph::pass_node::PassNode;
+use crate::framegraph::graphics_pass_node::PassNode;
 use crate::resource::resource_manager::{ResourceHandle, ResolvedResourceMap};
 
 pub struct OffsetUBO {
@@ -23,7 +23,7 @@ impl Drop for UBOPass {
 }
 
 impl UBOPass {
-    fn generate_renderpass(render_context: &mut RenderContext) -> vk::RenderPass {
+    fn generate_renderpass(render_context: &mut VulkanRenderContext) -> vk::RenderPass {
         let color_attachment = vk::AttachmentDescription::builder()
             .format(vk::Format::R8G8B8A8_SRGB)
             .flags(vk::AttachmentDescriptionFlags::empty())
@@ -74,7 +74,7 @@ impl UBOPass {
         render_pass
     }
 
-    pub fn new(render_context: &mut RenderContext) -> Self {
+    pub fn new(render_context: &mut VulkanRenderContext) -> Self {
         let render_pass = Self::generate_renderpass(render_context);
         let ubo_create_info = vk::BufferCreateInfo {
             s_type: vk::StructureType::BUFFER_CREATE_INFO,
@@ -358,7 +358,7 @@ impl UBOPass {
             .read(uniform_buffer)
             .render_target(render_target)
             .fill_commands(Box::new(
-                move |render_ctx: &RenderContext,
+                move |render_ctx: &VulkanRenderContext,
                       command_buffer: vk::CommandBuffer,
                       inputs: &ResolvedResourceMap,
                       outputs: &ResolvedResourceMap|

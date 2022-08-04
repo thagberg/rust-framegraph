@@ -4,18 +4,18 @@ pub mod frame_graph;
 pub mod resource;
 pub mod pipeline;
 pub mod shader;
-mod i_pass_node;
-mod pass_node;
+pub mod pass_node;
+pub mod graphics_pass_node;
 
 #[cfg(test)]
 mod tests
 {
     use std::process::Command;
     use ash::vk;
-    use context::i_render_context::{RenderContext, CommandBuffer};
-    use crate::resource::i_resource_manager::ResourceManager;
-    use crate::resource::resource_manager::{ResourceHandle, ResolvedResourceMap, ResolvedResource, ResourceType};
-    use crate::i_pass_node::PassNode;
+    use context::render_context::{RenderContext, CommandBuffer};
+    use crate::resource::resource_manager::ResourceManager;
+    use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, ResolvedResource, ResourceType};
+    use crate::pass_node::PassNode;
     use crate::frame_graph::FrameGraph;
 
     struct MockRenderContext {
@@ -84,7 +84,6 @@ mod tests
             &self.render_targets
         }
 
-        // fn execute<RCType: RenderContext, CBType: CommandBuffer> (
         fn execute(
             &self,
             render_context: &mut RCType,
@@ -119,12 +118,6 @@ mod tests
                 callback
             }
         }
-    }
-
-    #[test]
-    fn dummy_test() {
-        println!("Running a test");
-        assert_eq!(1, 1);
     }
 
     #[test]

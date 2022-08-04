@@ -1,3 +1,3 @@
-pub mod render_context;
+pub mod vulkan_render_context;
 pub mod api_types;
-pub mod i_render_context;
+pub mod render_context;

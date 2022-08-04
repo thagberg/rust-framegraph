@@ -5,14 +5,14 @@ extern crate multimap;
 use multimap::MultiMap;
 
 extern crate context;
-use context::i_render_context::{RenderContext, CommandBuffer};
+use context::render_context::{RenderContext, CommandBuffer};
 
 use ash::vk;
-use crate::i_pass_node::PassNode;
+use crate::pass_node::PassNode;
 // use crate::pass_node::{GraphicsPassNode};
 use crate::pipeline::{PipelineManager};
-use crate::resource::i_resource_manager::ResourceManager;
-use crate::resource::resource_manager::{ResolvedResourceMap, ResourceHandle};
+use crate::resource::resource_manager::ResourceManager;
+use crate::resource::vulkan_resource_manager::{ResolvedResourceMap, ResourceHandle};
 
 use std::collections::HashMap;
 use std::marker::PhantomData;

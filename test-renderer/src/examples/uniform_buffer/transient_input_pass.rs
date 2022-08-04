@@ -1,7 +1,7 @@
 use ash::vk;
 
-use crate::context::render_context::RenderContext;
-use crate::framegraph::pass_node::PassNode;
+use crate::context::vulkan_render_context::VulkanRenderContext;
+use crate::framegraph::graphics_pass_node::PassNode;
 use crate::resource::resource_manager::{ResourceHandle, ResolvedResourceMap};
 
 use untitled::{
@@ -14,7 +14,7 @@ pub struct TransientInputPass {
 
 impl TransientInputPass {
     fn generate_renderpass(
-        render_context: &mut RenderContext) -> vk::RenderPass
+        render_context: &mut VulkanRenderContext) -> vk::RenderPass
     {
         let rt_attachment = vk::AttachmentDescription::builder()
             .format(render_context.get_swapchain().as_ref().unwrap().get_format())
@@ -58,7 +58,7 @@ impl TransientInputPass {
     }
 
     pub fn new(
-        render_context: &mut RenderContext,
+        render_context: &mut VulkanRenderContext,
         rendertarget_handle: ResourceHandle,
         texture_handle: ResourceHandle) -> Self
     {
@@ -205,7 +205,7 @@ impl TransientInputPass {
             .write(rendertarget_handle)
             .fill_commands(
                 Box::new(
-                    move |render_context: &RenderContext,
+                    move |render_context: &VulkanRenderContext,
                           command_buffer: vk::CommandBuffer,
                           inputs: &ResolvedResourceMap,
                           outputs: &ResolvedResourceMap|
