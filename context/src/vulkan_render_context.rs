@@ -9,6 +9,8 @@ use crate::api_types::swapchain::SwapchainWrapper;
 use crate::api_types::image::ImageWrapper;
 use crate::api_types::surface::SurfaceWrapper;
 use crate::api_types::instance::InstanceWrapper;
+use crate::api_types::renderpass::{RenderPass, RenderPassCreate, VulkanRenderPass, VulkanRenderPassCreate};
+use crate::render_context::RenderContext;
 
 pub struct VulkanRenderContext {
     graphics_queue: vk::Queue,
@@ -389,6 +391,18 @@ fn create_swapchain(
         swapchain_extent)
 }
 
+impl RenderContext for VulkanRenderContext {
+    type Create = VulkanRenderPassCreate;
+    type RP = VulkanRenderPass;
+
+    fn create_renderpass(&self, create_info: &VulkanRenderPassCreate) -> VulkanRenderPass {
+        unsafe {
+            VulkanRenderPass(self.device.get().create_render_pass(create_info, None)
+                .expect("Failed to create renderpass"))
+        }
+    }
+}
+
 impl VulkanRenderContext {
     pub fn new(
         entry: ash::Entry,
@@ -577,6 +591,7 @@ impl VulkanRenderContext {
 
         framebuffers
     }
+
 }
 
 impl Drop for VulkanRenderContext {

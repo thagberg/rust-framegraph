@@ -2,17 +2,24 @@ use core::ffi::c_void;
 
 use ash::vk;
 
-use crate::context::vulkan_render_context::VulkanRenderContext;
-use crate::context::pipeline::{PipelineDescription, RasterizationType, DepthStencilType, BlendType};
-use crate::framegraph::graphics_pass_node::PassNode;
-use crate::resource::resource_manager::{ResourceHandle, ResolvedResourceMap};
+use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
+use context::vulkan_render_context::VulkanRenderContext;
+
+use framegraph::graphics_pass_node::GraphicsPassNode;
+use framegraph::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap};
+use framegraph::pipeline::{
+    PipelineDescription,
+    RasterizationType,
+    DepthStencilType,
+    BlendType
+};
 
 pub struct OffsetUBO {
     pub offset: [f32; 3]
 }
 
 pub struct UBOPass {
-    pub pass_node: PassNode,
+    pub pass_node: GraphicsPassNode<VulkanRenderContext, VulkanCommandBuffer>,
     pub render_target: ResourceHandle
 }
 

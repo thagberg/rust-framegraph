@@ -88,3 +88,13 @@ Build DAG
 Filter leaf nodes to only those with backbuffer as output
 
 Topological sort?
+
+07 August 22 - Start designing RenderpassManager.
+During framegraph compilation, a renderpass will be generated / fetched for each
+accepted node.
+
+Cached base on pipeline name?
+
+Inputs: rendertargets and read images
+Rendertargets always used, read images only if this is a subpass... Put this off for later probably
+Eventually can look for subpass candidates

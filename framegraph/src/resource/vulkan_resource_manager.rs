@@ -139,6 +139,27 @@ impl ResourceManager for VulkanResourceManager<'_> {
             }
         }
     }
+
+    fn get_resource_description(&self, handle: &ResourceHandle) -> Option<&ResourceCreateInfo> {
+        match handle {
+            ResourceHandle::Transient(t) => {
+                let resource = self.transient_resource_map.get(handle);
+                match resource {
+                    Some(found) => {
+                        Some(&found.create_info)
+                    },
+                    _ => {
+                        panic!("Trying to get description of non-existant resource");
+                    }
+                }
+            },
+            ResourceHandle::Persistent(p) => {
+                panic!("get_resource_description not implemented for persistent resources");
+            }
+        }
+
+        None
+    }
 }
 
 impl<'a> VulkanResourceManager<'a> {
@@ -339,4 +360,5 @@ impl<'a> VulkanResourceManager<'a> {
             allocation: buffer_alloc
         }
     }
+
 }

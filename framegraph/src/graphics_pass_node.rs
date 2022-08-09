@@ -1,38 +1,42 @@
 use std::fmt::{Debug, Formatter};
 use ash::vk;
+use context::api_types::renderpass::VulkanRenderPass;
+use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
 use crate::pass_node::PassNode;
 use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap};
 use context::render_context::{RenderContext, CommandBuffer};
+use context::vulkan_render_context::VulkanRenderContext;
 use crate::pipeline::{PipelineDescription};
 
-type FillCallback<RC: RenderContext, CB: CommandBuffer> = dyn (
+type FillCallback = dyn (
     Fn(
-        &RC,
-        &CB,
+        &VulkanRenderContext,
+        &VulkanCommandBuffer,
         &ResolvedResourceMap,
         &ResolvedResourceMap
     )
 );
 
-pub struct GraphicsPassNode<RC: RenderContext, CB: CommandBuffer> {
+pub struct GraphicsPassNode {
     pipeline_description: PipelineDescription,
     render_targets: Vec<ResourceHandle>,
     inputs: Vec<ResourceHandle>,
     outputs: Vec<ResourceHandle>,
-    fill_callback: Box<FillCallback<RC, CB>>
+    fill_callback: Box<FillCallback>
 }
 
 #[derive(Default)]
-pub struct PassNodeBuilder<RC: RenderContext, CB: CommandBuffer> {
+pub struct PassNodeBuilder {
     pipeline_description: Option<PipelineDescription>,
     render_targets: Vec<ResourceHandle>,
     inputs: Vec<ResourceHandle>,
     outputs: Vec<ResourceHandle>,
-    fill_callback: Option<Box<FillCallback<RC, CB>>>
+    fill_callback: Option<Box<FillCallback>>
 }
 
-impl<RC, CB> PassNode<RC, CB> for GraphicsPassNode<RC, CB>
-    where RC: RenderContext, CB: CommandBuffer {
+impl PassNode for GraphicsPassNode  {
+    type RC = VulkanRenderContext;
+    type CB = VulkanCommandBuffer;
 
     fn get_name(&self) -> &str {
         self.pipeline_description.get_name()
@@ -50,8 +54,8 @@ impl<RC, CB> PassNode<RC, CB> for GraphicsPassNode<RC, CB>
 
    fn execute(
         &self,
-        render_context: &mut RC,
-        command_buffer: &CB,
+        render_context: &mut Self::RC,
+        command_buffer: &Self::CB,
         resolved_inputs: &ResolvedResourceMap,
         resolved_outputs: &ResolvedResourceMap)
     {
@@ -64,8 +68,7 @@ impl<RC, CB> PassNode<RC, CB> for GraphicsPassNode<RC, CB>
 
 }
 
-impl<RC, CB> Debug for GraphicsPassNode<RC, CB>
-    where RC: RenderContext, CB: CommandBuffer {
+impl Debug for GraphicsPassNode  {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let pipeline_name = self.pipeline_description.get_name();
         f.debug_struct("PassNode")
@@ -74,9 +77,8 @@ impl<RC, CB> Debug for GraphicsPassNode<RC, CB>
     }
 }
 
-impl<RC, CB> GraphicsPassNode<RC, CB>
-    where RC: RenderContext + std::default::Default, CB: CommandBuffer + std::default::Default {
-    pub fn builder() -> PassNodeBuilder<RC, CB> {
+impl GraphicsPassNode  {
+    pub fn builder() -> PassNodeBuilder {
         PassNodeBuilder {
             ..Default::default()
         }
@@ -86,8 +88,7 @@ impl<RC, CB> GraphicsPassNode<RC, CB>
 
 }
 
-impl<RC, CB> PassNodeBuilder<RC, CB>
-    where RC: RenderContext, CB: CommandBuffer {
+impl PassNodeBuilder {
     pub fn pipeline_description(mut self, pipeline_description: PipelineDescription) -> Self {
         self.pipeline_description = Some(pipeline_description);
         self
@@ -108,13 +109,13 @@ impl<RC, CB> PassNodeBuilder<RC, CB>
         self
     }
 
-    pub fn fill_commands(mut self, fill_callback: Box<FillCallback<RC, CB>>) -> Self
+    pub fn fill_commands(mut self, fill_callback: Box<FillCallback>) -> Self
     {
         self.fill_callback = Some(fill_callback);
         self
     }
 
-    pub fn build(mut self) -> Result<GraphicsPassNode<RC, CB>, &'static str> {
+    pub fn build(mut self) -> Result<GraphicsPassNode, &'static str> {
         assert!(self.pipeline_description.is_some(), "No pipeline set");
         assert!(self.fill_callback.is_some(), "No fill callback set");
 

@@ -2,7 +2,10 @@ use std::fmt::Debug;
 use context::render_context::{RenderContext, CommandBuffer};
 use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap};
 
-pub trait PassNode<RCType: RenderContext, CBType: CommandBuffer> {
+pub trait PassNode {
+    type RC;
+    type CB;
+
     fn get_name(&self) -> &str;
 
     fn get_inputs(&self) -> &[ResourceHandle];
@@ -13,8 +16,8 @@ pub trait PassNode<RCType: RenderContext, CBType: CommandBuffer> {
 
     fn execute(
         &self,
-        render_context: &mut RCType,
-        command_buffer: &CBType,
+        render_context: &mut Self::RC,
+        command_buffer: &Self::CB,
         resolved_inputs: &ResolvedResourceMap,
         resolved_outputs: &ResolvedResourceMap);
 }

@@ -6,6 +6,7 @@ pub mod pipeline;
 pub mod shader;
 pub mod pass_node;
 pub mod graphics_pass_node;
+mod renderpass_manager;
 
 #[cfg(test)]
 mod tests
@@ -13,17 +14,29 @@ mod tests
     use std::process::Command;
     use ash::vk;
     use context::render_context::{RenderContext, CommandBuffer};
+    use context::api_types::renderpass::{RenderPassCreate, RenderPass};
     use crate::resource::resource_manager::ResourceManager;
     use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, ResolvedResource, ResourceType};
     use crate::pass_node::PassNode;
     use crate::frame_graph::FrameGraph;
+
+    struct MockRenderPassCreate { }
+    impl RenderPassCreate for MockRenderPassCreate { }
+
+    struct MockRenderPass { }
+    impl RenderPass for MockRenderPass { }
 
     struct MockRenderContext {
         nodes_executed: u32
     }
 
     impl RenderContext for MockRenderContext {
+        type Create = MockRenderPassCreate;
+        type RP = MockRenderPass;
 
+        fn create_renderpass(&self, create_info: &Self::Create) -> Self::RP {
+            MockRenderPass{};
+        }
     }
 
     struct MockCommandBuffer {
@@ -34,10 +47,10 @@ mod tests
 
     }
 
-    type FillCallback<RCType: RenderContext, CBType: CommandBuffer> = dyn (
+    type FillCallback = dyn (
     Fn(
-        &mut RCType,
-        &CBType,
+        &mut MockRenderContext,
+        &MockCommandBuffer,
         &ResolvedResourceMap,
         &ResolvedResourceMap,
         u32
@@ -58,16 +71,19 @@ mod tests
         }
     }
 
-    struct MockPassNode<RCType: RenderContext, CBType: CommandBuffer> {
+    struct MockPassNode {
         name: String,
         inputs: Vec<ResourceHandle>,
         outputs: Vec<ResourceHandle>,
         render_targets: Vec<ResourceHandle>,
         intended_order: u32,
-        callback: Box<FillCallback<RCType, CBType>>
+        callback: Box<FillCallback>
     }
 
-    impl<RCType: RenderContext, CBType: CommandBuffer> PassNode<RCType, CBType> for MockPassNode<RCType, CBType> {
+    impl PassNode for MockPassNode {
+        type RC = MockRenderContext;
+        type CB = MockCommandBuffer;
+
         fn get_name(&self) -> &str {
             &self.name
         }
@@ -86,8 +102,8 @@ mod tests
 
         fn execute(
             &self,
-            render_context: &mut RCType,
-            command_buffer: &CBType,
+            render_context: &mut Self::RC,
+            command_buffer: &Self::CB,
             resolved_inputs: &ResolvedResourceMap,
             resolved_outputs: &ResolvedResourceMap) {
 
@@ -100,14 +116,14 @@ mod tests
         }
     }
 
-    impl<RCType: RenderContext, CBType: CommandBuffer> MockPassNode<RCType, CBType> {
+    impl MockPassNode {
         pub fn new(
             name: String,
             inputs: Vec<ResourceHandle>,
             outputs: Vec<ResourceHandle>,
             render_targets: Vec<ResourceHandle>,
             intended_order: u32,
-            callback: Box<FillCallback<RCType, CBType>>) -> MockPassNode<RCType, CBType> {
+            callback: Box<FillCallback>) -> MockPassNode {
 
             MockPassNode {
                 name,
@@ -127,7 +143,7 @@ mod tests
         };
         let command_buffer = MockCommandBuffer{};
         let rm = MockResourceManager{};
-        let mut frame_graph : FrameGraph<MockRenderContext, MockCommandBuffer, MockResourceManager, MockPassNode<MockRenderContext, MockCommandBuffer>> = FrameGraph::new(rm);
+        let mut frame_graph : FrameGraph<MockResourceManager, MockPassNode> = FrameGraph::new(rm);
         let resource_one = ResourceHandle::Transient(0);
         let resource_two = ResourceHandle::Transient(1);
         let resource_three = ResourceHandle::Transient(2);

@@ -18,20 +18,22 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 
 
-pub struct FrameGraph<RCType: RenderContext, CBType: CommandBuffer, RMType, PNType> {
+pub struct FrameGraph<RMType, PNType>
+    where RMType: ResourceManager, PNType: PassNode{
+
     nodes: stable_graph::StableDiGraph<PNType, u32>,
     frame_started: bool,
     compiled: bool,
     pipeline_manager: PipelineManager,
     resource_manager: RMType,
-    sorted_nodes: Option<Vec<NodeIndex>>,
+    sorted_nodes: Option<Vec<NodeIndex>>
 
-    phantom_rc: PhantomData<RCType>,
-    phantom_cb: PhantomData<CBType>
+    // phantom_rc: PhantomData<RCType>,
+    // phantom_cb: PhantomData<CBType>
 }
 
-impl<RCType: RenderContext, CBType: CommandBuffer, RMType: ResourceManager, PNType: PassNode<RCType, CBType>> FrameGraph<RCType, CBType, RMType, PNType> {
-    pub fn new(resource_manager: RMType) -> FrameGraph<RCType, CBType, RMType, PNType> {
+impl<RMType: ResourceManager, PNType: PassNode> FrameGraph<RMType, PNType> {
+    pub fn new(resource_manager: RMType) -> FrameGraph<RMType, PNType> {
         // let resource_manager = ResourceManager::new(
         //     render_context.get_instance(),
         //     render_context.get_device_wrapper(),
@@ -42,10 +44,10 @@ impl<RCType: RenderContext, CBType: CommandBuffer, RMType: ResourceManager, PNTy
             compiled: false,
             pipeline_manager: PipelineManager::new(),
             resource_manager,
-            sorted_nodes: None,
+            sorted_nodes: None
 
-            phantom_rc: PhantomData,
-            phantom_cb: PhantomData
+            // phantom_rc: PhantomData,
+            // phantom_cb: PhantomData
         }
     }
 
@@ -140,10 +142,12 @@ impl<RCType: RenderContext, CBType: CommandBuffer, RMType: ResourceManager, PNTy
             }
         }
 
+        // iterate over sorted nodes to generate / fetch renderpasses
+
         self.compiled = true;
     }
 
-    pub fn end(&mut self, render_context: &mut RCType, command_buffer: &CBType) {
+    pub fn end<RCType: RenderContext, CBType: CommandBuffer>(&mut self, render_context: &mut RCType, command_buffer: &CBType) {
         assert!(self.frame_started, "Can't end frame before it's been started");
         assert!(self.compiled, "Can't end frame before it's been compiled");
         match &self.sorted_nodes {
