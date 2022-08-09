@@ -147,7 +147,7 @@ impl<RMType: ResourceManager, PNType: PassNode> FrameGraph<RMType, PNType> {
         self.compiled = true;
     }
 
-    pub fn end<RCType: RenderContext, CBType: CommandBuffer>(&mut self, render_context: &mut RCType, command_buffer: &CBType) {
+    pub fn end(&mut self, render_context: &mut PNType::RC, command_buffer: &PNType::CB) {
         assert!(self.frame_started, "Can't end frame before it's been started");
         assert!(self.compiled, "Can't end frame before it's been compiled");
         match &self.sorted_nodes {

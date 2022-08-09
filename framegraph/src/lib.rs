@@ -16,7 +16,7 @@ mod tests
     use context::render_context::{RenderContext, CommandBuffer};
     use context::api_types::renderpass::{RenderPassCreate, RenderPass};
     use crate::resource::resource_manager::ResourceManager;
-    use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, ResolvedResource, ResourceType};
+    use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, ResolvedResource, ResourceType, ResourceCreateInfo};
     use crate::pass_node::PassNode;
     use crate::frame_graph::FrameGraph;
 
@@ -35,7 +35,7 @@ mod tests
         type RP = MockRenderPass;
 
         fn create_renderpass(&self, create_info: &Self::Create) -> Self::RP {
-            MockRenderPass{};
+            MockRenderPass{}
         }
     }
 
@@ -68,6 +68,10 @@ mod tests
                 handle: *handle,
                 resource: ResourceType::Buffer(vk::Buffer::null())
             }
+        }
+
+        fn get_resource_description(&self, handle: &ResourceHandle) -> Option<&ResourceCreateInfo> {
+            None
         }
     }
 

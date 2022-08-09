@@ -24,7 +24,7 @@ impl RenderpassManager {
         match self.renderpass_map.get(pass_node.get_name()) {
             Some(renderpass) => {
                 // found a cached entry, no need to create a new renderpass
-                *renderpass
+                return *renderpass;
             },
             None => {
                 // no cached renderpass found, create it and cache it now
@@ -41,7 +41,7 @@ impl RenderpassManager {
                                         .initial_layout(rt_description.initial_layout)
                                         .final_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)// TODO: this needs to be paramateried
                                         .load_op(vk::AttachmentLoadOp::CLEAR)
-                                        .store_top(vk::AttachmentStoreOp::STORE)
+                                        .store_op(vk::AttachmentStoreOp::STORE)
                                         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
                                         .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
                                         .build());

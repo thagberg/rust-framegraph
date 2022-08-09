@@ -146,7 +146,7 @@ impl ResourceManager for VulkanResourceManager<'_> {
                 let resource = self.transient_resource_map.get(handle);
                 match resource {
                     Some(found) => {
-                        Some(&found.create_info)
+                        return Some(&found.create_info);
                     },
                     _ => {
                         panic!("Trying to get description of non-existant resource");
