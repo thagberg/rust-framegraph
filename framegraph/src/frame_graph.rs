@@ -213,30 +213,5 @@ impl<RMType: ResourceManager, PNType: PassNode> FrameGraph<RMType, PNType> {
                 println!("No nodes in framegraph to traverse");
             }
         }
-        // let mut next = self.nodes.pop();
-        // while next.is_some() {
-        //     let node = next.unwrap();
-        //     // TODO: determine the actual renderpass to provide
-        //     let pipeline = self.pipeline_manager.create_pipeline(render_context, vk::RenderPass::null(), node.get_pipeline_description() );
-        //     // let mut resolved_inputs: Vec<ResolvedResource> = Vec::new();
-        //     let mut resolved_inputs = ResolvedResourceMap::new();
-        //     let mut resolved_outputs = ResolvedResourceMap::new();
-        //     let inputs = node.get_inputs().as_ref();
-        //     let outputs = node.get_outputs().as_ref();
-        //     for input in inputs {
-        //         let resolved = self.resource_manager.resolve_resource(input);
-        //         resolved_inputs.insert(input.clone(), resolved.clone());
-        //     }
-        //     for output in outputs {
-        //         let resolved = self.resource_manager.resolve_resource(output);
-        //         resolved_outputs.insert(output.clone(), resolved.clone());
-        //     }
-        //     node.execute(
-        //         render_context,
-        //         command_buffer,
-        //         &resolved_inputs,
-        //         &resolved_outputs);
-        //     next = self.nodes.pop();
-        // }
     }
 }
