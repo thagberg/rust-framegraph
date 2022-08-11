@@ -1,6 +1,6 @@
 extern crate petgraph;
-use petgraph::{graph, stable_graph, Direction};
-use petgraph::stable_graph::NodeIndex;
+use petgraph::{graph, stable_graph, Direction, Directed};
+use petgraph::stable_graph::{Edges, NodeIndex};
 extern crate multimap;
 use multimap::MultiMap;
 
@@ -16,6 +16,7 @@ use crate::resource::vulkan_resource_manager::{ResolvedResourceMap, ResourceHand
 
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use petgraph::visit::EdgeRef;
 
 
 pub struct FrameGraph<RMType, PNType>
@@ -26,10 +27,8 @@ pub struct FrameGraph<RMType, PNType>
     compiled: bool,
     pipeline_manager: PipelineManager,
     resource_manager: RMType,
-    sorted_nodes: Option<Vec<NodeIndex>>
-
-    // phantom_rc: PhantomData<RCType>,
-    // phantom_cb: PhantomData<CBType>
+    sorted_nodes: Option<Vec<NodeIndex>>,
+    root_index: Option<NodeIndex>
 }
 
 impl<RMType: ResourceManager, PNType: PassNode> FrameGraph<RMType, PNType> {
@@ -44,22 +43,30 @@ impl<RMType: ResourceManager, PNType: PassNode> FrameGraph<RMType, PNType> {
             compiled: false,
             pipeline_manager: PipelineManager::new(),
             resource_manager,
-            sorted_nodes: None
-
-            // phantom_rc: PhantomData,
-            // phantom_cb: PhantomData
+            sorted_nodes: None,
+            root_index: None
         }
     }
 
-    pub fn start(&mut self) {
+    pub fn start(&mut self, root_node: PNType) {
         assert!(!self.frame_started, "Can't start a frame that's already been started");
         self.frame_started = true;
+        self.root_index = Some(self.add_node(root_node));
     }
 
-    pub fn add_node(&mut self, node: PNType) {
+    pub fn add_node(&mut self, node: PNType) -> NodeIndex {
         assert!(self.frame_started, "Can't add PassNode before frame has been started");
         assert!(!self.compiled, "Can't add PassNode after frame has been compiled");
-        let node_index = self.nodes.add_node(node);
+        self.nodes.add_node(node)
+    }
+
+    fn _mark_unused(&self, visited_nodes: &mut Vec<bool>, edges: Edges<u32, Directed>)  {
+        for edge in edges {
+            let node_index = edge.source();
+            visited_nodes[node_index.index()] = true;
+            let incoming = self.nodes.edges_directed(node_index, Direction::Incoming);
+            self._mark_unused(visited_nodes, incoming);
+        }
     }
 
     pub fn compile(&mut self) {
@@ -115,16 +122,43 @@ impl<RMType: ResourceManager, PNType: PassNode> FrameGraph<RMType, PNType> {
             }
         }
 
-        for unresolved_pass in unresolved_passes {
-            println!("Pass has an unresolved input; removing from graph: {}",
-                self.nodes.node_weight(*unresolved_pass).unwrap().get_name());
-            self.nodes.remove_node(*unresolved_pass);
+        // Ensure root node is valid, then mark any passes which don't contribute to root node as unused
+        let mut visited_nodes: Vec<bool> = vec![false; self.nodes.node_count()];
+        match self.root_index {
+            Some(root_index) => {
+                let root_node = self.nodes.node_weight(root_index);
+                match root_node {
+                    Some(node) => {
+                        visited_nodes[root_index.index()] = true;
+                        let mut incoming = self.nodes.edges_directed(root_index, Direction::Incoming);
+                        self._mark_unused(&mut visited_nodes, incoming);
+                    },
+                    None => {
+                        panic!("Root node is invalid");
+                    }
+                }
+            },
+            None => {
+                panic!("Root node was elided from frame graph, might have an unresolved dependency");
+            }
         }
 
-        for unused_pass in unused_passes {
-            println!("Pass has an unused output; removing from graph: {}",
-                     self.nodes.node_weight(*unused_pass).unwrap().get_name());
-            self.nodes.remove_node(*unused_pass);
+        // now remove unused passes
+        for i in 0..visited_nodes.len() {
+            if visited_nodes[i] == false {
+                let node_index = NodeIndex::new(i);
+                {
+                    let node = self.nodes.node_weight(node_index).unwrap();
+                    println!("Removing unused node: {:?}", node.get_name());
+                }
+                self.nodes.remove_node(node_index);
+            }
+        }
+
+        if self.root_index.is_some() {
+            let root_node = self.nodes.node_weight(self.root_index.unwrap());
+        } else {
+            panic!("Root node was elided from frame graph, might have an unresolved dependency");
         }
 
         // unresolved and unused passes have been removed from the graph,

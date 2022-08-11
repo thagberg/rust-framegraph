@@ -208,10 +208,10 @@ mod tests
             5,
             Box::new(mock_callback_fail));
 
-        frame_graph.start();
+        frame_graph.start(n3);
         frame_graph.add_node(n1);
         frame_graph.add_node(n2);
-        frame_graph.add_node(n3);
+        // frame_graph.add_node(n3);
         frame_graph.add_node(n4);
         frame_graph.add_node(n5);
         frame_graph.compile();
