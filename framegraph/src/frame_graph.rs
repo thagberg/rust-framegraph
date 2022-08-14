@@ -20,38 +20,40 @@ use std::marker::PhantomData;
 use petgraph::visit::EdgeRef;
 
 
-pub struct FrameGraph<PNType>
-    where PNType: PassNode{
+pub struct FrameGraph<RPM>
+    where RPM: RenderpassManager, RPM::PN: PassNode {
 
-    nodes: stable_graph::StableDiGraph<PNType, u32>,
+    nodes: stable_graph::StableDiGraph<RPM::PN, u32>,
     frame_started: bool,
     compiled: bool,
     pipeline_manager: PipelineManager,
-    renderpass_manager: VulkanRenderpassManager,
+    renderpass_manager: RPM,
     sorted_nodes: Option<Vec<NodeIndex>>,
     root_index: Option<NodeIndex>
 }
 
-impl<PNType: PassNode> FrameGraph<PNType> {
-    pub fn new() -> FrameGraph<PNType> {
+impl<RPM> FrameGraph<RPM>
+    where RPM: RenderpassManager, RPM::PN: PassNode {
+
+    pub fn new(renderpass_manager: RPM) -> FrameGraph<RPM> {
         FrameGraph {
             nodes: stable_graph::StableDiGraph::new(),
             frame_started: false,
             compiled: false,
             pipeline_manager: PipelineManager::new(),
-            renderpass_manager: VulkanRenderpassManager::new(),
+            renderpass_manager: renderpass_manager,
             sorted_nodes: None,
             root_index: None
         }
     }
 
-    pub fn start(&mut self, root_node: PNType) {
+    pub fn start(&mut self, root_node: RPM::PN) {
         assert!(!self.frame_started, "Can't start a frame that's already been started");
         self.frame_started = true;
         self.root_index = Some(self.add_node(root_node));
     }
 
-    pub fn add_node(&mut self, node: PNType) -> NodeIndex {
+    pub fn add_node(&mut self, node: RPM::PN) -> NodeIndex {
         assert!(self.frame_started, "Can't add PassNode before frame has been started");
         assert!(!self.compiled, "Can't add PassNode after frame has been compiled");
         self.nodes.add_node(node)
@@ -178,11 +180,12 @@ impl<PNType: PassNode> FrameGraph<PNType> {
         self.compiled = true;
     }
 
-    pub fn end<RM>(
+    pub fn end(
         &mut self,
-        resource_manager: &mut RM,
-        render_context: &mut PNType::RC,
-        command_buffer: &PNType::CB) where RM: ResourceManager, <PNType as PassNode>::RC: RenderContext {
+        resource_manager: &mut <RPM as RenderpassManager>::RM,
+        render_context: &mut <<RPM as RenderpassManager>::PN as PassNode>::RC,
+        command_buffer: &<<RPM as RenderpassManager>::PN as PassNode>::CB)
+        where <RPM as RenderpassManager>::RM: ResourceManager, <<RPM as RenderpassManager>::PN as PassNode>::RC: RenderContext {
 
         assert!(self.frame_started, "Can't end frame before it's been started");
         assert!(self.compiled, "Can't end frame before it's been compiled");

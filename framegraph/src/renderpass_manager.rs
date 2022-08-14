@@ -12,15 +12,15 @@ use crate::graphics_pass_node::GraphicsPassNode;
 pub trait RenderpassManager {
     type PN;
     type RM;
-    type RC;
+    // type RC;
     type RP;
 
     fn create_or_fetch_renderpass(
         &mut self,
         pass_node: &Self::PN,
         resource_manager: &Self::RM,
-        render_context: &Self::RC
-    ) -> &Self::RP;
+        render_context: &<<Self as RenderpassManager>::PN as PassNode>::RC
+    ) -> &Self::RP where <Self as RenderpassManager>::PN: PassNode;
 }
 
 pub struct VulkanRenderpassManager {
@@ -29,15 +29,15 @@ pub struct VulkanRenderpassManager {
 
 impl RenderpassManager for VulkanRenderpassManager {
     type PN = GraphicsPassNode;
-    type RM = VulkanResourceManager<'_>;
-    type RC = VulkanRenderContext;
+    type RM = VulkanResourceManager;
+    // type RC = VulkanRenderContext;
     type RP = vk::RenderPass;
 
     fn create_or_fetch_renderpass(
         &mut self,
         pass_node: &Self::PN,
         resource_manager: &Self::RM,
-        render_context: &Self::RC) -> &Self::RP {
+        render_context: &<<Self as RenderpassManager>::PN as PassNode>::RC) -> &Self::RP {
 
         self.renderpass_map.entry(pass_node.get_name().to_string()).or_insert({
             // no cached renderpass found, create it and cache it now
@@ -100,12 +100,12 @@ impl RenderpassManager for VulkanRenderpassManager {
 }
 
 impl VulkanRenderpassManager {
-
     pub fn new() -> Self {
         VulkanRenderpassManager {
             renderpass_map: HashMap::new()
         }
     }
+
 }
 
 // let render_target = render_context.create_transient_image(

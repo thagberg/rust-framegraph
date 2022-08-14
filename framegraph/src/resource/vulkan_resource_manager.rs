@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use core::ffi::c_void;
+use std::rc::Rc;
 use ash::{Device, vk};
 use gpu_allocator::vulkan::*;
 use gpu_allocator::MemoryLocation;
@@ -68,13 +69,14 @@ pub struct ResolvedImage {
 
 pub type ResolvedResourceMap = HashMap<ResourceHandle, ResolvedResource>;
 
-pub struct VulkanResourceManager<'a> {
+pub struct VulkanResourceManager {
     next_handle: u32,
     allocator: Allocator,
     transient_resource_map: HashMap<ResourceHandle, TransientResource>,
     resolved_resource_map: ResolvedResourceMap,
     persistent_resource_map: HashMap<ResourceHandle, PersistentResource>,
-    device: &'a DeviceWrapper
+    // device: &'a DeviceWrapper
+    device: Rc<DeviceWrapper>
 }
 
 impl ResolvedBuffer {
@@ -82,7 +84,7 @@ impl ResolvedBuffer {
     pub fn get_allocation(&self) -> &Allocation { &self.allocation }
 }
 
-impl ResourceManager for VulkanResourceManager<'_> {
+impl ResourceManager for VulkanResourceManager {
     fn resolve_resource(
         &mut self,
         handle: &ResourceHandle) -> ResolvedResource
@@ -162,12 +164,12 @@ impl ResourceManager for VulkanResourceManager<'_> {
     }
 }
 
-impl<'a> VulkanResourceManager<'a> {
+impl VulkanResourceManager {
     pub fn new(
         instance: &ash::Instance,
-        device: &'a DeviceWrapper,
+        device: Rc<DeviceWrapper>,
         physical_device: &PhysicalDeviceWrapper
-    ) -> VulkanResourceManager<'a> {
+    ) -> VulkanResourceManager {
         let allocator = Allocator::new(&AllocatorCreateDesc {
             instance: instance.clone(),
             device: device.get().clone(),
