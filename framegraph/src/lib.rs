@@ -19,6 +19,7 @@ mod tests
     use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, ResolvedResource, ResourceType, ResourceCreateInfo};
     use crate::pass_node::PassNode;
     use crate::frame_graph::FrameGraph;
+    use crate::renderpass_manager::RenderpassManager;
 
     struct MockRenderPassCreate { }
     impl RenderPassCreate for MockRenderPassCreate { }
@@ -151,6 +152,28 @@ mod tests
         }
     }
 
+    struct MockRenderpassManager {
+        render_pass: MockRenderPass
+    }
+
+    impl RenderpassManager for MockRenderpassManager {
+        type PN = MockPassNode;
+        type RM = MockResourceManager;
+        type RP = MockRenderPass;
+
+        fn create_or_fetch_renderpass(&mut self, pass_node: &Self::PN, resource_manager: &Self::RM, render_context: &<<Self as RenderpassManager>::PN as PassNode>::RC) -> &Self::RP where <Self as RenderpassManager>::PN: PassNode {
+            &self.render_pass
+        }
+    }
+
+    impl MockRenderpassManager {
+        pub fn new() -> Self {
+            MockRenderpassManager {
+                render_pass: MockRenderPass{}
+            }
+        }
+    }
+
     #[test]
     fn framegraph_sort() {
         let mut render_context = MockRenderContext{
@@ -158,7 +181,8 @@ mod tests
         };
         let command_buffer = MockCommandBuffer{};
         let mut rm = MockResourceManager{};
-        let mut frame_graph : FrameGraph<MockPassNode> = FrameGraph::new();
+        let rpm = MockRenderpassManager::new();
+        let mut frame_graph : FrameGraph<MockRenderpassManager> = FrameGraph::new(rpm);
         let resource_one = ResourceHandle::Transient(0);
         let resource_two = ResourceHandle::Transient(1);
         let resource_three = ResourceHandle::Transient(2);
