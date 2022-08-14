@@ -38,13 +38,13 @@ struct SyncObjects {
     inflight_fences: Vec<vk::Fence>,
 }
 
-struct VulkanApp<'a> {
+struct VulkanApp {
     window: winit::window::Window,
     debug_utils_loader: ash::extensions::ext::DebugUtils,
     debug_merssager: vk::DebugUtilsMessengerEXT,
 
     render_context: VulkanRenderContext,
-    resource_manager: VulkanResourceManager<'a>,
+    resource_manager: VulkanResourceManager,
 
     frame_graph: FrameGraph<GraphicsPassNode>,
     // ubo_pass: UBOPass,

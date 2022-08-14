@@ -1,6 +1,7 @@
 use std::ffi::CStr;
 use std::ffi::CString;
 use std::os::raw::c_char;
+use std::rc::Rc;
 use ash::vk;
 use ash::vk::PresentModeKHR;
 
@@ -20,7 +21,7 @@ pub struct VulkanRenderContext {
     surface: Option<SurfaceWrapper>,
     graphics_command_pool: vk::CommandPool,
     descriptor_pool: vk::DescriptorPool,
-    device: DeviceWrapper,
+    device: Rc<DeviceWrapper>,
     physical_device: PhysicalDeviceWrapper,
     instance: InstanceWrapper,
     entry: ash::Entry
@@ -503,7 +504,7 @@ impl VulkanRenderContext {
         VulkanRenderContext {
             entry,
             instance: instance_wrapper,
-            device: logical_device,
+            device: Rc::new(logical_device),
             physical_device,
             surface,
             graphics_queue,
@@ -519,7 +520,8 @@ impl VulkanRenderContext {
         &self.instance.get()
     }
 
-    pub fn get_device_wrapper(&self) -> &DeviceWrapper { &self.device }
+    // pub fn get_device_wrapper(&self) -> &DeviceWrapper { &self.device }
+    pub fn get_device_wrapper(&self) -> Rc<DeviceWrapper> { Rc::clone(&self.device) }
 
     pub fn get_device(&self) -> &ash::Device { &self.device.get() }
 
