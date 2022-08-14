@@ -392,13 +392,13 @@ fn create_swapchain(
 }
 
 impl RenderContext for VulkanRenderContext {
-    type Create = VulkanRenderPassCreate;
-    type RP = VulkanRenderPass;
+    type Create = vk::RenderPassCreateInfo;
+    type RP = vk::RenderPass;
 
-    fn create_renderpass(&self, create_info: &VulkanRenderPassCreate) -> VulkanRenderPass {
+    fn create_renderpass(&self, create_info: &Self::Create) -> Self::RP {
         unsafe {
-            VulkanRenderPass(self.device.get().create_render_pass(create_info, None)
-                .expect("Failed to create renderpass"))
+            self.device.get().create_render_pass(create_info, None)
+                .expect("Failed to create renderpass")
         }
     }
 }

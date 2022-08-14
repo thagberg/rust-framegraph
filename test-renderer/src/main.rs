@@ -18,6 +18,7 @@ use context::api_types::surface::SurfaceWrapper;
 use context::api_types::device::DeviceWrapper;
 use context::api_types::instance::InstanceWrapper;
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
+use framegraph::resource::vulkan_resource_manager::VulkanResourceManager;
 use framegraph::shader::ShaderManager;
 use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::frame_graph::FrameGraph;
@@ -43,12 +44,9 @@ struct VulkanApp<'a> {
     debug_merssager: vk::DebugUtilsMessengerEXT,
 
     render_context: VulkanRenderContext,
+    resource_manager: VulkanResourceManager<'a>,
 
-    frame_graph: FrameGraph<
-        VulkanRenderContext,
-        VulkanCommandBuffer,
-        VulkanRenderContext,
-        GraphicsPassNode<VulkanRenderContext, VulkanCommandBuffer>>,
+    frame_graph: FrameGraph<GraphicsPassNode>,
     // ubo_pass: UBOPass,
     // transient_pass: TransientInputPass,
 
@@ -125,6 +123,11 @@ impl<'a> VulkanApp<'a> {
         //     &mut render_context,
         //     ubo_pass.render_target);
 
+        let resource_manager = ResourceManager::new(
+            render_context.get_instance(),
+            render_context.get_device_wrapper(),
+            render_context.get_physical_device());
+
         let frame_graph = FrameGraph::new();
 
         let shader_manager = ShaderManager::new();
@@ -144,6 +147,7 @@ impl<'a> VulkanApp<'a> {
             debug_merssager,
 
             render_context,
+            resource_manager,
             frame_graph,
             // ubo_pass,
             // transient_pass,
@@ -202,7 +206,7 @@ impl<'a> VulkanApp<'a> {
             let swapchain_handle = self.render_context.get_swapchain_handles()[image_index as usize];
             // let ubo_pass = &self.ubo_pass.pass_node;
             // let transient_pass = &self.transient_pass.pass_node;
-            let ubo_pass = UBOPass::new(&mut self.render_context);
+            let ubo_pass = UBOPass::new(&mut self.resource_manager);
             let transient_pass = TransientInputPass::new(
                 &mut self.render_context,
                 swapchain_handle,
@@ -211,42 +215,13 @@ impl<'a> VulkanApp<'a> {
             let mut frame_graph = FrameGraph::new();
             frame_graph.start();
             frame_graph.add_node(&transient_pass.pass_node);
-            frame_graph.add_node(&ubo_pass.pass_node);
+            frame_graph.add_node(&ubo_pass.generate_pass(&mut self.resource_manager));
             frame_graph.compile();
 
-
-            // let clear_values = [vk::ClearValue {
-            //     color: vk::ClearColorValue {
-            //         float32: [0.0, 0.0, 1.0, 1.0],
-            //     },
-            // }];
-
-            // let render_pass_begin_info = vk::RenderPassBeginInfo {
-            //     s_type: vk::StructureType::RENDER_PASS_BEGIN_INFO,
-            //     p_next: ptr::null(),
-            //     render_pass: self.render_pass,
-            //     framebuffer: self.swapchain_framebuffers[image_index as usize],
-            //     render_area: vk::Rect2D {
-            //         offset: vk::Offset2D { x: 0, y: 0 },
-            //         extent: surface_extent,
-            //     },
-            //     clear_value_count: clear_values.len() as u32,
-            //     p_clear_values: clear_values.as_ptr(),
-            // };
-
-            // unsafe {
-            //     let device = self.render_context.get_device();
-            //     device.cmd_begin_render_pass(
-            //         command_buffer,
-            //         &render_pass_begin_info,
-            //         vk::SubpassContents::INLINE);
-            //     device.cmd_bind_pipeline(
-            //         command_buffer,
-            //         vk::PipelineBindPoint::GRAPHICS,
-            //         self.graphics_pipeline);
-            // }
-
-            frame_graph.end(&mut self.render_context, command_buffer);
+            frame_graph.end(
+                &mut self.resource_manager,
+                &mut self.render_context,
+                command_buffer);
         }
 
         unsafe {

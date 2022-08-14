@@ -75,18 +75,24 @@ mod tests
         }
     }
 
+    struct MockPipelineDescription {
+
+    }
+
     struct MockPassNode {
         name: String,
         inputs: Vec<ResourceHandle>,
         outputs: Vec<ResourceHandle>,
         render_targets: Vec<ResourceHandle>,
         intended_order: u32,
-        callback: Box<FillCallback>
+        callback: Box<FillCallback>,
+        pipeline_description: MockPipelineDescription
     }
 
     impl PassNode for MockPassNode {
         type RC = MockRenderContext;
         type CB = MockCommandBuffer;
+        type PD = MockPipelineDescription;
 
         fn get_name(&self) -> &str {
             &self.name
@@ -102,6 +108,10 @@ mod tests
 
         fn get_rendertargets(&self) -> &[ResourceHandle] {
             &self.render_targets
+        }
+
+        fn get_pipeline_description(&self) -> &Self::PD {
+            &self.pipeline_description
         }
 
         fn execute(
@@ -135,7 +145,8 @@ mod tests
                 outputs,
                 render_targets,
                 intended_order,
-                callback
+                callback,
+                pipeline_description: MockPipelineDescription{}
             }
         }
     }
@@ -146,8 +157,8 @@ mod tests
             nodes_executed: 0
         };
         let command_buffer = MockCommandBuffer{};
-        let rm = MockResourceManager{};
-        let mut frame_graph : FrameGraph<MockResourceManager, MockPassNode> = FrameGraph::new(rm);
+        let mut rm = MockResourceManager{};
+        let mut frame_graph : FrameGraph<MockPassNode> = FrameGraph::new();
         let resource_one = ResourceHandle::Transient(0);
         let resource_two = ResourceHandle::Transient(1);
         let resource_three = ResourceHandle::Transient(2);
@@ -215,6 +226,6 @@ mod tests
         frame_graph.add_node(n4);
         frame_graph.add_node(n5);
         frame_graph.compile();
-        frame_graph.end(&mut render_context, &command_buffer);
+        frame_graph.end(&mut rm, &mut render_context, &command_buffer);
     }
 }

@@ -13,36 +13,33 @@ use crate::pass_node::PassNode;
 use crate::pipeline::{PipelineManager};
 use crate::resource::resource_manager::ResourceManager;
 use crate::resource::vulkan_resource_manager::{ResolvedResourceMap, ResourceHandle};
+use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager};
 
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use petgraph::visit::EdgeRef;
 
 
-pub struct FrameGraph<RMType, PNType>
-    where RMType: ResourceManager, PNType: PassNode{
+pub struct FrameGraph<PNType>
+    where PNType: PassNode{
 
     nodes: stable_graph::StableDiGraph<PNType, u32>,
     frame_started: bool,
     compiled: bool,
     pipeline_manager: PipelineManager,
-    resource_manager: RMType,
+    renderpass_manager: VulkanRenderpassManager,
     sorted_nodes: Option<Vec<NodeIndex>>,
     root_index: Option<NodeIndex>
 }
 
-impl<RMType: ResourceManager, PNType: PassNode> FrameGraph<RMType, PNType> {
-    pub fn new(resource_manager: RMType) -> FrameGraph<RMType, PNType> {
-        // let resource_manager = ResourceManager::new(
-        //     render_context.get_instance(),
-        //     render_context.get_device_wrapper(),
-        //     render_context.get_physical_device());
+impl<PNType: PassNode> FrameGraph<PNType> {
+    pub fn new() -> FrameGraph<PNType> {
         FrameGraph {
             nodes: stable_graph::StableDiGraph::new(),
             frame_started: false,
             compiled: false,
             pipeline_manager: PipelineManager::new(),
-            resource_manager,
+            renderpass_manager: VulkanRenderpassManager::new(),
             sorted_nodes: None,
             root_index: None
         }
@@ -181,24 +178,34 @@ impl<RMType: ResourceManager, PNType: PassNode> FrameGraph<RMType, PNType> {
         self.compiled = true;
     }
 
-    pub fn end(&mut self, render_context: &mut PNType::RC, command_buffer: &PNType::CB) {
+    pub fn end<RM>(
+        &mut self,
+        resource_manager: &mut RM,
+        render_context: &mut PNType::RC,
+        command_buffer: &PNType::CB) where RM: ResourceManager, <PNType as PassNode>::RC: RenderContext {
+
         assert!(self.frame_started, "Can't end frame before it's been started");
         assert!(self.compiled, "Can't end frame before it's been compiled");
         match &self.sorted_nodes {
             Some(indices) => {
                 for index in indices {
                     let node = self.nodes.node_weight(*index).unwrap();
+                    let renderpass = self.renderpass_manager.create_or_fetch_renderpass(
+                        node,
+                        resource_manager,
+                        render_context);
+                    //let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass, node.)
                     let mut resolved_inputs = ResolvedResourceMap::new();
                     let mut resolved_outputs = ResolvedResourceMap::new();
                     let inputs = node.get_inputs().as_ref();
                     let outputs = node.get_outputs().as_ref();
                     let render_targets = node.get_rendertargets().as_ref();
                     for input in inputs {
-                        let resolved = self.resource_manager.resolve_resource(input);
+                        let resolved = resource_manager.resolve_resource(input);
                         resolved_inputs.insert(input.clone(), resolved.clone());
                     }
                     for output in outputs {
-                        let resolved = self.resource_manager.resolve_resource(output);
+                        let resolved = resource_manager.resolve_resource(output);
                         resolved_outputs.insert(output.clone(), resolved.clone());
                     }
 

@@ -3,7 +3,7 @@ use ash::vk;
 use context::api_types::renderpass::VulkanRenderPass;
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
 use crate::pass_node::PassNode;
-use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap};
+use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, VulkanResourceManager};
 use context::render_context::{RenderContext, CommandBuffer};
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::pipeline::{PipelineDescription};
@@ -37,6 +37,7 @@ pub struct PassNodeBuilder {
 impl PassNode for GraphicsPassNode  {
     type RC = VulkanRenderContext;
     type CB = VulkanCommandBuffer;
+    type PD = PipelineDescription;
 
     fn get_name(&self) -> &str {
         self.pipeline_description.get_name()
@@ -51,6 +52,10 @@ impl PassNode for GraphicsPassNode  {
     }
 
    fn get_rendertargets(&self) -> &[ResourceHandle] { &self.render_targets }
+
+    fn get_pipeline_description(&self) -> &Self::PD {
+        &self.pipeline_description
+    }
 
    fn execute(
         &self,

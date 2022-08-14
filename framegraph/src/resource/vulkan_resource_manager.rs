@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use core::ffi::c_void;
-use ash::vk;
+use ash::{Device, vk};
 use gpu_allocator::vulkan::*;
 use gpu_allocator::MemoryLocation;
 
