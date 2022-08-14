@@ -1,10 +1,12 @@
 use std::fmt::Debug;
 use context::render_context::{RenderContext, CommandBuffer};
+use crate::resource::resource_manager::ResourceManager;
 use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap};
 
 pub trait PassNode {
     type RC;
     type CB;
+    type PD;
 
     fn get_name(&self) -> &str;
 
@@ -13,6 +15,8 @@ pub trait PassNode {
     fn get_outputs(&self) -> &[ResourceHandle];
 
     fn get_rendertargets(&self) -> &[ResourceHandle];
+
+    fn get_pipeline_description(&self) -> &Self::PD;
 
     fn execute(
         &self,

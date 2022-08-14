@@ -30,7 +30,6 @@ pub enum RasterizationType
     Standard
 }
 
-// #[derive(Hash)]
 pub struct PipelineDescription
 {
     vertex_input: vk::PipelineVertexInputStateCreateInfo,
