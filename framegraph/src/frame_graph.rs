@@ -10,7 +10,7 @@ use context::render_context::{RenderContext, CommandBuffer};
 use ash::vk;
 use crate::pass_node::PassNode;
 // use crate::pass_node::{GraphicsPassNode};
-use crate::pipeline::{PipelineManager};
+use crate::pipeline::{PipelineManager, VulkanPipelineManager};
 use crate::resource::resource_manager::ResourceManager;
 use crate::resource::vulkan_resource_manager::{ResolvedResourceMap, ResourceHandle};
 use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager};
@@ -20,28 +20,34 @@ use std::marker::PhantomData;
 use petgraph::visit::EdgeRef;
 
 
-pub struct FrameGraph<RPM>
-    where RPM: RenderpassManager, RPM::PN: PassNode {
+pub struct FrameGraph<RPM, PM>
+    where
+        RPM: RenderpassManager,
+        RPM::PN: PassNode,
+        PM: PipelineManager<RC = <<RPM as RenderpassManager>::PN as PassNode>::RC> {
 
     nodes: stable_graph::StableDiGraph<RPM::PN, u32>,
     frame_started: bool,
     compiled: bool,
-    pipeline_manager: PipelineManager,
+    pipeline_manager: PM,
     renderpass_manager: RPM,
     sorted_nodes: Option<Vec<NodeIndex>>,
     root_index: Option<NodeIndex>
 }
 
-impl<RPM> FrameGraph<RPM>
-    where RPM: RenderpassManager, RPM::PN: PassNode {
+impl<RPM, PM> FrameGraph<RPM, PM>
+    where
+        RPM: RenderpassManager,
+        RPM::PN: PassNode,
+        PM: PipelineManager<RC = <<RPM as RenderpassManager>::PN as PassNode>::RC> {
 
-    pub fn new(renderpass_manager: RPM) -> FrameGraph<RPM> {
+    pub fn new(renderpass_manager: RPM, pipeline_manager: PM) -> FrameGraph<RPM, PM> {
         FrameGraph {
             nodes: stable_graph::StableDiGraph::new(),
             frame_started: false,
             compiled: false,
-            pipeline_manager: PipelineManager::new(),
-            renderpass_manager: renderpass_manager,
+            pipeline_manager,
+            renderpass_manager,
             sorted_nodes: None,
             root_index: None
         }
@@ -197,6 +203,7 @@ impl<RPM> FrameGraph<RPM>
                         node,
                         resource_manager,
                         render_context);
+                    let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass, node.get_pipeline_description());
                     //let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass, node.)
                     let mut resolved_inputs = ResolvedResourceMap::new();
                     let mut resolved_outputs = ResolvedResourceMap::new();
