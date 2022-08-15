@@ -20,13 +20,16 @@ use std::marker::PhantomData;
 use petgraph::visit::EdgeRef;
 
 
-pub struct FrameGraph<RPM, PM>
+pub struct FrameGraph<PN, RPM, PM>
     where
-        RPM: RenderpassManager,
-        RPM::PN: PassNode,
-        PM: PipelineManager<RC = <<RPM as RenderpassManager>::PN as PassNode>::RC> {
+        PN: PassNode,
+        RPM: RenderpassManager<PN = PN, RC = PN::RC>,
+        PM: PipelineManager<
+            RC = <<RPM as RenderpassManager>::PN as PassNode>::RC,
+            RP = <RPM as RenderpassManager>::RP,
+            PD = <PN as PassNode>::PD> {
 
-    nodes: stable_graph::StableDiGraph<RPM::PN, u32>,
+    nodes: stable_graph::StableDiGraph<PN, u32>,
     frame_started: bool,
     compiled: bool,
     pipeline_manager: PM,
@@ -35,13 +38,16 @@ pub struct FrameGraph<RPM, PM>
     root_index: Option<NodeIndex>
 }
 
-impl<RPM, PM> FrameGraph<RPM, PM>
+impl<PN, RPM, PM> FrameGraph<PN, RPM, PM>
     where
-        RPM: RenderpassManager,
-        RPM::PN: PassNode,
-        PM: PipelineManager<RC = <<RPM as RenderpassManager>::PN as PassNode>::RC> {
+        PN: PassNode,
+        RPM: RenderpassManager<PN = PN, RC = PN::RC>,
+        PM: PipelineManager<
+            RC = <<RPM as RenderpassManager>::PN as PassNode>::RC,
+            RP = <RPM as RenderpassManager>::RP,
+            PD = <PN as PassNode>::PD> {
 
-    pub fn new(renderpass_manager: RPM, pipeline_manager: PM) -> FrameGraph<RPM, PM> {
+    pub fn new(renderpass_manager: RPM, pipeline_manager: PM) -> FrameGraph<PN, RPM, PM> {
         FrameGraph {
             nodes: stable_graph::StableDiGraph::new(),
             frame_started: false,

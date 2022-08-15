@@ -12,15 +12,15 @@ use crate::graphics_pass_node::GraphicsPassNode;
 pub trait RenderpassManager {
     type PN;
     type RM;
-    // type RC;
+    type RC;
     type RP;
 
     fn create_or_fetch_renderpass(
         &mut self,
         pass_node: &Self::PN,
         resource_manager: &Self::RM,
-        render_context: &<<Self as RenderpassManager>::PN as PassNode>::RC
-    ) -> &Self::RP where <Self as RenderpassManager>::PN: PassNode;
+        render_context: &Self::RC
+    ) -> Self::RP;
 }
 
 pub struct VulkanRenderpassManager {
@@ -30,16 +30,16 @@ pub struct VulkanRenderpassManager {
 impl RenderpassManager for VulkanRenderpassManager {
     type PN = GraphicsPassNode;
     type RM = VulkanResourceManager;
-    // type RC = VulkanRenderContext;
+    type RC = VulkanRenderContext;
     type RP = vk::RenderPass;
 
     fn create_or_fetch_renderpass(
         &mut self,
         pass_node: &Self::PN,
         resource_manager: &Self::RM,
-        render_context: &<<Self as RenderpassManager>::PN as PassNode>::RC) -> &Self::RP {
+        render_context: &Self::RC) -> Self::RP {
 
-        self.renderpass_map.entry(pass_node.get_name().to_string()).or_insert({
+        *self.renderpass_map.entry(pass_node.get_name().to_string()).or_insert({
             // no cached renderpass found, create it and cache it now
             let mut color_attachments: Vec<vk::AttachmentDescription> = Vec::new();
             let mut attachment_refs: Vec<vk::AttachmentReference> = Vec::new();

@@ -19,6 +19,7 @@ mod tests
     use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, ResolvedResource, ResourceType, ResourceCreateInfo};
     use crate::pass_node::PassNode;
     use crate::frame_graph::FrameGraph;
+    use crate::pipeline::PipelineManager;
     use crate::renderpass_manager::RenderpassManager;
 
     struct MockRenderPassCreate { }
@@ -152,6 +153,31 @@ mod tests
         }
     }
 
+    struct MockPipeline;
+
+    struct MockPipelineManager {
+        pipeline: MockPipeline
+    }
+
+    impl PipelineManager for MockPipelineManager {
+        type P = MockPipeline;
+        type RC = MockRenderContext;
+        type RP = MockRenderPass;
+        type PD = MockPipelineDescription;
+
+        fn create_pipeline(&mut self, render_context: &Self::RC, render_pass: Self::RP, pipeline_description: &Self::PD) -> &Self::P where Self::RC: RenderContext {
+            &self.pipeline
+        }
+    }
+
+    impl MockPipelineManager {
+        pub fn new() -> Self {
+            MockPipelineManager {
+                pipeline: MockPipeline{}
+            }
+        }
+    }
+
     struct MockRenderpassManager {
         render_pass: MockRenderPass
     }
@@ -159,10 +185,11 @@ mod tests
     impl RenderpassManager for MockRenderpassManager {
         type PN = MockPassNode;
         type RM = MockResourceManager;
+        type RC = MockRenderContext;
         type RP = MockRenderPass;
 
-        fn create_or_fetch_renderpass(&mut self, pass_node: &Self::PN, resource_manager: &Self::RM, render_context: &<<Self as RenderpassManager>::PN as PassNode>::RC) -> &Self::RP where <Self as RenderpassManager>::PN: PassNode {
-            &self.render_pass
+        fn create_or_fetch_renderpass(&mut self, pass_node: &Self::PN, resource_manager: &Self::RM, render_context: &<<Self as RenderpassManager>::PN as PassNode>::RC) -> Self::RP where <Self as RenderpassManager>::PN: PassNode {
+            MockRenderPass{}
         }
     }
 
@@ -182,7 +209,8 @@ mod tests
         let command_buffer = MockCommandBuffer{};
         let mut rm = MockResourceManager{};
         let rpm = MockRenderpassManager::new();
-        let mut frame_graph : FrameGraph<MockRenderpassManager> = FrameGraph::new(rpm);
+        let pm = MockPipelineManager::new();
+        let mut frame_graph : FrameGraph<MockPassNode, MockRenderpassManager, MockPipelineManager> = FrameGraph::new(rpm, pm);
         let resource_one = ResourceHandle::Transient(0);
         let resource_two = ResourceHandle::Transient(1);
         let resource_three = ResourceHandle::Transient(2);
