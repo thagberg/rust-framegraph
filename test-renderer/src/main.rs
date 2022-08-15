@@ -22,10 +22,12 @@ use framegraph::resource::vulkan_resource_manager::VulkanResourceManager;
 use framegraph::shader::ShaderManager;
 use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::frame_graph::FrameGraph;
+use framegraph::renderpass_manager::VulkanRenderpassManager;
+use framegraph::pipeline::VulkanPipelineManager;
 
 mod examples;
 use crate::examples::uniform_buffer::ubo_pass::UBOPass;
-use crate::examples::uniform_buffer::transient_input_pass::TransientInputPass;
+// use crate::examples::uniform_buffer::transient_input_pass::TransientInputPass;
 
 
 // Constants
@@ -46,7 +48,7 @@ struct VulkanApp {
     render_context: VulkanRenderContext,
     resource_manager: VulkanResourceManager,
 
-    frame_graph: FrameGraph<GraphicsPassNode>,
+    frame_graph: FrameGraph<VulkanRenderpassManager>,
     // ubo_pass: UBOPass,
     // transient_pass: TransientInputPass,
 
@@ -66,8 +68,8 @@ struct VulkanApp {
     current_frame: usize,
 }
 
-impl<'a> VulkanApp<'a> {
-    pub fn new(event_loop: &winit::event_loop::EventLoop<()>) -> VulkanApp<'a> {
+impl VulkanApp {
+    pub fn new(event_loop: &winit::event_loop::EventLoop<()>) -> VulkanApp {
         let window = utility::window::init_window(event_loop, WINDOW_TITLE, WINDOW_WIDTH, WINDOW_HEIGHT);
 
         // init vulkan stuff
@@ -123,12 +125,14 @@ impl<'a> VulkanApp<'a> {
         //     &mut render_context,
         //     ubo_pass.render_target);
 
-        let resource_manager = ResourceManager::new(
+        let resource_manager = VulkanResourceManager::new(
             render_context.get_instance(),
             render_context.get_device_wrapper(),
             render_context.get_physical_device());
 
-        let frame_graph = FrameGraph::new();
+        let pipeline_manager = VulkanPipelineManager::new();
+
+        let frame_graph = FrameGraph::new(VulkanRenderpassManager::new(), pipeline_manager);
 
         let shader_manager = ShaderManager::new();
 
@@ -203,22 +207,22 @@ impl<'a> VulkanApp<'a> {
 
         // let surface_extent = self.render_context.get_swapchain().as_ref().unwrap().get_extent();
         {
-            let swapchain_handle = self.render_context.get_swapchain_handles()[image_index as usize];
+            // let swapchain_handle = self.render_context.get_swapchain_handles()[image_index as usize];
             // let ubo_pass = &self.ubo_pass.pass_node;
             // let transient_pass = &self.transient_pass.pass_node;
             let ubo_pass = UBOPass::new(&mut self.resource_manager);
-            let transient_pass = TransientInputPass::new(
-                &mut self.render_context,
-                swapchain_handle,
-                ubo_pass.render_target);
+            // let transient_pass = TransientInputPass::new(
+            //     &mut self.render_context,
+            //     swapchain_handle,
+            //     ubo_pass.render_target);
 
-            let mut frame_graph = FrameGraph::new();
-            frame_graph.start();
-            frame_graph.add_node(&transient_pass.pass_node);
-            frame_graph.add_node(&ubo_pass.generate_pass(&mut self.resource_manager));
-            frame_graph.compile();
+            // let mut frame_graph = FrameGraph::new();
+            self.frame_graph.start();
+            // frame_graph.add_node(&transient_pass.pass_node);
+            self.frame_graph.add_node(&ubo_pass.generate_pass(&mut self.resource_manager));
+            self.frame_graph.compile();
 
-            frame_graph.end(
+            self.frame_graph.end(
                 &mut self.resource_manager,
                 &mut self.render_context,
                 command_buffer);
@@ -397,7 +401,7 @@ impl<'a> VulkanApp<'a> {
     }
 }
 
-impl Drop for VulkanApp<'_> {
+impl Drop for VulkanApp {
     fn drop(&mut self) {
         unsafe {
             let device = self.render_context.get_device();
@@ -437,7 +441,7 @@ impl Drop for VulkanApp<'_> {
 }
 
 // Fix content -------------------------------------------------------------------------------
-impl VulkanApp<'static> {
+impl VulkanApp {
 
     pub fn main_loop(mut self, event_loop: EventLoop<()>) {
 

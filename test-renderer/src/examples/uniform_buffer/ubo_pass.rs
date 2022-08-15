@@ -5,7 +5,7 @@ use ash::vk;
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
 use context::vulkan_render_context::VulkanRenderContext;
 
-use framegraph::graphics_pass_node::GraphicsPassNode;
+use framegraph::graphics_pass_node::{GraphicsPassNode};
 use framegraph::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, VulkanResourceManager};
 use framegraph::pipeline::{PipelineDescription, RasterizationType, DepthStencilType, BlendType, Pipeline};
 
@@ -98,13 +98,13 @@ impl UBOPass {
                 .array_layers(1)
                 .build());
 
-        PassNode::builder()
+        GraphicsPassNode::builder()
             .pipeline_description(pipeline_description)
-            .read(uniform_buffer)
+            .read(self.uniform_buffer)
             .render_target(render_target)
             .fill_commands(Box::new(
                 move |render_ctx: &VulkanRenderContext,
-                      command_buffer: vk::CommandBuffer,
+                      command_buffer: &VulkanCommandBuffer,
                       inputs: &ResolvedResourceMap,
                       outputs: &ResolvedResourceMap|
                     {

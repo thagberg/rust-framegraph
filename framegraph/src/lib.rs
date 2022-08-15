@@ -6,7 +6,7 @@ pub mod pipeline;
 pub mod shader;
 pub mod pass_node;
 pub mod graphics_pass_node;
-mod renderpass_manager;
+pub mod renderpass_manager;
 
 #[cfg(test)]
 mod tests
