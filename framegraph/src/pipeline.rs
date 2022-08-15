@@ -3,11 +3,14 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 use ash::vk;
+use context::render_context::RenderContext;
 
 use crate::shader::ShaderManager;
 
 extern crate context;
 use context::vulkan_render_context::VulkanRenderContext;
+use crate::pass_node::PassNode;
+use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager};
 
 #[derive(Copy, Clone)]
 pub enum BlendType
@@ -56,7 +59,20 @@ pub struct Pipeline
     graphics_pipeline: vk::Pipeline
 }
 
-pub struct PipelineManager
+pub trait PipelineManager {
+    type P;
+    type RC;
+    type RP;
+    type PD;
+
+    fn create_pipeline(
+        &mut self,
+        render_context: &Self::RC,
+        render_pass: Self::RP,
+        pipeline_description: &Self::PD) -> &Self::P where Self::RC: RenderContext;
+}
+
+pub struct VulkanPipelineManager
 {
     pipeline_cache: HashMap<u64, Pipeline>,
     shader_manager: ShaderManager
@@ -207,29 +223,25 @@ impl PipelineDescription
     pub fn get_name(&self) -> &str { &self.vertex_name }
 }
 
-impl PipelineManager
-{
-    pub fn new() -> PipelineManager
-    {
-        PipelineManager {
-            pipeline_cache: HashMap::new(),
-            shader_manager: ShaderManager::new()
-        }
-    }
+impl PipelineManager for VulkanPipelineManager {
+    type P = Pipeline;
+    type RC = <<VulkanRenderpassManager as RenderpassManager>::PN as PassNode>::RC;
+    type RP = vk::RenderPass;
+    type PD = PipelineDescription;
 
-    pub fn create_pipeline(
+    fn create_pipeline(
         &mut self,
-        render_context: &VulkanRenderContext,
-        render_pass: vk::RenderPass,
-        pipeline_description: &PipelineDescription) -> &Pipeline
-    {
+        render_context: &Self::RC,
+        render_pass: Self::RP,
+        pipeline_description: &Self::PD) -> &Self::P where Self::RC: RenderContext {
+
         // TODO: define a PipelineKey type and require the consumer to provide it here
         //  to avoid needing to calculate a hash for each used pipeline each frame?
         let mut pipeline_hasher = DefaultHasher::new();
         pipeline_description.hash(&mut pipeline_hasher);
         let pipeline_key = pipeline_hasher.finish();
         self.pipeline_cache.entry(pipeline_key).or_insert(
-    {
+            {
                 // if self.pipeline_cache.contains_key(&pipeline_key)
                 let vertex_shader_module = self.shader_manager.load_shader(
                     render_context,
@@ -317,5 +329,16 @@ impl PipelineManager
                 Pipeline::new(graphics_pipeline[0])
             }
         )
+    }
+}
+
+impl VulkanPipelineManager
+{
+    pub fn new() -> VulkanPipelineManager
+    {
+        VulkanPipelineManager {
+            pipeline_cache: HashMap::new(),
+            shader_manager: ShaderManager::new()
+        }
     }
 }
