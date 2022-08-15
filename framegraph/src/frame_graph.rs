@@ -187,8 +187,6 @@ impl<PN, RPM, PM> FrameGraph<PN, RPM, PM>
             }
         }
 
-        // iterate over sorted nodes to generate / fetch renderpasses
-
         self.compiled = true;
     }
 
@@ -210,7 +208,6 @@ impl<PN, RPM, PM> FrameGraph<PN, RPM, PM>
                         resource_manager,
                         render_context);
                     let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass, node.get_pipeline_description());
-                    //let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass, node.)
                     let mut resolved_inputs = ResolvedResourceMap::new();
                     let mut resolved_outputs = ResolvedResourceMap::new();
                     let inputs = node.get_inputs().as_ref();

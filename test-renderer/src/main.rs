@@ -48,7 +48,7 @@ struct VulkanApp {
     render_context: VulkanRenderContext,
     resource_manager: VulkanResourceManager,
 
-    frame_graph: FrameGraph<VulkanRenderpassManager>,
+    frame_graph: FrameGraph<GraphicsPassNode, VulkanRenderpassManager, VulkanPipelineManager>,
     // ubo_pass: UBOPass,
     // transient_pass: TransientInputPass,
 
