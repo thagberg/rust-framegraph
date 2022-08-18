@@ -18,11 +18,12 @@ type FillCallback = dyn (
 );
 
 pub struct GraphicsPassNode {
-    pipeline_description: PipelineDescription,
+    pipeline_description: Option<PipelineDescription>,
     render_targets: Vec<ResourceHandle>,
     inputs: Vec<ResourceHandle>,
     outputs: Vec<ResourceHandle>,
-    fill_callback: Box<FillCallback>
+    fill_callback: Box<FillCallback>,
+    name: String
 }
 
 #[derive(Default)]
@@ -31,7 +32,8 @@ pub struct PassNodeBuilder {
     render_targets: Vec<ResourceHandle>,
     inputs: Vec<ResourceHandle>,
     outputs: Vec<ResourceHandle>,
-    fill_callback: Option<Box<FillCallback>>
+    fill_callback: Option<Box<FillCallback>>,
+    name: String
 }
 
 impl PassNode for GraphicsPassNode  {
@@ -40,7 +42,7 @@ impl PassNode for GraphicsPassNode  {
     type PD = PipelineDescription;
 
     fn get_name(&self) -> &str {
-        self.pipeline_description.get_name()
+        &self.name
     }
 
    fn get_inputs(&self) -> &[ResourceHandle] {
@@ -53,7 +55,7 @@ impl PassNode for GraphicsPassNode  {
 
    fn get_rendertargets(&self) -> &[ResourceHandle] { &self.render_targets }
 
-    fn get_pipeline_description(&self) -> &Self::PD {
+    fn get_pipeline_description(&self) -> &Option<Self::PD> {
         &self.pipeline_description
     }
 
@@ -75,21 +77,21 @@ impl PassNode for GraphicsPassNode  {
 
 impl Debug for GraphicsPassNode  {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let pipeline_name = self.pipeline_description.get_name();
         f.debug_struct("PassNode")
-            .field("Name", &pipeline_name.to_string())
+            .field("Name", &self.name)
             .finish()
     }
 }
 
 impl GraphicsPassNode  {
-    pub fn builder() -> PassNodeBuilder {
+    pub fn builder(name: String) -> PassNodeBuilder {
         PassNodeBuilder {
+            name,
             ..Default::default()
         }
     }
 
-    pub fn get_pipeline_description(&self) -> &PipelineDescription { &self.pipeline_description }
+    pub fn get_pipeline_description(&self) -> &Option<PipelineDescription> { &self.pipeline_description }
 
 }
 
@@ -121,15 +123,15 @@ impl PassNodeBuilder {
     }
 
     pub fn build(mut self) -> Result<GraphicsPassNode, &'static str> {
-        assert!(self.pipeline_description.is_some(), "No pipeline set");
         assert!(self.fill_callback.is_some(), "No fill callback set");
 
-        if self.pipeline_description.is_some() && self.fill_callback.is_some() {
+        if self.fill_callback.is_some() {
             let rt_len = self.render_targets.len();
             let inputs_len = self.inputs.len();
             let outputs_len = self.outputs.len();
             Ok(GraphicsPassNode {
-                pipeline_description: self.pipeline_description.unwrap(),
+                name: self.name,
+                pipeline_description: self.pipeline_description,
                 render_targets: self.render_targets.into_iter().take(rt_len).collect(),
                 inputs: self.inputs.into_iter().take(inputs_len).collect(),
                 outputs: self.outputs.into_iter().take(outputs_len).collect(),

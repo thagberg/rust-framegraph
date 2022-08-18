@@ -16,7 +16,7 @@ pub trait PassNode {
 
     fn get_rendertargets(&self) -> &[ResourceHandle];
 
-    fn get_pipeline_description(&self) -> &Self::PD;
+    fn get_pipeline_description(&self) -> &Option<Self::PD>;
 
     fn execute(
         &self,

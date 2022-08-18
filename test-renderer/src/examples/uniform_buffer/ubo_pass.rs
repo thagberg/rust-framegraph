@@ -98,7 +98,7 @@ impl UBOPass {
                 .array_layers(1)
                 .build());
 
-        GraphicsPassNode::builder()
+        GraphicsPassNode::builder("ubo_pass".to_string())
             .pipeline_description(pipeline_description)
             .read(self.uniform_buffer)
             .render_target(render_target)

@@ -203,13 +203,10 @@ impl<PN, RPM, PM> FrameGraph<PN, RPM, PM>
             Some(indices) => {
                 for index in indices {
                     let node = self.nodes.node_weight(*index).unwrap();
-                    let renderpass = self.renderpass_manager.create_or_fetch_renderpass(
-                        node,
-                        resource_manager,
-                        render_context);
-                    let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass, node.get_pipeline_description());
+
                     let mut resolved_inputs = ResolvedResourceMap::new();
                     let mut resolved_outputs = ResolvedResourceMap::new();
+                    let mut resolved_render_targets = ResolvedResourceMap::new();
                     let inputs = node.get_inputs().as_ref();
                     let outputs = node.get_outputs().as_ref();
                     let render_targets = node.get_rendertargets().as_ref();
@@ -221,6 +218,26 @@ impl<PN, RPM, PM> FrameGraph<PN, RPM, PM>
                         let resolved = resource_manager.resolve_resource(output);
                         resolved_outputs.insert(output.clone(), resolved.clone());
                     }
+                    for render_target in render_targets {
+                        let resolved = resource_manager.resolve_resource(render_target);
+                        resolved_render_targets.insert(*render_target, resolved.clone());
+                    }
+
+                    let renderpass = self.renderpass_manager.create_or_fetch_renderpass(
+                        node,
+                        resource_manager,
+                        render_context);
+
+                    let pipeline = {
+                        match node.get_pipeline_description() {
+                            Some(pd) => {
+                                Some(self.pipeline_manager.create_pipeline(render_context, renderpass, pd))
+                            },
+                            None => {
+                                None
+                            }
+                        }
+                    };
 
                     node.execute(
                         render_context,
