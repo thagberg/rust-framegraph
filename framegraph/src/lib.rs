@@ -88,7 +88,7 @@ mod tests
         render_targets: Vec<ResourceHandle>,
         intended_order: u32,
         callback: Box<FillCallback>,
-        pipeline_description: MockPipelineDescription
+        pipeline_description: Option<MockPipelineDescription>
     }
 
     impl PassNode for MockPassNode {
@@ -112,7 +112,7 @@ mod tests
             &self.render_targets
         }
 
-        fn get_pipeline_description(&self) -> &Self::PD {
+        fn get_pipeline_description(&self) -> &Option<Self::PD> {
             &self.pipeline_description
         }
 
@@ -148,7 +148,7 @@ mod tests
                 render_targets,
                 intended_order,
                 callback,
-                pipeline_description: MockPipelineDescription{}
+                pipeline_description: Some(MockPipelineDescription{})
             }
         }
     }

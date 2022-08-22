@@ -16,6 +16,8 @@ tobj            = "^3.2"
 num             = "^0.4"
 context         = {path="../context"}
 framegraph      = {path="../framegraph"}
+passes          = {path="../passes"}
+glam            = "0.21.2"
 
 [build-dependencies]
 glob        = "0.3.0"

@@ -223,32 +223,33 @@ impl<PN, RPM, PM> FrameGraph<PN, RPM, PM>
                         resolved_render_targets.insert(*render_target, resolved.clone());
                     }
 
-                    let renderpass = self.renderpass_manager.create_or_fetch_renderpass(
-                        node,
-                        resource_manager,
-                        render_context);
+                    if let Some(pipeline_description) = node.get_pipeline_description() {
+                        let renderpass = self.renderpass_manager.create_or_fetch_renderpass(
+                            node,
+                            resource_manager,
+                            render_context);
 
-                    let pipeline = {
-                        match node.get_pipeline_description() {
-                            Some(pd) => {
-                                Some(self.pipeline_manager.create_pipeline(render_context, renderpass, pd))
-                            },
-                            None => {
-                                None
-                            }
-                        }
-                    };
+                        let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass, pipeline_description);
+                    }
 
                     node.execute(
                         render_context,
                         command_buffer,
                         &resolved_inputs,
-                        &resolved_outputs);
+                        &resolved_outputs,
+                        &resolved_render_targets);
                 }
             },
             _ => {
                 println!("No nodes in framegraph to traverse");
             }
         }
+
+        if let Some(sorted_indices) = &mut self.sorted_nodes {
+            sorted_indices.clear();
+        }
+        self.nodes.clear();
+        self.compiled = false;
+        self.frame_started = false;
     }
 }

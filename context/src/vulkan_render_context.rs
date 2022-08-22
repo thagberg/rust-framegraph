@@ -344,7 +344,7 @@ fn create_swapchain(
         image_color_space: swapchain_format.color_space,
         image_format: swapchain_format.format,
         image_extent: swapchain_extent,
-        image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
+        image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST,
         image_sharing_mode,
         queue_family_index_count: 0,
         p_queue_family_indices: std::ptr::null(),

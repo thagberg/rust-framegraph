@@ -8,6 +8,7 @@ use crate::{
 use ash::vk;
 use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
 use winit::event_loop::{EventLoop, ControlFlow};
+use glam::IVec2;
 
 use std::ptr;
 
@@ -15,15 +16,17 @@ extern crate framegraph;
 extern crate context;
 use context::vulkan_render_context::VulkanRenderContext;
 use context::api_types::surface::SurfaceWrapper;
+use context::api_types::swapchain::SwapchainWrapper;
 use context::api_types::device::DeviceWrapper;
 use context::api_types::instance::InstanceWrapper;
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
-use framegraph::resource::vulkan_resource_manager::VulkanResourceManager;
+use framegraph::resource::vulkan_resource_manager::{ResourceHandle, VulkanResourceManager};
 use framegraph::shader::ShaderManager;
 use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::frame_graph::FrameGraph;
 use framegraph::renderpass_manager::VulkanRenderpassManager;
 use framegraph::pipeline::VulkanPipelineManager;
+use passes::blit;
 
 mod examples;
 use crate::examples::uniform_buffer::ubo_pass::UBOPass;
@@ -48,10 +51,12 @@ struct VulkanApp {
     render_context: VulkanRenderContext,
     resource_manager: VulkanResourceManager,
 
+    ubo_pass: UBOPass,
     frame_graph: FrameGraph<GraphicsPassNode, VulkanRenderpassManager, VulkanPipelineManager>,
     // ubo_pass: UBOPass,
     // transient_pass: TransientInputPass,
 
+    swapchain_handles: Vec<ResourceHandle>,
     swapchain_framebuffers: Vec<vk::Framebuffer>,
 
     render_pass: vk::RenderPass,
@@ -125,12 +130,14 @@ impl VulkanApp {
         //     &mut render_context,
         //     ubo_pass.render_target);
 
-        let resource_manager = VulkanResourceManager::new(
+        let mut resource_manager = VulkanResourceManager::new(
             render_context.get_instance(),
             render_context.get_device_wrapper(),
             render_context.get_physical_device());
 
         let pipeline_manager = VulkanPipelineManager::new();
+
+        let ubo_pass = UBOPass::new(&mut resource_manager);
 
         let frame_graph = FrameGraph::new(VulkanRenderpassManager::new(), pipeline_manager);
 
@@ -145,6 +152,22 @@ impl VulkanApp {
 
         // cleanup(); the 'drop' function will take care of it.
 
+        let swapchain_handles = {
+            render_context.get_swapchain().as_ref().unwrap().get_images().into_iter().map(
+                |i| {
+                    resource_manager.register_image(i)
+            }).collect()
+        };
+
+        // let mut swapchain_handles = vec![];
+        // if let Some(swaps) = &swapchain {
+        //     for image in swaps.get_images()
+        //     {
+        //         let handle = resource_manager.register_image(image);
+        //         swapchain_handles.push(handle);
+        //     }
+        // }
+
         VulkanApp {
             window,
             debug_utils_loader,
@@ -152,10 +175,12 @@ impl VulkanApp {
 
             render_context,
             resource_manager,
+            ubo_pass,
             frame_graph,
             // ubo_pass,
             // transient_pass,
 
+            swapchain_handles,
             swapchain_framebuffers,
 
             // pipeline_layout,
@@ -207,25 +232,49 @@ impl VulkanApp {
 
         // let surface_extent = self.render_context.get_swapchain().as_ref().unwrap().get_extent();
         {
-            // let swapchain_handle = self.render_context.get_swapchain_handles()[image_index as usize];
-            // let ubo_pass = &self.ubo_pass.pass_node;
-            // let transient_pass = &self.transient_pass.pass_node;
-            let ubo_pass = UBOPass::new(&mut self.resource_manager);
-            // let transient_pass = TransientInputPass::new(
-            //     &mut self.render_context,
-            //     swapchain_handle,
-            //     ubo_pass.render_target);
-
-            // let mut frame_graph = FrameGraph::new();
-            self.frame_graph.start();
-            // frame_graph.add_node(&transient_pass.pass_node);
-            self.frame_graph.add_node(&ubo_pass.generate_pass(&mut self.resource_manager));
+            let swapchain_handle = self.swapchain_handles[image_index as usize];
+            let extent = self.render_context.get_swapchain().as_ref().unwrap().get_extent();
+            let blit_offsets = [glam::IVec2::new(0, 0), glam::IVec2::new(extent.width as i32, extent.height as i32)];
+            let (ubo_pass_node, ubo_render_target) = self.ubo_pass.generate_pass(&mut self.resource_manager, self.render_context.get_swapchain().as_ref().unwrap().get_extent());
+            self.frame_graph.start(blit::generate_pass(ubo_render_target, 0, swapchain_handle, 0, blit_offsets));
+            // self.frame_graph.add_node(ubo_pass_node);
             self.frame_graph.compile();
-
             self.frame_graph.end(
                 &mut self.resource_manager,
                 &mut self.render_context,
-                command_buffer);
+                &command_buffer);
+
+            let present_transition = {
+                let swapchain_image = self.render_context.get_swapchain().as_ref().unwrap().get_images()[image_index as usize].image;
+                let subresource_range = vk::ImageSubresourceRange::builder()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .layer_count(1)
+                    .base_array_layer(0)
+                    .level_count(1)
+                    .base_mip_level(0)
+                    .build();
+                vk::ImageMemoryBarrier::builder()
+                    .old_layout(vk::ImageLayout::UNDEFINED)
+                    .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+                    .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                    .dst_access_mask(vk::AccessFlags::NONE)
+                    .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .image(swapchain_image)
+                    .subresource_range(subresource_range)
+                    .build()
+            };
+
+            unsafe {
+                self.render_context.get_device().cmd_pipeline_barrier(
+                    command_buffer,
+                    vk::PipelineStageFlags::TRANSFER,
+                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    &[present_transition]);
+            }
         }
 
         unsafe {
@@ -272,16 +321,10 @@ impl VulkanApp {
 
         let swapchains = [self.render_context.get_swapchain().as_ref().unwrap().get()];
 
-        let present_info = vk::PresentInfoKHR {
-            s_type: vk::StructureType::PRESENT_INFO_KHR,
-            p_next: ptr::null(),
-            wait_semaphore_count: 1,
-            p_wait_semaphores: signal_semaphores.as_ptr(),
-            swapchain_count: 1,
-            p_swapchains: swapchains.as_ptr(),
-            p_image_indices: &image_index,
-            p_results: ptr::null_mut(),
-        };
+        let present_info = vk::PresentInfoKHR::builder()
+            .wait_semaphores(&signal_semaphores)
+            .swapchains(&swapchains)
+            .image_indices(std::slice::from_ref(&image_index));
 
         unsafe {
             self.render_context.get_swapchain().as_ref().unwrap().get_loader()

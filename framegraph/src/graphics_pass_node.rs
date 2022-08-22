@@ -11,7 +11,9 @@ use crate::pipeline::{PipelineDescription};
 type FillCallback = dyn (
     Fn(
         &VulkanRenderContext,
-        &VulkanCommandBuffer,
+        // &VulkanCommandBuffer,
+        &vk::CommandBuffer,
+        &ResolvedResourceMap,
         &ResolvedResourceMap,
         &ResolvedResourceMap
     )
@@ -38,7 +40,8 @@ pub struct PassNodeBuilder {
 
 impl PassNode for GraphicsPassNode  {
     type RC = VulkanRenderContext;
-    type CB = VulkanCommandBuffer;
+    // type CB = VulkanCommandBuffer;
+    type CB = vk::CommandBuffer;
     type PD = PipelineDescription;
 
     fn get_name(&self) -> &str {
@@ -64,13 +67,15 @@ impl PassNode for GraphicsPassNode  {
         render_context: &mut Self::RC,
         command_buffer: &Self::CB,
         resolved_inputs: &ResolvedResourceMap,
-        resolved_outputs: &ResolvedResourceMap)
+        resolved_outputs: &ResolvedResourceMap,
+        resolved_render_targets: &ResolvedResourceMap)
     {
         (self.fill_callback)(
             render_context,
             command_buffer,
             resolved_inputs,
-            resolved_outputs);
+            resolved_outputs,
+            resolved_render_targets);
     }
 
 }

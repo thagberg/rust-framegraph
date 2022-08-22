@@ -52,7 +52,7 @@ impl UBOPass {
         }
     }
 
-    pub fn generate_pass(&self, resource_manager: &mut VulkanResourceManager) -> GraphicsPassNode {
+    pub fn generate_pass(&self, resource_manager: &mut VulkanResourceManager, rendertarget_extent: vk::Extent2D) -> (GraphicsPassNode, ResourceHandle) {
 
         let vertex_input_state_create_info = vk::PipelineVertexInputStateCreateInfo {
             s_type: vk::StructureType::PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -80,8 +80,8 @@ impl UBOPass {
             RasterizationType::Standard,
             DepthStencilType::Disable,
             BlendType::None,
-            "hello-vert",
-            "hello-frag"
+            concat!(env!("OUT_DIR"), "/shaders/hello-vert.spv"),
+            concat!(env!("OUT_DIR"), "/shaders/hello-frag.spv")
         );
 
         let render_target = resource_manager.create_image_transient(
@@ -92,21 +92,26 @@ impl UBOPass {
                 // .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
                 .initial_layout(vk::ImageLayout::UNDEFINED)
                 .samples(vk::SampleCountFlags::TYPE_1)
-                .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT | vk::ImageUsageFlags::SAMPLED)
-                .extent(vk::Extent3D::builder().height(100).width(100).depth(1).build())
+                .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT | vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_SRC)
+                .extent(vk::Extent3D::builder()
+                    .height(rendertarget_extent.height)
+                    .width(rendertarget_extent.width)
+                    .depth(1)
+                    .build())
                 .mip_levels(1)
                 .array_layers(1)
                 .build());
 
-        GraphicsPassNode::builder("ubo_pass".to_string())
+        let passnode = GraphicsPassNode::builder("ubo_pass".to_string())
             .pipeline_description(pipeline_description)
             .read(self.uniform_buffer)
             .render_target(render_target)
             .fill_commands(Box::new(
                 move |render_ctx: &VulkanRenderContext,
-                      command_buffer: &VulkanCommandBuffer,
+                      command_buffer: &vk::CommandBuffer,
                       inputs: &ResolvedResourceMap,
-                      outputs: &ResolvedResourceMap|
+                      outputs: &ResolvedResourceMap,
+                      render_targets: &ResolvedResourceMap|
                     {
                         println!("I'm doing something!");
                         // let render_target = outputs.get(&render_target) .expect("No resolved render target");
@@ -241,6 +246,8 @@ impl UBOPass {
                     }
             ))
             .build()
-            .expect("Failed to create PassNode")
+            .expect("Failed to create PassNode");
+
+        return (passnode, render_target);
     }
 }

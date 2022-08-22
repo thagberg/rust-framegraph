@@ -98,3 +98,20 @@ Cached base on pipeline name?
 Inputs: rendertargets and read images
 Rendertargets always used, read images only if this is a subpass... Put this off for later probably
 Eventually can look for subpass candidates
+
+21 August 22 - Time to think about global resources and resource lifetimes
+Refcounted resources - how do we clean up the resource via Drop trait?
+	Need to free allocation on the Allocator
+	Need to destroy resource on the Device
+
+Transient resources
+	After frame submission, put all transient resources into deletion queue
+	Once we know the GPU is done, flush the deletion queue
+	
+Global resources
+	Owner registers the global resource with resource manager
+	Allocation is created
+	Owner tells resource manager to delete global resource
+	What if it doesn't?
+	How will the owner get a mutable ref to the resource manager when it needs to clean up?
+
