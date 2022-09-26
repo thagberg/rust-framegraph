@@ -51,9 +51,9 @@ pub fn generate_pass(
                             render_ctx.get_device().cmd_blit_image(
                                 *command_buffer,
                                 s.image,
-                                vk::ImageLayout::GENERAL,
+                                vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
                                 d.image,
-                                vk::ImageLayout::GENERAL,
+                                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                                 std::slice::from_ref(&blit_region),
                                 vk::Filter::LINEAR);
                         }

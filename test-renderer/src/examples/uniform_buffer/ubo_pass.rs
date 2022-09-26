@@ -90,7 +90,7 @@ impl UBOPass {
                 .format(vk::Format::R8G8B8A8_SRGB)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE)
                 // .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                .initial_layout(vk::ImageLayout::UNDEFINED)
+                .initial_layout(vk::ImageLayout::GENERAL)
                 .samples(vk::SampleCountFlags::TYPE_1)
                 .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT | vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_SRC)
                 .extent(vk::Extent3D::builder()

@@ -115,3 +115,10 @@ Global resources
 	What if it doesn't?
 	How will the owner get a mutable ref to the resource manager when it needs to clean up?
 
+02 September 22 - Considering additional PassNode resource types
+	Currently have Input, Output, RenderTarget
+	Add TransferSrc and TransferDst
+		This will support blits and copies without the pass needing to handle transitions
+	How will the framegraph know the previos resource state to transition from?
+		Resource manager could track current resource state
+		Or maybe just add this to the ResourceHandle?
