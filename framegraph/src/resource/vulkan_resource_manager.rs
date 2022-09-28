@@ -206,6 +206,7 @@ impl VulkanResourceManager {
 
     pub fn create_image_transient(
         &mut self,
+        name: &str,
         create_info: vk::ImageCreateInfo
     ) -> ResourceHandle
     {

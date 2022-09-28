@@ -85,6 +85,7 @@ impl UBOPass {
         );
 
         let render_target = resource_manager.create_image_transient(
+            "ubo_rendertarget",
             vk::ImageCreateInfo::builder()
                 .image_type(vk::ImageType::TYPE_2D)
                 .format(vk::Format::R8G8B8A8_SRGB)

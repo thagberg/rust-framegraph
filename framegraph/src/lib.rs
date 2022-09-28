@@ -121,7 +121,8 @@ mod tests
             render_context: &mut Self::RC,
             command_buffer: &Self::CB,
             resolved_inputs: &ResolvedResourceMap,
-            resolved_outputs: &ResolvedResourceMap) {
+            resolved_outputs: &ResolvedResourceMap,
+            resolved_render_targets: &ResolvedResourceMap) {
 
             (self.callback)(
                 render_context,

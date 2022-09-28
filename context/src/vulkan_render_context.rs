@@ -419,7 +419,8 @@ impl VulkanRenderContext {
         let physical_device = pick_physical_device(
     &instance_wrapper,
             &surface,
-            &[]).expect("Failed to select a suitable physical device.");
+            // &extensions).expect("Failed to select a suitable physical device.");
+        &[]).expect("Failed to select a suitable physical device.");
 
         let logical_device = create_logical_device(
             &instance_wrapper,
