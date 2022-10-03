@@ -27,9 +27,27 @@ impl PartialEq for ResourceHandle {
     }
 }
 
+pub struct ImageCreateInfo {
+    create_info: vk::ImageCreateInfo,
+    name: String
+}
+
+impl ImageCreateInfo {
+    pub fn new(create_info: vk::ImageCreateInfo, name: String) -> Self {
+        ImageCreateInfo {
+            create_info,
+            name
+        }
+    }
+
+    pub fn get_create_info(&self) -> &vk::ImageCreateInfo {
+        &self.create_info
+    }
+}
+
 pub enum ResourceCreateInfo {
     Buffer(vk::BufferCreateInfo),
-    Image(vk::ImageCreateInfo)
+    Image(ImageCreateInfo)
 }
 
 // #[derive(Clone, Copy)]
@@ -97,17 +115,18 @@ impl ResourceManager for VulkanResourceManager {
                     None => {
                         let transient = self.transient_resource_map.get(handle)
                             .expect("No transient resource found");
+
                         let resolved_resource: Option<ResolvedResource>;
-                        match transient.create_info {
+                        match &transient.create_info {
                             ResourceCreateInfo::Buffer(buffer_create) => {
-                                let resolved_buffer = self.create_resolved_buffer(&buffer_create);
+                                let resolved_buffer = self.create_resolved_buffer(buffer_create);
                                 resolved_resource = Some(ResolvedResource {
                                     handle: handle.clone(),
                                     resource: ResourceType::Buffer(resolved_buffer.buffer)
                                 });
                             },
                             ResourceCreateInfo::Image(image_create) => {
-                                let resolved_image = self.create_resolved_image(&image_create);
+                                let resolved_image = self.create_resolved_image(image_create);
                                 resolved_resource = Some(ResolvedResource {
                                     handle: handle.clone(),
                                     resource: ResourceType::Image(resolved_image.image)
@@ -206,8 +225,7 @@ impl VulkanResourceManager {
 
     pub fn create_image_transient(
         &mut self,
-        name: &str,
-        create_info: vk::ImageCreateInfo
+        create_info: ImageCreateInfo
     ) -> ResourceHandle
     {
         let ret_handle = ResourceHandle::Transient(self.next_handle);
@@ -223,7 +241,7 @@ impl VulkanResourceManager {
 
     fn create_resolved_image(
         &mut self,
-        create_info: &vk::ImageCreateInfo
+        create_info: &ImageCreateInfo
     ) -> ResolvedImage {
         self.create_image(create_info)
     }
@@ -289,12 +307,12 @@ impl VulkanResourceManager {
 
     fn create_image(
         &mut self,
-        create_info: &vk::ImageCreateInfo
+        create_info: &ImageCreateInfo
     ) -> ResolvedImage
     {
         let mut image_alloc: Allocation = Default::default();
         let image = self.device.create_image(
-            create_info,
+            &create_info.create_info,
             &mut |memory_requirements: vk::MemoryRequirements| -> (vk::DeviceMemory, vk::DeviceSize) {
                 unsafe {
                     image_alloc = self.allocator.allocate(&AllocationCreateDesc {

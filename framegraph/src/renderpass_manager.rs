@@ -48,10 +48,11 @@ impl RenderpassManager for VulkanRenderpassManager {
                     Some(create_info) => {
                         match create_info {
                             ResourceCreateInfo::Image(rt_description) => {
+                                let rt_create_info = rt_description.get_create_info();
                                 color_attachments.push(vk::AttachmentDescription::builder()
-                                    .format(rt_description.format)
-                                    .samples(rt_description.samples)
-                                    .initial_layout(rt_description.initial_layout)
+                                    .format(rt_create_info.format)
+                                    .samples(rt_create_info.samples)
+                                    .initial_layout(rt_create_info.initial_layout)
                                     .final_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)// TODO: this needs to be paramateried
                                     .load_op(vk::AttachmentLoadOp::CLEAR)
                                     .store_op(vk::AttachmentStoreOp::STORE)

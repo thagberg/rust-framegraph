@@ -6,7 +6,7 @@ use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
 use context::vulkan_render_context::VulkanRenderContext;
 
 use framegraph::graphics_pass_node::{GraphicsPassNode};
-use framegraph::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, VulkanResourceManager};
+use framegraph::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, VulkanResourceManager, ImageCreateInfo};
 use framegraph::pipeline::{PipelineDescription, RasterizationType, DepthStencilType, BlendType, Pipeline};
 
 pub struct OffsetUBO {
@@ -84,8 +84,8 @@ impl UBOPass {
             concat!(env!("OUT_DIR"), "/shaders/hello-frag.spv")
         );
 
-        let render_target = resource_manager.create_image_transient(
-            "ubo_rendertarget",
+        let handle = resource_manager.create_image_transient(
+            ImageCreateInfo::new(
             vk::ImageCreateInfo::builder()
                 .image_type(vk::ImageType::TYPE_2D)
                 .format(vk::Format::R8G8B8A8_SRGB)
@@ -101,7 +101,9 @@ impl UBOPass {
                     .build())
                 .mip_levels(1)
                 .array_layers(1)
-                .build());
+                .build(),
+                "ubo_rendertarget".to_string()));
+        let render_target = handle;
 
         let passnode = GraphicsPassNode::builder("ubo_pass".to_string())
             .pipeline_description(pipeline_description)
