@@ -102,6 +102,79 @@ impl ResolvedBuffer {
     pub fn get_allocation(&self) -> &Allocation { &self.allocation }
 }
 
+fn create_resolved_image(
+    allocator: &mut Allocator,
+    device: &DeviceWrapper,
+    create_info: &ImageCreateInfo) -> ResolvedImage {
+    create_image(allocator, device, create_info)
+}
+
+fn create_image(
+    allocator: &mut Allocator,
+    device: &DeviceWrapper,
+    create_info: &ImageCreateInfo) -> ResolvedImage
+{
+    let mut image_alloc: Allocation = Default::default();
+    let image = device.create_image(
+        &create_info.create_info,
+        &mut |memory_requirements: vk::MemoryRequirements| -> (vk::DeviceMemory, vk::DeviceSize) {
+            unsafe {
+                image_alloc = allocator.allocate(&AllocationCreateDesc {
+                    name: "Image allocation",
+                    requirements: memory_requirements,
+                    location: MemoryLocation::GpuOnly, // TODO: Parameterized eventually?
+                    linear: true // TODO: I think this is required for render targets?
+                }).expect("Failed to allocate memory for image");
+                (image_alloc.memory(), image_alloc.offset())
+            }
+        });
+
+    ResolvedImage {
+        image,
+        allocation: image_alloc
+    }
+}
+
+fn create_resolved_buffer(
+    allocator: &mut Allocator,
+    device: &DeviceWrapper,
+    create_info: &vk::BufferCreateInfo) -> ResolvedBuffer {
+    create_uniform_buffer(allocator, device, create_info)
+}
+
+fn create_uniform_buffer(
+    allocator: &mut Allocator,
+    device: &DeviceWrapper,
+    create_info: &vk::BufferCreateInfo) -> ResolvedBuffer {
+    let buffer = unsafe {
+        device.get().create_buffer(create_info, None)
+            .expect("Failed to create uniform buffer")
+    };
+    let requirements = unsafe {
+        device.get().get_buffer_memory_requirements(buffer)
+    };
+
+    let buffer_alloc = allocator.allocate(&AllocationCreateDesc {
+        name: "Uniform Buffer Allocation",
+        requirements: requirements,
+        location: MemoryLocation::CpuToGpu,
+        linear: true
+    }).expect("Failed to allocate memory for uniform buffer");
+
+    unsafe {
+        device.get().bind_buffer_memory(
+            buffer,
+            buffer_alloc.memory(),
+            buffer_alloc.offset())
+            .expect("Failed to bind uniform buffer to memory")
+    };
+
+    ResolvedBuffer {
+        buffer,
+        allocation: buffer_alloc
+    }
+}
+
 impl ResourceManager for VulkanResourceManager {
     fn resolve_resource(
         &mut self,
@@ -119,14 +192,14 @@ impl ResourceManager for VulkanResourceManager {
                         let resolved_resource: Option<ResolvedResource>;
                         match &transient.create_info {
                             ResourceCreateInfo::Buffer(buffer_create) => {
-                                let resolved_buffer = self.create_resolved_buffer(buffer_create);
+                                let resolved_buffer = create_resolved_buffer(&mut self.allocator, &self.device, buffer_create);
                                 resolved_resource = Some(ResolvedResource {
                                     handle: handle.clone(),
                                     resource: ResourceType::Buffer(resolved_buffer.buffer)
                                 });
                             },
                             ResourceCreateInfo::Image(image_create) => {
-                                let resolved_image = self.create_resolved_image(image_create);
+                                let resolved_image = create_resolved_image(&mut self.allocator, &self.device, image_create);
                                 resolved_resource = Some(ResolvedResource {
                                     handle: handle.clone(),
                                     resource: ResourceType::Image(resolved_image.image)
@@ -239,19 +312,6 @@ impl VulkanResourceManager {
         ret_handle
     }
 
-    fn create_resolved_image(
-        &mut self,
-        create_info: &ImageCreateInfo
-    ) -> ResolvedImage {
-        self.create_image(create_info)
-    }
-
-    fn create_resolved_buffer(
-        &mut self,
-        create_info: &vk::BufferCreateInfo
-    ) -> ResolvedBuffer {
-       self.create_uniform_buffer(create_info)
-    }
 
     pub fn create_buffer_persistent(
         &mut self,
@@ -260,7 +320,7 @@ impl VulkanResourceManager {
         let ret_handle = ResourceHandle::Persistent(self.next_handle);
         self.next_handle += 1;
 
-        let resolved_buffer = self.create_uniform_buffer(create_info);
+        let resolved_buffer = create_uniform_buffer(&mut self.allocator, &self.device, create_info);
 
         self.persistent_resource_map.insert(ret_handle, PersistentResource {
             handle: ret_handle,
@@ -305,31 +365,6 @@ impl VulkanResourceManager {
         }
     }
 
-    fn create_image(
-        &mut self,
-        create_info: &ImageCreateInfo
-    ) -> ResolvedImage
-    {
-        let mut image_alloc: Allocation = Default::default();
-        let image = self.device.create_image(
-            &create_info.create_info,
-            &mut |memory_requirements: vk::MemoryRequirements| -> (vk::DeviceMemory, vk::DeviceSize) {
-                unsafe {
-                    image_alloc = self.allocator.allocate(&AllocationCreateDesc {
-                        name: "Image allocation",
-                        requirements: memory_requirements,
-                        location: MemoryLocation::GpuOnly, // TODO: Parameterized eventually?
-                        linear: true // TODO: I think this is required for render targets?
-                    }).expect("Failed to allocate memory for image");
-                    (image_alloc.memory(), image_alloc.offset())
-                }
-        });
-
-        ResolvedImage {
-            image,
-            allocation: image_alloc
-        }
-    }
 
     pub fn register_image(
         &mut self,
@@ -349,37 +384,5 @@ impl VulkanResourceManager {
         ret_handle
     }
 
-    fn create_uniform_buffer(
-        &mut self,
-        create_info: &vk::BufferCreateInfo
-    ) -> ResolvedBuffer {
-        let buffer = unsafe {
-            self.device.get().create_buffer(create_info, None)
-                .expect("Failed to create uniform buffer")
-        };
-        let requirements = unsafe {
-            self.device.get().get_buffer_memory_requirements(buffer)
-        };
-
-        let buffer_alloc = self.allocator.allocate(&AllocationCreateDesc {
-            name: "Uniform Buffer Allocation",
-            requirements: requirements,
-            location: MemoryLocation::CpuToGpu,
-            linear: true
-        }).expect("Failed to allocate memory for uniform buffer");
-
-        unsafe {
-            self.device.get().bind_buffer_memory(
-                buffer,
-                buffer_alloc.memory(),
-                buffer_alloc.offset())
-                .expect("Failed to bind uniform buffer to memory")
-        };
-
-        ResolvedBuffer {
-            buffer,
-            allocation: buffer_alloc
-        }
-    }
 
 }
