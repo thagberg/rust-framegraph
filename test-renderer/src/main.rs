@@ -45,7 +45,7 @@ struct SyncObjects {
 
 struct VulkanApp {
     window: winit::window::Window,
-    debug_utils_loader: ash::extensions::ext::DebugUtils,
+    // debug_utils_loader: ash::extensions::ext::DebugUtils,
     debug_merssager: vk::DebugUtilsMessengerEXT,
 
     render_context: VulkanRenderContext,
@@ -97,6 +97,7 @@ impl VulkanApp {
         let render_context = VulkanRenderContext::new(
             entry,
             instance,
+            debug_utils_loader,
             Some(surface_wrapper),
             &window);
 
@@ -170,7 +171,7 @@ impl VulkanApp {
 
         VulkanApp {
             window,
-            debug_utils_loader,
+            // debug_utils_loader,
             debug_merssager,
 
             render_context,
@@ -473,10 +474,11 @@ impl Drop for VulkanApp {
             // device.destroy_device(None);
             // self.surface_loader.destroy_surface(self.surface, None);
 
-            if VALIDATION.is_enable {
-                self.debug_utils_loader
-                    .destroy_debug_utils_messenger(self.debug_merssager, None);
-            }
+            // if VALIDATION.is_enable {
+            //     self.debug_utils_loader
+            //         .destroy_debug_utils_messenger(self.debug_merssager, None);
+            // }
+
             // self.render_context.get_instance().destroy_instance(None);
             // self.instance.destroy_instance(None);
         }

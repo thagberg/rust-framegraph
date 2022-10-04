@@ -3,10 +3,11 @@ use core::ffi::c_void;
 use ash::vk;
 
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
+use context::api_types::image::ImageCreateInfo;
 use context::vulkan_render_context::VulkanRenderContext;
 
 use framegraph::graphics_pass_node::{GraphicsPassNode};
-use framegraph::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, VulkanResourceManager, ImageCreateInfo};
+use framegraph::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, VulkanResourceManager};
 use framegraph::pipeline::{PipelineDescription, RasterizationType, DepthStencilType, BlendType, Pipeline};
 
 pub struct OffsetUBO {

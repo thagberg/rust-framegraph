@@ -4,6 +4,7 @@ use std::os::raw::c_char;
 use std::rc::Rc;
 use ash::vk;
 use ash::vk::PresentModeKHR;
+use ash::extensions::ext::DebugUtils;
 
 use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper, DeviceWrapper};
 use crate::api_types::swapchain::SwapchainWrapper;
@@ -169,6 +170,7 @@ fn pick_physical_device(
 
 fn create_logical_device(
     instance: &InstanceWrapper,
+    debug_utils: DebugUtils,
     physical_device: &PhysicalDeviceWrapper,
     surface: &Option<SurfaceWrapper>,
     layers: Vec<&str>,
@@ -246,7 +248,7 @@ fn create_logical_device(
             .expect("Failed to create logical device.")
     };
 
-    DeviceWrapper::new(device, queue_family_indices)
+    DeviceWrapper::new(device, debug_utils, queue_family_indices)
 }
 
 fn create_command_pool(
@@ -408,6 +410,7 @@ impl VulkanRenderContext {
     pub fn new(
         entry: ash::Entry,
         instance: ash::Instance,
+        debug_utils: DebugUtils,
         surface: Option<SurfaceWrapper>,
         window: &winit::window::Window
     ) -> VulkanRenderContext {
@@ -424,6 +427,7 @@ impl VulkanRenderContext {
 
         let logical_device = create_logical_device(
             &instance_wrapper,
+            debug_utils,
             &physical_device,
             &surface,
             layers,

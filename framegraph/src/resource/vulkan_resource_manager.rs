@@ -7,7 +7,7 @@ use gpu_allocator::MemoryLocation;
 
 extern crate context;
 use context::api_types::device::{PhysicalDeviceWrapper, DeviceWrapper};
-use context::api_types::image::ImageWrapper;
+use context::api_types::image::{ImageCreateInfo, ImageWrapper};
 
 use crate::resource::resource_manager::{ResourceManager};
 
@@ -27,23 +27,6 @@ impl PartialEq for ResourceHandle {
     }
 }
 
-pub struct ImageCreateInfo {
-    create_info: vk::ImageCreateInfo,
-    name: String
-}
-
-impl ImageCreateInfo {
-    pub fn new(create_info: vk::ImageCreateInfo, name: String) -> Self {
-        ImageCreateInfo {
-            create_info,
-            name
-        }
-    }
-
-    pub fn get_create_info(&self) -> &vk::ImageCreateInfo {
-        &self.create_info
-    }
-}
 
 pub enum ResourceCreateInfo {
     Buffer(vk::BufferCreateInfo),
@@ -116,7 +99,7 @@ fn create_image(
 {
     let mut image_alloc: Allocation = Default::default();
     let image = device.create_image(
-        &create_info.create_info,
+        create_info,
         &mut |memory_requirements: vk::MemoryRequirements| -> (vk::DeviceMemory, vk::DeviceSize) {
             unsafe {
                 image_alloc = allocator.allocate(&AllocationCreateDesc {

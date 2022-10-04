@@ -1,5 +1,8 @@
+use std::ffi::{CStr, CString};
 use ash::vk;
-use crate::api_types::image::ImageWrapper;
+use ash::extensions::ext::DebugUtils;
+use ash::vk::{DebugUtilsObjectNameInfoEXT, Handle};
+use crate::api_types::image::{ImageWrapper, ImageCreateInfo};
 
 #[derive(Copy, Clone)]
 pub struct QueueFamilies {
@@ -31,6 +34,7 @@ impl PhysicalDeviceWrapper {
 
 pub struct DeviceWrapper {
     device: ash::Device,
+    debug_utils: DebugUtils,
     queue_family_indices: QueueFamilies
 }
 
@@ -43,9 +47,10 @@ impl Drop for DeviceWrapper {
 }
 
 impl DeviceWrapper {
-    pub fn new(device: ash::Device, queue_family_indices: QueueFamilies) -> DeviceWrapper {
+    pub fn new(device: ash::Device, debug_utils: DebugUtils, queue_family_indices: QueueFamilies) -> DeviceWrapper {
         DeviceWrapper {
             device,
+            debug_utils,
             queue_family_indices
         }
     }
@@ -92,13 +97,13 @@ impl DeviceWrapper {
 
     pub fn create_image(
         &self,
-        create_info: &vk::ImageCreateInfo,
+        create_info: &ImageCreateInfo,
         bind_callback: &mut dyn FnMut(vk::MemoryRequirements) -> (vk::DeviceMemory, vk::DeviceSize)) -> ImageWrapper
     {
 
         let image_wrapper = {
             let image = unsafe {
-                self.device.create_image(create_info, None)
+                self.device.create_image(create_info.get_create_info(), None)
                     .expect("Failed to create image")
             };
 
@@ -120,6 +125,20 @@ impl DeviceWrapper {
                 1);
             ImageWrapper::new(image, image_view)
         };
+
+        {
+            let c_name = CString::new(create_info.get_name())
+                .expect("Failed to create C-name for debug object");
+            let debug_info = DebugUtilsObjectNameInfoEXT::builder()
+                .object_type(vk::ObjectType::IMAGE)
+                .object_handle(image_wrapper.image.as_raw())
+                .object_name(&c_name)
+                .build();
+            unsafe {
+                self.debug_utils.debug_utils_set_object_name(self.device.handle(), &debug_info)
+                    .expect("Failed to set debug object name");
+            }
+        }
 
         image_wrapper
     }
