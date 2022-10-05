@@ -8,6 +8,7 @@ use gpu_allocator::MemoryLocation;
 extern crate context;
 use context::api_types::device::{PhysicalDeviceWrapper, DeviceWrapper};
 use context::api_types::image::{ImageCreateInfo, ImageWrapper};
+use context::api_types::buffer::{BufferCreateInfo, BufferWrapper};
 
 use crate::resource::resource_manager::{ResourceManager};
 
@@ -29,14 +30,14 @@ impl PartialEq for ResourceHandle {
 
 
 pub enum ResourceCreateInfo {
-    Buffer(vk::BufferCreateInfo),
+    Buffer(BufferCreateInfo),
     Image(ImageCreateInfo)
 }
 
 // #[derive(Clone, Copy)]
 #[derive(Clone)]
 pub enum ResourceType {
-    Buffer(vk::Buffer),
+    Buffer(BufferWrapper),
     Image(ImageWrapper)
 }
 
@@ -59,7 +60,7 @@ pub struct ResolvedResource {
 }
 
 pub struct ResolvedBuffer {
-    buffer: vk::Buffer,
+    buffer: BufferWrapper,
     allocation: Allocation
 }
 
@@ -78,11 +79,6 @@ pub struct VulkanResourceManager {
     persistent_resource_map: HashMap<ResourceHandle, PersistentResource>,
     // device: &'a DeviceWrapper
     device: Rc<DeviceWrapper>
-}
-
-impl ResolvedBuffer {
-    pub fn get(&self) -> vk::Buffer { self.buffer }
-    pub fn get_allocation(&self) -> &Allocation { &self.allocation }
 }
 
 fn create_resolved_image(
@@ -121,36 +117,30 @@ fn create_image(
 fn create_resolved_buffer(
     allocator: &mut Allocator,
     device: &DeviceWrapper,
-    create_info: &vk::BufferCreateInfo) -> ResolvedBuffer {
+    create_info: &BufferCreateInfo) -> ResolvedBuffer {
     create_uniform_buffer(allocator, device, create_info)
 }
 
 fn create_uniform_buffer(
     allocator: &mut Allocator,
     device: &DeviceWrapper,
-    create_info: &vk::BufferCreateInfo) -> ResolvedBuffer {
-    let buffer = unsafe {
-        device.get().create_buffer(create_info, None)
-            .expect("Failed to create uniform buffer")
-    };
-    let requirements = unsafe {
-        device.get().get_buffer_memory_requirements(buffer)
-    };
+    create_info: &BufferCreateInfo) -> ResolvedBuffer {
 
-    let buffer_alloc = allocator.allocate(&AllocationCreateDesc {
-        name: "Uniform Buffer Allocation",
-        requirements: requirements,
-        location: MemoryLocation::CpuToGpu,
-        linear: true
-    }).expect("Failed to allocate memory for uniform buffer");
-
-    unsafe {
-        device.get().bind_buffer_memory(
-            buffer,
-            buffer_alloc.memory(),
-            buffer_alloc.offset())
-            .expect("Failed to bind uniform buffer to memory")
-    };
+    let mut buffer_alloc: Allocation = Default::default();
+    let buffer = device.create_buffer(
+        create_info,
+        &mut |memory_requirements: vk::MemoryRequirements| -> (vk::DeviceMemory, vk::DeviceSize) {
+            unsafe {
+                buffer_alloc = allocator.allocate(&AllocationCreateDesc {
+                    name: "Uniform Buffer Allocation", // TODO: use the create_info name here?
+                    requirements: memory_requirements,
+                    location: MemoryLocation::CpuToGpu, // TODO: should definitely parameterize this
+                    linear: true
+                }).expect("Failed to allocate memory for buffer");
+                (buffer_alloc.memory(), buffer_alloc.offset())
+            }
+        }
+    );
 
     ResolvedBuffer {
         buffer,
@@ -266,7 +256,7 @@ impl VulkanResourceManager {
 
     pub fn create_buffer_transient(
         &mut self,
-        create_info: vk::BufferCreateInfo
+        create_info: BufferCreateInfo
     ) -> ResourceHandle {
         let ret_handle = ResourceHandle::Transient(self.next_handle);
         self.next_handle += 1;
@@ -298,12 +288,12 @@ impl VulkanResourceManager {
 
     pub fn create_buffer_persistent(
         &mut self,
-        create_info: &vk::BufferCreateInfo
+        create_info: BufferCreateInfo
     ) -> ResourceHandle {
         let ret_handle = ResourceHandle::Persistent(self.next_handle);
         self.next_handle += 1;
 
-        let resolved_buffer = create_uniform_buffer(&mut self.allocator, &self.device, create_info);
+        let resolved_buffer = create_uniform_buffer(&mut self.allocator, &self.device, &create_info);
 
         self.persistent_resource_map.insert(ret_handle, PersistentResource {
             handle: ret_handle,

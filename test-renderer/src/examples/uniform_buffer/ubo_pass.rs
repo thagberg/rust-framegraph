@@ -4,6 +4,7 @@ use ash::vk;
 
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
 use context::api_types::image::ImageCreateInfo;
+use context::api_types::buffer::BufferCreateInfo;
 use context::vulkan_render_context::VulkanRenderContext;
 
 use framegraph::graphics_pass_node::{GraphicsPassNode};
@@ -34,7 +35,9 @@ impl UBOPass {
             ..Default::default()
         };
 
-        let uniform_buffer = resource_manager.create_buffer_persistent(&ubo_create_info);
+        let uniform_buffer = resource_manager.create_buffer_persistent(
+            BufferCreateInfo::new(ubo_create_info,
+                "ubo_persistent_buffer".to_string()));
         let ubo_value = OffsetUBO {
             offset: [0.2, 0.1, 0.0]
         };

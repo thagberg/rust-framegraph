@@ -3,6 +3,7 @@ use ash::vk;
 use ash::extensions::ext::DebugUtils;
 use ash::vk::{DebugUtilsObjectNameInfoEXT, Handle};
 use crate::api_types::image::{ImageWrapper, ImageCreateInfo};
+use crate::api_types::buffer::{BufferWrapper, BufferCreateInfo};
 
 #[derive(Copy, Clone)]
 pub struct QueueFamilies {
@@ -141,5 +142,27 @@ impl DeviceWrapper {
         }
 
         image_wrapper
+    }
+
+    pub fn create_buffer(
+        &self,
+        create_info: &BufferCreateInfo,
+        bind_callback: &mut dyn FnMut(vk::MemoryRequirements) -> (vk::DeviceMemory, vk::DeviceSize)) -> BufferWrapper {
+
+        let buffer = unsafe {
+            self.device.create_buffer(create_info.get_create_info(), None)
+                .expect("Failed to create uniform buffer")
+        };
+        let requirements = unsafe {
+            self.device.get_buffer_memory_requirements(buffer)
+        };
+
+        let (memory, offset) = bind_callback(requirements);
+        unsafe {
+            self.device.bind_buffer_memory( buffer, memory, offset)
+                .expect("Failed to bind buffer to memory");
+        }
+
+        BufferWrapper::new(buffer)
     }
 }
