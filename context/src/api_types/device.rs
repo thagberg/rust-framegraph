@@ -99,7 +99,7 @@ impl DeviceWrapper {
     pub fn create_image(
         &self,
         create_info: &ImageCreateInfo,
-        bind_callback: &mut dyn FnMut(vk::MemoryRequirements) -> (vk::DeviceMemory, vk::DeviceSize)) -> ImageWrapper
+        allocate_callback: &mut dyn FnMut(vk::MemoryRequirements) -> (vk::DeviceMemory, vk::DeviceSize)) -> ImageWrapper
     {
 
         let image_wrapper = {
@@ -112,7 +112,7 @@ impl DeviceWrapper {
                 self.device.get_image_memory_requirements(image)
             };
 
-            let (memory, offset) = bind_callback(memory_requirements);
+            let (memory, offset) = allocate_callback(memory_requirements);
             unsafe {
                 self.device.bind_image_memory(image, memory, offset)
                     .expect("Failed to bind image to memory");
@@ -147,7 +147,7 @@ impl DeviceWrapper {
     pub fn create_buffer(
         &self,
         create_info: &BufferCreateInfo,
-        bind_callback: &mut dyn FnMut(vk::MemoryRequirements) -> (vk::DeviceMemory, vk::DeviceSize)) -> BufferWrapper {
+        allocate_callback: &mut dyn FnMut(vk::MemoryRequirements) -> (vk::DeviceMemory, vk::DeviceSize)) -> BufferWrapper {
 
         let buffer = unsafe {
             self.device.create_buffer(create_info.get_create_info(), None)
@@ -157,7 +157,7 @@ impl DeviceWrapper {
             self.device.get_buffer_memory_requirements(buffer)
         };
 
-        let (memory, offset) = bind_callback(requirements);
+        let (memory, offset) = allocate_callback(requirements);
         unsafe {
             self.device.bind_buffer_memory( buffer, memory, offset)
                 .expect("Failed to bind buffer to memory");
