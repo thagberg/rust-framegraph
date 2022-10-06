@@ -381,7 +381,8 @@ fn create_swapchain(
                         swapchain_format.format,
                         vk::ImageViewCreateFlags::empty(),
                         vk::ImageAspectFlags::COLOR,
-                        1))
+                        1),
+                        vk::ImageLayout::UNDEFINED)
             })
             .collect()
     };

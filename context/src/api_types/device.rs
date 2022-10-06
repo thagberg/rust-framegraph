@@ -144,7 +144,7 @@ impl DeviceWrapper {
                 vk::ImageViewCreateFlags::empty(),
                 vk::ImageAspectFlags::COLOR,
                 1);
-            ImageWrapper::new(image, image_view)
+            ImageWrapper::new(image, image_view, create_info.get_create_info().initial_layout)
         };
 
         self.set_image_name(&image_wrapper, create_info.get_name());

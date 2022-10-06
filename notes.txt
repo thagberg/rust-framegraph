@@ -122,3 +122,16 @@ Global resources
 	How will the framegraph know the previos resource state to transition from?
 		Resource manager could track current resource state
 		Or maybe just add this to the ResourceHandle?
+
+06 October 22 - Current Layout is added to ImageWrapper
+	Next, framegraph should use this to handle layout transitions between nodes
+	Add copy src/dst inputs to PassNode
+	Framegraph can then use those to perform the correct transition in a pipeline barrier
+	Example of copy:
+		Blit specifies a texture as a CopySrc and swapchain image as CopyDst
+		Framegraph uses texture's current layout -> TRANSFER_SRC
+		Framegraph uses swapchain image's current layout -> TRANSFER_DST
+	Example of read after write on image:
+		Pass specifies a texture as an read dependency and a rendertarget as a write dependency
+		Texture current layout -> READ_ONLY_OPTIMAL
+		Rendertarget current layout -> COLOR_ATTACHMENT_OPTIMAL	

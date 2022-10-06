@@ -25,14 +25,16 @@ impl ImageCreateInfo {
 #[derive(Clone)]
 pub struct ImageWrapper {
     pub image: vk::Image,
-    pub view: vk::ImageView
+    pub view: vk::ImageView,
+    pub layout: vk::ImageLayout
 }
 
 impl ImageWrapper {
-    pub fn new(image: vk::Image, view: vk::ImageView) -> ImageWrapper {
+    pub fn new(image: vk::Image, view: vk::ImageView, layout: vk::ImageLayout) -> ImageWrapper {
         ImageWrapper {
             image,
-            view: view
+            view,
+            layout
         }
     }
 
