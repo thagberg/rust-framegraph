@@ -96,6 +96,26 @@ impl DeviceWrapper {
         }
     }
 
+    fn set_debug_name(&self, object_type: vk::ObjectType, handle: u64, name: &str)
+    {
+        let c_name = CString::new(name)
+            .expect("Failed to create C-name for debug object");
+        let debug_info = DebugUtilsObjectNameInfoEXT::builder()
+            .object_type(object_type)
+            .object_handle(handle)
+            .object_name(&c_name)
+            .build();
+        unsafe {
+            self.debug_utils.debug_utils_set_object_name(self.device.handle(), &debug_info)
+                .expect("Failed to set debug object name");
+        }
+    }
+
+    pub fn set_image_name(&self, image: &ImageWrapper, name: &str)
+    {
+        self.set_debug_name(vk::ObjectType::IMAGE, image.get().as_raw(), name);
+    }
+
     pub fn create_image(
         &self,
         create_info: &ImageCreateInfo,
@@ -127,21 +147,14 @@ impl DeviceWrapper {
             ImageWrapper::new(image, image_view)
         };
 
-        {
-            let c_name = CString::new(create_info.get_name())
-                .expect("Failed to create C-name for debug object");
-            let debug_info = DebugUtilsObjectNameInfoEXT::builder()
-                .object_type(vk::ObjectType::IMAGE)
-                .object_handle(image_wrapper.image.as_raw())
-                .object_name(&c_name)
-                .build();
-            unsafe {
-                self.debug_utils.debug_utils_set_object_name(self.device.handle(), &debug_info)
-                    .expect("Failed to set debug object name");
-            }
-        }
+        self.set_image_name(&image_wrapper, create_info.get_name());
 
         image_wrapper
+    }
+
+    pub fn set_buffer_name(&self, buffer: &BufferWrapper, name: &str)
+    {
+        self.set_debug_name(vk::ObjectType::BUFFER, buffer.get().as_raw(), name);
     }
 
     pub fn create_buffer(
@@ -163,6 +176,10 @@ impl DeviceWrapper {
                 .expect("Failed to bind buffer to memory");
         }
 
-        BufferWrapper::new(buffer)
+        let buffer_wrapper = BufferWrapper::new(buffer);
+
+        self.set_buffer_name(&buffer_wrapper, create_info.get_name());
+
+        buffer_wrapper
     }
 }

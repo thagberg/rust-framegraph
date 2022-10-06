@@ -341,7 +341,8 @@ impl VulkanResourceManager {
 
     pub fn register_image(
         &mut self,
-        image: &ImageWrapper
+        image: &ImageWrapper,
+        name: &str
     ) -> ResourceHandle
     {
         let ret_handle = ResourceHandle::Persistent(self.next_handle);
@@ -353,6 +354,8 @@ impl VulkanResourceManager {
             // allocation: resolved_buffer.allocation
             allocation: Allocation::default() // TODO: this is really dumb and bad
         });
+
+        self.device.set_image_name(image, name);
 
         ret_handle
     }

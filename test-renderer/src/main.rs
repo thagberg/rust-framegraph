@@ -153,12 +153,13 @@ impl VulkanApp {
 
         // cleanup(); the 'drop' function will take care of it.
 
-        let swapchain_handles = {
-            render_context.get_swapchain().as_ref().unwrap().get_images().into_iter().map(
-                |i| {
-                    resource_manager.register_image(i)
-            }).collect()
-        };
+        let mut swapchain_handles: Vec<ResourceHandle> = Vec::new();
+        if let Some(swapchain) = render_context.get_swapchain().as_ref() {
+            for (index, image) in swapchain.get_images().into_iter().enumerate() {
+               let handle = resource_manager.register_image(image, &format!("Swapchain{}", index));
+                swapchain_handles.push(handle);
+            }
+        }
 
         // let mut swapchain_handles = vec![];
         // if let Some(swaps) = &swapchain {
