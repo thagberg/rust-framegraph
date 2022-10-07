@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use ash::vk;
 use spirv_reflect::types::descriptor::{ReflectDescriptorType};
 
+use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 
 #[derive(Clone)]

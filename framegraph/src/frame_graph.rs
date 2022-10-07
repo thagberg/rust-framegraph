@@ -12,7 +12,7 @@ use crate::pass_node::PassNode;
 // use crate::pass_node::{GraphicsPassNode};
 use crate::pipeline::{PipelineManager, VulkanPipelineManager};
 use crate::resource::resource_manager::ResourceManager;
-use crate::resource::vulkan_resource_manager::{ResolvedResourceMap, ResourceHandle};
+use crate::resource::vulkan_resource_manager::{ResolvedResourceMap, ResourceHandle, ResourceType};
 use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager};
 
 use std::collections::HashMap;
@@ -231,6 +231,19 @@ impl<PN, RPM, PM> FrameGraph<PN, RPM, PM>
                     let resolved_render_targets = resolve_resource_type(render_targets);
                     let resolved_copy_sources = resolve_resource_type(copy_sources);
                     let resolved_copy_dests = resolve_resource_type(copy_dests);
+
+                    let image_memory_barriers: Vec<vk::ImageMemoryBarrier> = Vec::new();
+                    for (handle, resource) in &resolved_copy_sources {
+                        if let ResourceType::Image(image) = &resource.resource {
+                            let barier = vk::ImageMemoryBarrier::builder()
+                                .image(image.image)
+                                .old_layout(image.layout)
+                                .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                                .src_access_mask(vk::AccessFlags::TRANSFER_READ)
+                                .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                        }
+                    }
+
 
                     if let Some(pipeline_description) = node.get_pipeline_description() {
                         let renderpass = self.renderpass_manager.create_or_fetch_renderpass(

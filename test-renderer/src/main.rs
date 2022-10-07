@@ -14,6 +14,7 @@ use std::ptr;
 
 extern crate framegraph;
 extern crate context;
+use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use context::api_types::surface::SurfaceWrapper;
 use context::api_types::swapchain::SwapchainWrapper;

@@ -2,6 +2,7 @@ use ash::vk;
 use glam::IVec2;
 
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
+use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, ResourceType};
 use framegraph::graphics_pass_node::GraphicsPassNode;
@@ -14,8 +15,8 @@ pub fn generate_pass(
     offsets: [IVec2; 2]) -> GraphicsPassNode {
 
     GraphicsPassNode::builder("blit".to_string())
-        .read(source)
-        .render_target(dest)
+        .copy_src(source)
+        .copy_dst(dest)
         .fill_commands(Box::new(
             move |render_ctx: &VulkanRenderContext,
                     command_buffer: &vk::CommandBuffer,
@@ -26,8 +27,8 @@ pub fn generate_pass(
                     resolved_copy_dests: &ResolvedResourceMap| {
 
                 println!("Performing blit");
-                let dest_resolved = render_targets.get(&dest).expect("No blit destination");
-                let source_resolved = inputs.get(&source).expect("No blit source");
+                let dest_resolved = resolved_copy_dests.get(&dest).expect("No blit destination");
+                let source_resolved = resolved_copy_sources.get(&source).expect("No blit source");
                 match (&dest_resolved.resource, &source_resolved.resource) {
                     (ResourceType::Image(d), ResourceType::Image(s)) => {
                         unsafe {
@@ -53,9 +54,9 @@ pub fn generate_pass(
                             render_ctx.get_device().cmd_blit_image(
                                 *command_buffer,
                                 s.image,
-                                vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                                s.layout,
                                 d.image,
-                                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                                d.layout,
                                 std::slice::from_ref(&blit_region),
                                 vk::Filter::LINEAR);
                         }

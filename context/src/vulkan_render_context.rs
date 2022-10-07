@@ -2,7 +2,7 @@ use std::ffi::CStr;
 use std::ffi::CString;
 use std::os::raw::c_char;
 use std::rc::Rc;
-use ash::vk;
+use ash::{Device, vk};
 use ash::vk::PresentModeKHR;
 use ash::extensions::ext::DebugUtils;
 
@@ -405,6 +405,9 @@ impl RenderContext for VulkanRenderContext {
                 .expect("Failed to create renderpass")
         }
     }
+
+    fn get_device(&self) -> &Device { &self.device.get() }
+
 }
 
 impl VulkanRenderContext {
@@ -528,8 +531,6 @@ impl VulkanRenderContext {
 
     // pub fn get_device_wrapper(&self) -> &DeviceWrapper { &self.device }
     pub fn get_device_wrapper(&self) -> Rc<DeviceWrapper> { Rc::clone(&self.device) }
-
-    pub fn get_device(&self) -> &ash::Device { &self.device.get() }
 
     pub fn get_physical_device(&self) -> &PhysicalDeviceWrapper { &self.physical_device }
 
