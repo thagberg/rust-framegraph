@@ -28,5 +28,7 @@ pub trait PassNode {
         command_buffer: &Self::CB,
         resolved_inputs: &ResolvedResourceMap,
         resolved_outputs: &ResolvedResourceMap,
-        resolved_render_targets: &ResolvedResourceMap);
+        resolved_render_targets: &ResolvedResourceMap,
+        resolved_copy_sources: &ResolvedResourceMap,
+        resolved_copy_dests: &ResolvedResourceMap);
 }

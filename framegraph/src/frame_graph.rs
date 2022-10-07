@@ -190,6 +190,13 @@ impl<PN, RPM, PM> FrameGraph<PN, RPM, PM>
         self.compiled = true;
     }
 
+    // fn resolve_resource_type(resource_manager: &mut ResourceManager, resources: &[ResourceHandle], resolved_map: &mut ResolvedResourceMap) {
+    //     for resource in resources {
+    //         let resolved = resource_manager.resolve_resource(resource);
+    //         resolved_map.insert(*resource, resolved.clone());
+    //     }
+    // }
+
     pub fn end(
         &mut self,
         resource_manager: &mut <RPM as RenderpassManager>::RM,
@@ -204,24 +211,26 @@ impl<PN, RPM, PM> FrameGraph<PN, RPM, PM>
                 for index in indices {
                     let node = self.nodes.node_weight(*index).unwrap();
 
-                    let mut resolved_inputs = ResolvedResourceMap::new();
-                    let mut resolved_outputs = ResolvedResourceMap::new();
-                    let mut resolved_render_targets = ResolvedResourceMap::new();
-                    let inputs = node.get_inputs().as_ref();
-                    let outputs = node.get_outputs().as_ref();
-                    let render_targets = node.get_rendertargets().as_ref();
-                    for input in inputs {
-                        let resolved = resource_manager.resolve_resource(input);
-                        resolved_inputs.insert(input.clone(), resolved.clone());
-                    }
-                    for output in outputs {
-                        let resolved = resource_manager.resolve_resource(output);
-                        resolved_outputs.insert(output.clone(), resolved.clone());
-                    }
-                    for render_target in render_targets {
-                        let resolved = resource_manager.resolve_resource(render_target);
-                        resolved_render_targets.insert(*render_target, resolved.clone());
-                    }
+                    let inputs = node.get_inputs();
+                    let outputs = node.get_outputs();
+                    let render_targets = node.get_rendertargets();
+                    let copy_sources = node.get_copy_sources();
+                    let copy_dests = node.get_copy_dests();
+
+                    let mut resolve_resource_type = | resources: &[ResourceHandle] | -> ResolvedResourceMap {
+                        let mut resolved_map = ResolvedResourceMap::new();
+                        for resource in resources {
+                            let resolved = resource_manager.resolve_resource(resource);
+                            resolved_map.insert(*resource, resolved.clone());
+                        }
+                        resolved_map
+                    };
+
+                    let resolved_inputs = resolve_resource_type(inputs);
+                    let resolved_outputs = resolve_resource_type(outputs);
+                    let resolved_render_targets = resolve_resource_type(render_targets);
+                    let resolved_copy_sources = resolve_resource_type(copy_sources);
+                    let resolved_copy_dests = resolve_resource_type(copy_dests);
 
                     if let Some(pipeline_description) = node.get_pipeline_description() {
                         let renderpass = self.renderpass_manager.create_or_fetch_renderpass(
@@ -237,7 +246,9 @@ impl<PN, RPM, PM> FrameGraph<PN, RPM, PM>
                         command_buffer,
                         &resolved_inputs,
                         &resolved_outputs,
-                        &resolved_render_targets);
+                        &resolved_render_targets,
+                        &resolved_copy_sources,
+                        &resolved_copy_dests);
                 }
             },
             _ => {

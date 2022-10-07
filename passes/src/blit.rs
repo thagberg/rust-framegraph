@@ -21,7 +21,9 @@ pub fn generate_pass(
                     command_buffer: &vk::CommandBuffer,
                     inputs: &ResolvedResourceMap,
                     outputs: &ResolvedResourceMap,
-                    render_targets: &ResolvedResourceMap| {
+                    render_targets: &ResolvedResourceMap,
+                    resolved_copy_sources: &ResolvedResourceMap,
+                    resolved_copy_dests: &ResolvedResourceMap| {
 
                 println!("Performing blit");
                 let dest_resolved = render_targets.get(&dest).expect("No blit destination");

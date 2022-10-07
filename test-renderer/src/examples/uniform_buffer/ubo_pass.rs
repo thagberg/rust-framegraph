@@ -118,7 +118,9 @@ impl UBOPass {
                       command_buffer: &vk::CommandBuffer,
                       inputs: &ResolvedResourceMap,
                       outputs: &ResolvedResourceMap,
-                      render_targets: &ResolvedResourceMap|
+                      render_targets: &ResolvedResourceMap,
+                      resolved_copy_sources: &ResolvedResourceMap,
+                      resolved_copy_dests: &ResolvedResourceMap|
                     {
                         println!("I'm doing something!");
                         // let render_target = outputs.get(&render_target) .expect("No resolved render target");
