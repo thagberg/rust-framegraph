@@ -1,12 +1,13 @@
 use ash::vk;
 
-pub mod frame_graph;
 pub mod resource;
 pub mod pipeline;
 pub mod shader;
 pub mod pass_node;
 pub mod graphics_pass_node;
 pub mod renderpass_manager;
+pub mod frame_graph;
+pub mod vulkan_frame_graph;
 
 #[cfg(test)]
 mod tests
@@ -18,7 +19,7 @@ mod tests
     use crate::resource::resource_manager::ResourceManager;
     use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, ResolvedResource, ResourceType, ResourceCreateInfo};
     use crate::pass_node::PassNode;
-    use crate::frame_graph::FrameGraph;
+    use crate::vulkan_frame_graph::VulkanFrameGraph;
     use crate::pipeline::PipelineManager;
     use crate::renderpass_manager::RenderpassManager;
 
@@ -211,7 +212,7 @@ mod tests
         let mut rm = MockResourceManager{};
         let rpm = MockRenderpassManager::new();
         let pm = MockPipelineManager::new();
-        let mut frame_graph : FrameGraph<MockPassNode, MockRenderpassManager, MockPipelineManager> = FrameGraph::new(rpm, pm);
+        let mut frame_graph : VulkanFrameGraph<MockPassNode, MockRenderpassManager, MockPipelineManager> = VulkanFrameGraph::new(rpm, pm);
         let resource_one = ResourceHandle::Transient(0);
         let resource_two = ResourceHandle::Transient(1);
         let resource_three = ResourceHandle::Transient(2);

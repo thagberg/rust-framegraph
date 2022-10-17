@@ -25,6 +25,7 @@ use framegraph::resource::vulkan_resource_manager::{ResourceHandle, VulkanResour
 use framegraph::shader::ShaderManager;
 use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::frame_graph::FrameGraph;
+use framegraph::vulkan_frame_graph::VulkanFrameGraph;
 use framegraph::renderpass_manager::VulkanRenderpassManager;
 use framegraph::pipeline::VulkanPipelineManager;
 use passes::blit;
@@ -53,7 +54,7 @@ struct VulkanApp {
     resource_manager: VulkanResourceManager,
 
     ubo_pass: UBOPass,
-    frame_graph: FrameGraph<GraphicsPassNode, VulkanRenderpassManager, VulkanPipelineManager>,
+    frame_graph: VulkanFrameGraph,
     // ubo_pass: UBOPass,
     // transient_pass: TransientInputPass,
 
@@ -141,7 +142,7 @@ impl VulkanApp {
 
         let ubo_pass = UBOPass::new(&mut resource_manager);
 
-        let frame_graph = FrameGraph::new(VulkanRenderpassManager::new(), pipeline_manager);
+        let frame_graph = VulkanFrameGraph::new(VulkanRenderpassManager::new(), pipeline_manager);
 
         let shader_manager = ShaderManager::new();
 
