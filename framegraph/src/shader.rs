@@ -70,7 +70,7 @@ fn create_shader_module(render_context: &VulkanRenderContext, file_name: &str) -
     let create_info = vk::ShaderModuleCreateInfo::builder()
         .code(&bytes32);
     let shader = unsafe {
-        render_context.get_device().create_shader_module(&create_info, None)
+        render_context.get_device().get().create_shader_module(&create_info, None)
             .expect("Failed to create shader")
     };
 
@@ -99,7 +99,7 @@ fn create_shader_module(render_context: &VulkanRenderContext, file_name: &str) -
                 .build();
 
             let layout = unsafe {
-                render_context.get_device().create_descriptor_set_layout(
+                render_context.get_device().get().create_descriptor_set_layout(
                     &layout_create_info,
                     None)
                     .expect("Failed to create descriptor set layout")
@@ -114,7 +114,7 @@ fn create_shader_module(render_context: &VulkanRenderContext, file_name: &str) -
     let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
         .set_layouts(&descriptor_set_layouts);
     let pipeline_layout = unsafe {
-        render_context.get_device().create_pipeline_layout(&pipeline_layout_create, None)
+        render_context.get_device().get().create_pipeline_layout(&pipeline_layout_create, None)
             .expect("Failed to create pipeline layout")
     };
 

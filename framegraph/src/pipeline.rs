@@ -320,7 +320,7 @@ impl PipelineManager for VulkanPipelineManager {
                     .build();
 
                 let graphics_pipeline = unsafe {
-                    render_context.get_device().create_graphics_pipelines(
+                    render_context.get_device().get().create_graphics_pipelines(
                         vk::PipelineCache::null(),
                         std::slice::from_ref(&graphics_pipeline_info),
                         None

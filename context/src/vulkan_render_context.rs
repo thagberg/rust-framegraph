@@ -406,7 +406,7 @@ impl RenderContext for VulkanRenderContext {
         }
     }
 
-    fn get_device(&self) -> &Device { &self.device.get() }
+    fn get_device(&self) -> &DeviceWrapper { &self.device }
 
 }
 

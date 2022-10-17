@@ -109,7 +109,7 @@ impl VulkanApp {
         };
 
         let render_pass = VulkanApp::create_render_pass(
-            render_context.get_device(),
+            render_context.get_device().get(),
             swapchain_format);
         // let (graphics_pipeline, pipeline_layout) = share::v1::create_graphics_pipeline(
         //     render_context.get_device(),
@@ -121,7 +121,7 @@ impl VulkanApp {
             let image_views: Vec<vk::ImageView> = swapchain.get_images().iter()
                 .map(|s| s.view).collect();
             share::v1::create_framebuffers(
-                render_context.get_device(),
+                render_context.get_device().get(),
                 render_pass,
                 &image_views,
                 swapchain_extent)
@@ -146,11 +146,11 @@ impl VulkanApp {
         let shader_manager = ShaderManager::new();
 
         let command_buffers = share::v1::create_command_buffers(
-            render_context.get_device(),
+            render_context.get_device().get(),
             render_context.get_graphics_command_pool(),
             2);
         let sync_ojbects = VulkanApp::create_sync_objects(
-            render_context.get_device());
+            render_context.get_device().get());
 
         // cleanup(); the 'drop' function will take care of it.
 
@@ -206,7 +206,7 @@ impl VulkanApp {
 
         unsafe
         {
-            self.render_context.get_device()
+            self.render_context.get_device().get()
                 .wait_for_fences(&wait_fences, true, u64::MAX)
                 .expect("Failed to wait for Fence!");
         }
@@ -218,7 +218,7 @@ impl VulkanApp {
 
         let command_buffer = self.command_buffers[image_index as usize];
         unsafe {
-            self.render_context.get_device().reset_command_buffer(
+            self.render_context.get_device().get().reset_command_buffer(
                 command_buffer,
                 vk::CommandBufferResetFlags::empty())
                 .expect("Failed to reset command buffer");
@@ -229,7 +229,7 @@ impl VulkanApp {
                 p_inheritance_info: ptr::null(),
                 flags: vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,
             };
-            self.render_context.get_device().begin_command_buffer(command_buffer, &command_buffer_begin_info)
+            self.render_context.get_device().get().begin_command_buffer(command_buffer, &command_buffer_begin_info)
                 .expect("Failed to begin recording command buffer");
         }
 
@@ -269,7 +269,7 @@ impl VulkanApp {
             };
 
             unsafe {
-                self.render_context.get_device().cmd_pipeline_barrier(
+                self.render_context.get_device().get().cmd_pipeline_barrier(
                     command_buffer,
                     vk::PipelineStageFlags::TRANSFER,
                     vk::PipelineStageFlags::BOTTOM_OF_PIPE,
@@ -283,7 +283,7 @@ impl VulkanApp {
         unsafe {
             let device = self.render_context.get_device();
             // device.cmd_end_render_pass(command_buffer);
-            device.end_command_buffer(command_buffer)
+            device.get().end_command_buffer(command_buffer)
                 .expect("Failed to record command buffer");
         }
 
@@ -307,12 +307,12 @@ impl VulkanApp {
 
         unsafe {
             // self.device
-            self.render_context.get_device()
+            self.render_context.get_device().get()
                 .reset_fences(&wait_fences)
                 .expect("Failed to reset Fence!");
 
             // self.device
-            self.render_context.get_device()
+            self.render_context.get_device().get()
                 .queue_submit(
                     // self.graphics_queue,
                     self.render_context.get_graphics_queue(),
@@ -450,7 +450,7 @@ impl VulkanApp {
 impl Drop for VulkanApp {
     fn drop(&mut self) {
         unsafe {
-            let device = self.render_context.get_device();
+            let device = self.render_context.get_device().get();
             for i in 0..MAX_FRAMES_IN_FLIGHT {
                 device.destroy_semaphore(self.image_available_semaphores[i], None);
                 device.destroy_semaphore(self.render_finished_semaphores[i], None);
@@ -523,7 +523,7 @@ impl VulkanApp {
                 },
                 | Event::LoopDestroyed => {
                     unsafe {
-                        self.render_context.get_device().device_wait_idle()
+                        self.render_context.get_device().get().device_wait_idle()
                             .expect("Failed to wait device idle!")
                     };
                 },

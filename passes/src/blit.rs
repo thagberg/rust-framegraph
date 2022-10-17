@@ -51,7 +51,7 @@ pub fn generate_pass(
                                 .dst_subresource(*dest_layer)
                                 .src_offsets(offsets)
                                 .dst_offsets(offsets);
-                            render_ctx.get_device().cmd_blit_image(
+                            render_ctx.get_device().get().cmd_blit_image(
                                 *command_buffer,
                                 s.image,
                                 s.layout,

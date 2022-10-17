@@ -235,12 +235,12 @@ impl<PN, RPM, PM> FrameGraph<PN, RPM, PM>
                     let image_memory_barriers: Vec<vk::ImageMemoryBarrier> = Vec::new();
                     for (handle, resource) in &resolved_copy_sources {
                         if let ResourceType::Image(image) = &resource.resource {
-                            let barier = vk::ImageMemoryBarrier::builder()
-                                .image(image.image)
-                                .old_layout(image.layout)
-                                .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                                .src_access_mask(vk::AccessFlags::TRANSFER_READ)
-                                .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                            // let barrier = vk::ImageMemoryBarrier::builder()
+                            //     .image(image.image)
+                            //     .old_layout(image.layout)
+                            //     .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                            //     .src_access_mask(vk::AccessFlags::TRANSFER_READ)
+                            //     .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
                         }
                     }
 

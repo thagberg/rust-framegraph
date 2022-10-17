@@ -135,3 +135,8 @@ Global resources
 		Pass specifies a texture as an read dependency and a rendertarget as a write dependency
 		Texture current layout -> READ_ONLY_OPTIMAL
 		Rendertarget current layout -> COLOR_ATTACHMENT_OPTIMAL	
+
+16 October 22 - Consider removing all function calls on ash::Device from code
+	outside of DeviceWrapper implementation.
+	e.g. instead of calling `render_ctx.get_device().get().create_graphics_pipeline(...)` I should
+	implement a `create_graphics_pipeline` on the DeviceWrapper (or something similar)
