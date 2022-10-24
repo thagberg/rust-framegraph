@@ -90,11 +90,11 @@ impl FrameGraph for VulkanFrameGraph {
         let mut output_map = MultiMap::new();
         for node_index in self.nodes.node_indices() {
             let node = &self.nodes[node_index];
-            for input in node.get_inputs() {
-                input_map.insert(*input, node_index);
+            for input in node.get_dependencies() {
+                input_map.insert(input, node_index);
             }
-            for rt in node.get_rendertargets() {
-                output_map.insert(*rt, node_index);
+            for rt in node.get_writes() {
+                output_map.insert(rt, node_index);
             }
         }
 

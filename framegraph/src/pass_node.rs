@@ -22,6 +22,10 @@ pub trait PassNode {
 
     fn get_pipeline_description(&self) -> &Option<Self::PD>;
 
+    fn get_dependencies(&self) -> Vec<ResourceHandle>;
+
+    fn get_writes(&self) -> Vec<ResourceHandle>;
+
     fn execute(
         &self,
         render_context: &mut Self::RC,

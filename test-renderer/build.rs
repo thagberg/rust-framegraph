@@ -27,7 +27,8 @@ fn main() {
                 let shader_ext = shader_path.extension()
                     .expect("Couldn't determine shader extension")
                     .to_str().unwrap();
-                Command::new("glslc").args(&[shader_path.to_str().unwrap(), "-o"])
+                // Command::new("glslc").args(&[shader_path.to_str().unwrap(), "--target-env=vulkan1.1", "-o"])
+                Command::new("glslangValidator").args(&[shader_path.to_str().unwrap(), "--target-env", "vulkan1.1", "-o"])
                     .arg(&format!("{}/shaders/{}-{}.spv", out_dir, shader_name, shader_ext))
                     .status()
                     .expect("Error compiling shader");

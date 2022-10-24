@@ -555,20 +555,24 @@ impl VulkanRenderContext {
         &self,
         layouts: &[vk::DescriptorSetLayout]) -> Vec<vk::DescriptorSet> {
 
-        let alloc_info = vk::DescriptorSetAllocateInfo {
-            s_type: vk::StructureType::DESCRIPTOR_SET_ALLOCATE_INFO,
-            p_next: std::ptr::null(),
-            descriptor_pool: self.descriptor_pool,
-            descriptor_set_count: layouts.len() as u32,
-            p_set_layouts: layouts.as_ptr()
-        };
+        if layouts.len() > 0 {
+            let alloc_info = vk::DescriptorSetAllocateInfo {
+                s_type: vk::StructureType::DESCRIPTOR_SET_ALLOCATE_INFO,
+                p_next: std::ptr::null(),
+                descriptor_pool: self.descriptor_pool,
+                descriptor_set_count: layouts.len() as u32,
+                p_set_layouts: layouts.as_ptr()
+            };
 
-        let descriptor_sets = unsafe {
-            self.device.get().allocate_descriptor_sets(&alloc_info )
-                .expect("Failed to allocate descriptor sets")
-        };
+            let descriptor_sets = unsafe {
+                self.device.get().allocate_descriptor_sets(&alloc_info )
+                    .expect("Failed to allocate descriptor sets")
+            };
 
-        descriptor_sets
+            return descriptor_sets;
+        }
+
+        Vec::new()
     }
 
     pub fn create_framebuffers(

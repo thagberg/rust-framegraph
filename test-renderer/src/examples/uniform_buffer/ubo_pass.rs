@@ -68,19 +68,22 @@ impl UBOPass {
             p_vertex_binding_descriptions: std::ptr::null(),
         };
 
-        let dynamic_states = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
-        let dynamic_state = vk::PipelineDynamicStateCreateInfo {
-            s_type: vk::StructureType::PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-            p_next: std::ptr::null(),
-            flags: vk::PipelineDynamicStateCreateFlags::empty(),
-            dynamic_state_count: dynamic_states.len() as u32,
-            p_dynamic_states: dynamic_states.as_ptr()
-        };
+        let dynamic_states = vec!(vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR);
+        // let dynamic_state = vk::PipelineDynamicStateCreateInfo {
+        //     s_type: vk::StructureType::PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+        //     p_next: std::ptr::null(),
+        //     flags: vk::PipelineDynamicStateCreateFlags::empty(),
+        //     dynamic_state_count: dynamic_states.len() as u32,
+        //     p_dynamic_states: dynamic_states.as_ptr()
+        // };
+        // let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
+        //     .dynamic_states(&dynamic_states)
+        //     .build();
 
 
         let pipeline_description = PipelineDescription::new(
             vertex_input_state_create_info,
-            dynamic_state,
+            dynamic_states,
             RasterizationType::Standard,
             DepthStencilType::Disable,
             BlendType::None,

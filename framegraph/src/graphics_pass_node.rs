@@ -72,6 +72,14 @@ impl PassNode for GraphicsPassNode  {
         &self.pipeline_description
     }
 
+    fn get_dependencies(&self) -> Vec<ResourceHandle> {
+        [self.get_inputs(), self.get_copy_sources()].concat()
+    }
+
+    fn get_writes(&self) -> Vec<ResourceHandle> {
+        [self.get_outputs(), self.get_rendertargets(), self.get_copy_dests()].concat()
+    }
+
    fn execute(
         &self,
         render_context: &mut Self::RC,

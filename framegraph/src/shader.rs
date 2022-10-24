@@ -61,17 +61,30 @@ fn convert_vec8_to_vec32(mut vec8: Vec<u8>) -> Vec<u32>
 
 fn create_shader_module(render_context: &VulkanRenderContext, file_name: &str) -> ShaderModule
 {
-    let bytes = fs::read(file_name)
-        .expect(&format!("Unable to load shader at {}", file_name));
-    let reflection_module = spirv_reflect::ShaderModule::load_u8_data(&bytes)
-        .expect(&format!("Failed to parse shader for reflection data at {}", file_name));
-    let bytes32 = convert_vec8_to_vec32(bytes);
+    let (reflection_module, shader) = {
+        let bytes = fs::read(file_name)
+            .expect(&format!("Unable to load shader at {}", file_name));
+        let reflection_module = spirv_reflect::ShaderModule::load_u8_data(&bytes)
+            .expect(&format!("Failed to parse shader for reflection data at {}", file_name));
+        // let bytes32 = convert_vec8_to_vec32(bytes);
+        // assert!(bytes.len() % 4 == 0);
 
-    let create_info = vk::ShaderModuleCreateInfo::builder()
-        .code(&bytes32);
-    let shader = unsafe {
-        render_context.get_device().get().create_shader_module(&create_info, None)
-            .expect("Failed to create shader")
+        let create_info = vk::ShaderModuleCreateInfo {
+            s_type: vk::StructureType::SHADER_MODULE_CREATE_INFO,
+            p_next: std::ptr::null(),
+            flags: vk::ShaderModuleCreateFlags::empty(),
+            code_size: bytes.len(),
+            p_code: bytes.as_ptr() as *const u32
+        };
+
+        // let create_info = vk::ShaderModuleCreateInfo::builder()
+        //     .code(&bytes32);
+        let shader = unsafe {
+            render_context.get_device().get().create_shader_module(&create_info, None)
+                .expect("Failed to create shader")
+        };
+
+        (reflection_module, shader)
     };
 
     // TODO: Add support for compute descriptor set bindings (could just use VK_SHADER_STAGE_ALL)

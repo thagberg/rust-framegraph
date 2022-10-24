@@ -241,7 +241,7 @@ impl VulkanApp {
             let blit_offsets = [glam::IVec2::new(0, 0), glam::IVec2::new(extent.width as i32, extent.height as i32)];
             let (ubo_pass_node, ubo_render_target) = self.ubo_pass.generate_pass(&mut self.resource_manager, self.render_context.get_swapchain().as_ref().unwrap().get_extent());
             self.frame_graph.start(blit::generate_pass(ubo_render_target, 0, swapchain_handle, 0, blit_offsets));
-            // self.frame_graph.add_node(ubo_pass_node);
+            self.frame_graph.add_node(ubo_pass_node);
             self.frame_graph.compile();
             self.frame_graph.end(
                 &mut self.resource_manager,
