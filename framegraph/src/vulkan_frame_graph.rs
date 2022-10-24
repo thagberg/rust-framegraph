@@ -240,6 +240,31 @@ impl FrameGraph for VulkanFrameGraph {
                             let range = vk::ImageSubresourceRange::builder()
                                 .level_count(1)
                                 .base_mip_level(0)
+                                .layer_count(1)
+                                .base_array_layer(0)
+                                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                                .build();
+                            let barrier = vk::ImageMemoryBarrier::builder()
+                                .image(image.image)
+                                .old_layout(image.layout)
+                                .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                                .src_access_mask(vk::AccessFlags::NONE)
+                                .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                                .src_queue_family_index(graphics_index)
+                                .dst_queue_family_index(graphics_index)
+                                .subresource_range(range)
+                                .build();
+                            image_memory_barriers.push(barrier);
+                        }
+                    }
+                    for (handle, resource) in &resolved_copy_dests {
+                        if let ResourceType::Image(image) = &resource.resource {
+                            let graphics_index = render_context.get_device().get_queue_family_indices().graphics
+                                .expect("Expected a valid graphics queue index");
+                            let range = vk::ImageSubresourceRange::builder()
+                                .level_count(1)
+                                .base_mip_level(0)
+                                .layer_count(1)
                                 .base_array_layer(0)
                                 .aspect_mask(vk::ImageAspectFlags::COLOR)
                                 .build();
@@ -247,8 +272,8 @@ impl FrameGraph for VulkanFrameGraph {
                                 .image(image.image)
                                 .old_layout(image.layout)
                                 .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                                .src_access_mask(vk::AccessFlags::TRANSFER_READ)
-                                .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                                .src_access_mask(vk::AccessFlags::NONE)
+                                .dst_access_mask(vk::AccessFlags::SHADER_READ)
                                 .src_queue_family_index(graphics_index)
                                 .dst_queue_family_index(graphics_index)
                                 .subresource_range(range)
