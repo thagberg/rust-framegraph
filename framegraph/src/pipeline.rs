@@ -54,6 +54,7 @@ impl Hash for PipelineDescription
     }
 }
 
+#[derive(Clone)]
 pub struct Pipeline
 {
     graphics_pipeline: vk::Pipeline
@@ -69,7 +70,7 @@ pub trait PipelineManager {
         &mut self,
         render_context: &Self::RC,
         render_pass: Self::RP,
-        pipeline_description: &Self::PD) -> &Self::P where Self::RC: RenderContext;
+        pipeline_description: &Self::PD) -> Self::P where Self::RC: RenderContext;
 }
 
 pub struct VulkanPipelineManager
@@ -254,25 +255,23 @@ impl PipelineManager for VulkanPipelineManager {
         &mut self,
         render_context: &Self::RC,
         render_pass: Self::RP,
-        pipeline_description: &Self::PD) -> &Self::P where Self::RC: RenderContext {
+        pipeline_description: &Self::PD) -> Self::P where Self::RC: RenderContext {
 
         // TODO: define a PipelineKey type and require the consumer to provide it here
         //  to avoid needing to calculate a hash for each used pipeline each frame?
         let mut pipeline_hasher = DefaultHasher::new();
         pipeline_description.hash(&mut pipeline_hasher);
         let pipeline_key = pipeline_hasher.finish();
-        self.pipeline_cache.entry(pipeline_key).or_insert(
-            {
-                // if self.pipeline_cache.contains_key(&pipeline_key)
-                let frag_shader_module = self.shader_manager.load_shader(
-                    render_context,
-                    &pipeline_description.fragment_name);
+        let pipeline_val = self.pipeline_cache.get(&pipeline_key);
+        match pipeline_val {
+            Some(pipeline) => { pipeline.clone() },
+            None => {
                 let vertex_shader_module = self.shader_manager.load_shader(
                     render_context,
                     &pipeline_description.vertex_name);
-                // let frag_shader_module = self.shader_manager.load_shader(
-                //     render_context,
-                //     &pipeline_description.fragment_name);
+                let frag_shader_module = self.shader_manager.load_shader(
+                    render_context,
+                    &pipeline_description.fragment_name);
                 let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo {
                     s_type: vk::StructureType::PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
                     flags: vk::PipelineInputAssemblyStateCreateFlags::empty(),
@@ -347,10 +346,11 @@ impl PipelineManager for VulkanPipelineManager {
                     .color_blend_state(&blend_state)
                     // .dynamic_state(&pipeline_description.dynamic_state)
                     .dynamic_state(&dynamic_state)
-                    .layout(frag_shader_module.pipeline_layout)
+                    // .layout(frag_shader_module.pipeline_layout)
+                    .layout(vertex_shader_module.pipeline_layout)
                     .render_pass(render_pass)
                     .subpass(0); // TODO: this shouldn't be static
-                    // .build();
+                // .build();
 
                 let graphics_pipeline = unsafe {
                     render_context.get_device().get().create_graphics_pipelines(
@@ -359,9 +359,11 @@ impl PipelineManager for VulkanPipelineManager {
                         None
                     ).expect("Failed to create Graphics Pipeline")
                 };
-                Pipeline::new(graphics_pipeline[0])
+                let pipeline = Pipeline::new(graphics_pipeline[0]);
+                self.pipeline_cache.insert(pipeline_key, pipeline.clone());
+                pipeline
             }
-        )
+        }
     }
 }
 

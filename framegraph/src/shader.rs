@@ -163,8 +163,14 @@ impl ShaderManager
     pub fn load_shader(&mut self, render_context: &VulkanRenderContext, file_name: &str) -> ShaderModule
     {
         // TODO: can this return a &ShaderModule without a double mutable borrow error in PipelineManager::create_pipeline?
-        self.shader_cache.entry(file_name.parse().unwrap()).or_insert(
-            create_shader_module(render_context, file_name)
-        ).clone()
+        let val = self.shader_cache.get(file_name);
+        match val {
+            Some(sm) => {sm.clone()},
+            None => {
+                let sm = create_shader_module(render_context, file_name);
+                self.shader_cache.insert(file_name.to_string(), sm.clone());
+                sm
+            }
+        }
     }
 }
