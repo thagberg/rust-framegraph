@@ -52,6 +52,11 @@ pub struct PersistentResource {
     pub allocation: Allocation
 }
 
+pub struct ResolvedResourceInternal {
+    resource: ResolvedResource,
+    allocation: Allocation
+}
+
 #[derive(Clone)]
 pub struct ResolvedResource {
     pub handle: ResourceHandle,
@@ -69,12 +74,13 @@ pub struct ResolvedImage {
 }
 
 pub type ResolvedResourceMap = HashMap<ResourceHandle, ResolvedResource>;
+type ResolvedResourceInternalMap = HashMap<ResourceHandle, ResolvedResourceInternal>;
 
 pub struct VulkanResourceManager {
     next_handle: u32,
     allocator: Allocator,
     transient_resource_map: HashMap<ResourceHandle, TransientResource>,
-    resolved_resource_map: ResolvedResourceMap,
+    resolved_resource_map: ResolvedResourceInternalMap,
     persistent_resource_map: HashMap<ResourceHandle, PersistentResource>,
     device: Rc<DeviceWrapper>
 }
@@ -155,33 +161,42 @@ impl ResourceManager for VulkanResourceManager {
             ResourceHandle::Transient(_) => {
                 let resolved = self.resolved_resource_map.get(handle);
                 match resolved {
-                    Some(found) => { found.clone() },
+                    Some(found) => {
+                        found.resource.clone()
+                    },
                     None => {
                         let transient = self.transient_resource_map.get(handle)
                             .expect("No transient resource found");
 
-                        let resolved_resource: Option<ResolvedResource>;
+                        let resolved_resource: Option<ResolvedResourceInternal>;
                         match &transient.create_info {
                             ResourceCreateInfo::Buffer(buffer_create) => {
                                 let resolved_buffer = create_resolved_buffer(&mut self.allocator, &self.device, buffer_create);
-                                resolved_resource = Some(ResolvedResource {
-                                    handle: handle.clone(),
-                                    resource: ResourceType::Buffer(resolved_buffer.buffer)
+                                resolved_resource = Some(ResolvedResourceInternal {
+                                    resource: ResolvedResource {
+                                        handle: handle.clone(),
+                                        resource: ResourceType::Buffer(resolved_buffer.buffer)
+                                    },
+                                    allocation: resolved_buffer.allocation
                                 });
                             },
                             ResourceCreateInfo::Image(image_create) => {
                                 let resolved_image = create_resolved_image(&mut self.allocator, &self.device, image_create);
-                                resolved_resource = Some(ResolvedResource {
-                                    handle: handle.clone(),
-                                    resource: ResourceType::Image(resolved_image.image)
+                                resolved_resource = Some(ResolvedResourceInternal {
+                                    resource: ResolvedResource {
+                                        handle: handle.clone(),
+                                        resource: ResourceType::Image(resolved_image.image)
+                                    },
+                                    allocation: resolved_image.allocation
                                 });
                             }
                         }
 
                         match resolved_resource {
                             Some(rr) => {
-                                self.resolved_resource_map.insert(handle.clone(), rr.clone());
-                                rr
+                                let return_resource = rr.resource.clone();
+                                self.resolved_resource_map.insert(handle.clone(), rr);
+                                return_resource
                             },
                             None => {
                                 panic!("Failed to find or create resource during resolution");
@@ -227,7 +242,26 @@ impl ResourceManager for VulkanResourceManager {
     }
 
     fn flush(&mut self, device: &DeviceWrapper) {
-        self.resolved_resource_map.clear();
+        for (handle, resolved) in self.resolved_resource_map.drain() {
+            match &resolved.resource.resource {
+                ResourceType::Image(resolved_image) => {
+                    unsafe {
+                        device.get().destroy_image_view(resolved_image.view, None);
+                        device.get().destroy_image(resolved_image.image, None);
+                        self.allocator.free(resolved.allocation)
+                            .expect("Failed to free image allocation");
+                    }
+                },
+                ResourceType::Buffer(resolved_buffer) => {
+                    unsafe {
+                        device.get().destroy_buffer(resolved_buffer.buffer, None);
+                        self.allocator.free(resolved.allocation)
+                            .expect("Failed to free buffer allocation");
+                    }
+                }
+            }
+        }
+
         self.transient_resource_map.clear();
     }
 }
@@ -255,8 +289,6 @@ impl VulkanResourceManager {
             device
         }
     }
-
-    fn free_resource
 
     pub fn create_buffer_transient(
         &mut self,
