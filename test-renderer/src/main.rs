@@ -209,6 +209,9 @@ impl VulkanApp {
         unsafe
         {
             self.render_context.get_device().get()
+                .device_wait_idle()
+                .expect("Error while waiting for device to idle");
+            self.render_context.get_device().get()
                 .wait_for_fences(&wait_fences, true, u64::MAX)
                 .expect("Failed to wait for Fence!");
         }
