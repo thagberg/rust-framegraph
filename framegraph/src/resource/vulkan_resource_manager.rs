@@ -52,7 +52,6 @@ pub struct PersistentResource {
     pub allocation: Allocation
 }
 
-// #[derive(Clone, Copy)]
 #[derive(Clone)]
 pub struct ResolvedResource {
     pub handle: ResourceHandle,
@@ -77,7 +76,6 @@ pub struct VulkanResourceManager {
     transient_resource_map: HashMap<ResourceHandle, TransientResource>,
     resolved_resource_map: ResolvedResourceMap,
     persistent_resource_map: HashMap<ResourceHandle, PersistentResource>,
-    // device: &'a DeviceWrapper
     device: Rc<DeviceWrapper>
 }
 
@@ -227,6 +225,11 @@ impl ResourceManager for VulkanResourceManager {
 
         None
     }
+
+    fn flush(&mut self, device: &DeviceWrapper) {
+        self.resolved_resource_map.clear();
+        self.transient_resource_map.clear();
+    }
 }
 
 impl VulkanResourceManager {
@@ -253,6 +256,7 @@ impl VulkanResourceManager {
         }
     }
 
+    fn free_resource
 
     pub fn create_buffer_transient(
         &mut self,

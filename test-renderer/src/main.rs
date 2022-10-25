@@ -28,6 +28,7 @@ use framegraph::frame_graph::FrameGraph;
 use framegraph::vulkan_frame_graph::VulkanFrameGraph;
 use framegraph::renderpass_manager::VulkanRenderpassManager;
 use framegraph::pipeline::VulkanPipelineManager;
+use framegraph::resource::resource_manager::ResourceManager;
 use passes::blit;
 
 mod examples;
@@ -216,6 +217,8 @@ impl VulkanApp {
             None,
         Some(self.image_available_semaphores[self.current_frame]),
         None);
+
+        self.resource_manager.flush();
 
         let command_buffer = self.command_buffers[image_index as usize];
         unsafe {
