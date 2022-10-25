@@ -382,7 +382,12 @@ fn create_swapchain(
                         vk::ImageViewCreateFlags::empty(),
                         vk::ImageAspectFlags::COLOR,
                         1),
-                        vk::ImageLayout::UNDEFINED)
+                        vk::ImageLayout::UNDEFINED,
+                    vk::Extent3D {
+                            width: swapchain_extent.width,
+                            height: swapchain_extent.height,
+                            depth: 1
+                        })
             })
             .collect()
     };
@@ -573,6 +578,27 @@ impl VulkanRenderContext {
         }
 
         Vec::new()
+    }
+
+    pub fn create_framebuffer(
+        &self,
+        render_pass: vk::RenderPass,
+        extent: &vk::Extent3D,
+        images: &[ImageWrapper]) -> vk::Framebuffer {
+
+        let image_views: Vec<vk::ImageView> = images.iter().map(|i| i.view).collect();
+
+        let create_info = vk::FramebufferCreateInfo::builder()
+            .render_pass(render_pass)
+            .attachments(&image_views)
+            .width(extent.width)
+            .height(extent.height)
+            .layers(extent.depth);
+
+        unsafe {
+            self.device.get().create_framebuffer(&create_info, None)
+                .expect("Failed to create framebuffer")
+        }
     }
 
     pub fn create_framebuffers(

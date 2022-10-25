@@ -123,8 +123,9 @@ impl DeviceWrapper {
     {
 
         let image_wrapper = {
+            let create_info = create_info.get_create_info();
             let image = unsafe {
-                self.device.create_image(create_info.get_create_info(), None)
+                self.device.create_image(create_info, None)
                     .expect("Failed to create image")
             };
 
@@ -144,7 +145,7 @@ impl DeviceWrapper {
                 vk::ImageViewCreateFlags::empty(),
                 vk::ImageAspectFlags::COLOR,
                 1);
-            ImageWrapper::new(image, image_view, create_info.get_create_info().initial_layout)
+            ImageWrapper::new(image, image_view, create_info.initial_layout, create_info.extent)
         };
 
         self.set_image_name(&image_wrapper, create_info.get_name());

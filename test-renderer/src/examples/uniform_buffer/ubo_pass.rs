@@ -121,7 +121,6 @@ impl UBOPass {
                       command_buffer: &vk::CommandBuffer,
                       inputs: &ResolvedResourceMap,
                       outputs: &ResolvedResourceMap,
-                      render_targets: &ResolvedResourceMap,
                       resolved_copy_sources: &ResolvedResourceMap,
                       resolved_copy_dests: &ResolvedResourceMap|
                     {

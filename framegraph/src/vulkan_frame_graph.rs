@@ -19,6 +19,7 @@ use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager};
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use petgraph::visit::EdgeRef;
+use context::api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::graphics_pass_node::GraphicsPassNode;
 
@@ -228,9 +229,35 @@ impl FrameGraph for VulkanFrameGraph {
 
                     let resolved_inputs = resolve_resource_type(inputs);
                     let resolved_outputs = resolve_resource_type(outputs);
-                    let resolved_render_targets = resolve_resource_type(render_targets);
+                    // let resolved_render_targets = resolve_resource_type(render_targets);
                     let resolved_copy_sources = resolve_resource_type(copy_sources);
                     let resolved_copy_dests = resolve_resource_type(copy_dests);
+
+                    let resolved_render_targets = {
+                        let mut rts: Vec<ImageWrapper> = Vec::new();
+                        for rt_handle in render_targets {
+                            let resolved = resource_manager.resolve_resource(rt_handle);
+                            if let ResourceType::Image(rt_image) = resolved.resource {
+                                rts.push(rt_image);
+                            }
+                        }
+                        rts
+                    };
+
+                    // Ensure all rendertargets are the same dimensions
+                    let mut framebuffer_extent: Option<vk::Extent3D> = None;
+                    {
+                        for resolved in &resolved_render_targets {
+                            match framebuffer_extent {
+                                Some(extent) => {
+                                    assert_eq!(extent, resolved.extent, "All framebuffer attachments must be the same dimensions");
+                                },
+                                None => {
+                                    framebuffer_extent = Some(resolved.extent.clone());
+                                }
+                            }
+                        }
+                    }
 
                     let mut image_memory_barriers: Vec<vk::ImageMemoryBarrier> = Vec::new();
                     for (handle, resource) in &resolved_copy_sources {
@@ -292,14 +319,51 @@ impl FrameGraph for VulkanFrameGraph {
                             &image_memory_barriers);
                     }
 
+                    let active_pipeline = node.get_pipeline_description();
+                    if let Some(pipeline_description) = active_pipeline {
+                        let framebuffer_extent = framebuffer_extent
+                            .expect("Framebuffer required for renderpass");
 
-                    if let Some(pipeline_description) = node.get_pipeline_description() {
                         let renderpass = self.renderpass_manager.create_or_fetch_renderpass(
                             node,
                             resource_manager,
                             render_context);
 
                         let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass, pipeline_description);
+
+                        let framebuffer = render_context.create_framebuffer(
+                            renderpass,
+                            &framebuffer_extent,
+                            &resolved_render_targets);
+
+                        let clear_value = vk::ClearValue {
+                            color: vk::ClearColorValue {
+                                float32: [0.1, 0.1, 0.1, 1.0]
+                            }
+                        };
+
+                        let render_pass_begin = vk::RenderPassBeginInfo::builder()
+                            .render_pass(renderpass)
+                            .framebuffer(framebuffer)
+                            .render_area(vk::Rect2D::builder()
+                                             .offset(vk::Offset2D{x: 0, y: 0})
+                                             .extent(vk::Extent2D{
+                                                 width: framebuffer_extent.width,
+                                                 height: framebuffer_extent.height})
+                                             .build())
+                            .clear_values(std::slice::from_ref(&clear_value));
+
+                        unsafe {
+                            render_context.get_device().get().cmd_begin_render_pass(
+                                *command_buffer,
+                                &render_pass_begin,
+                                vk::SubpassContents::INLINE);
+
+                            render_context.get_device().get().cmd_bind_pipeline(
+                                *command_buffer,
+                                vk::PipelineBindPoint::GRAPHICS,
+                                pipeline.graphics_pipeline);
+                        }
                     }
 
                     node.execute(
@@ -307,9 +371,15 @@ impl FrameGraph for VulkanFrameGraph {
                         command_buffer,
                         &resolved_inputs,
                         &resolved_outputs,
-                        &resolved_render_targets,
                         &resolved_copy_sources,
                         &resolved_copy_dests);
+
+                    // if we began a render pass and bound a pipeline for this node, end it
+                    if active_pipeline.is_some() {
+                        unsafe {
+                            render_context.get_device().get().cmd_end_render_pass(*command_buffer);
+                        }
+                    }
                 }
             },
             _ => {

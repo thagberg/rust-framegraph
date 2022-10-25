@@ -26,15 +26,17 @@ impl ImageCreateInfo {
 pub struct ImageWrapper {
     pub image: vk::Image,
     pub view: vk::ImageView,
-    pub layout: vk::ImageLayout
+    pub layout: vk::ImageLayout,
+    pub extent: vk::Extent3D
 }
 
 impl ImageWrapper {
-    pub fn new(image: vk::Image, view: vk::ImageView, layout: vk::ImageLayout) -> ImageWrapper {
+    pub fn new(image: vk::Image, view: vk::ImageView, layout: vk::ImageLayout, extent: vk::Extent3D) -> ImageWrapper {
         ImageWrapper {
             image,
             view,
-            layout
+            layout,
+            extent
         }
     }
 

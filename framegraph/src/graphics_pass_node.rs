@@ -16,7 +16,6 @@ type FillCallback = dyn (
         &ResolvedResourceMap,
         &ResolvedResourceMap,
         &ResolvedResourceMap,
-        &ResolvedResourceMap,
         &ResolvedResourceMap
     )
 );
@@ -86,7 +85,6 @@ impl PassNode for GraphicsPassNode  {
         command_buffer: &Self::CB,
         resolved_inputs: &ResolvedResourceMap,
         resolved_outputs: &ResolvedResourceMap,
-        resolved_render_targets: &ResolvedResourceMap,
         resolved_copy_sources: &ResolvedResourceMap,
         resolved_copy_dests: &ResolvedResourceMap)
     {
@@ -95,7 +93,6 @@ impl PassNode for GraphicsPassNode  {
             command_buffer,
             resolved_inputs,
             resolved_outputs,
-            resolved_render_targets,
             resolved_copy_sources,
             resolved_copy_dests);
     }

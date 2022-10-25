@@ -57,7 +57,7 @@ impl Hash for PipelineDescription
 #[derive(Clone)]
 pub struct Pipeline
 {
-    graphics_pipeline: vk::Pipeline
+    pub graphics_pipeline: vk::Pipeline
 }
 
 pub trait PipelineManager {
