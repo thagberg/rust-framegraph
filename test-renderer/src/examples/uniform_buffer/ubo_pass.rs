@@ -5,10 +5,11 @@ use ash::vk;
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
 use context::api_types::image::ImageCreateInfo;
 use context::api_types::buffer::BufferCreateInfo;
+use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 
 use framegraph::graphics_pass_node::{GraphicsPassNode};
-use framegraph::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, VulkanResourceManager};
+use framegraph::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, VulkanResourceManager, ResourceType};
 use framegraph::pipeline::{PipelineDescription, RasterizationType, DepthStencilType, BlendType, Pipeline};
 
 pub struct OffsetUBO {
@@ -112,9 +113,11 @@ impl UBOPass {
                 "ubo_rendertarget".to_string()));
         let render_target = handle;
 
+        // TODO: need to do this to avoid lifetime issue of &self for when the UBO handle is used during callback
+        let ubo_handle = self.uniform_buffer.clone();
         let passnode = GraphicsPassNode::builder("ubo_pass".to_string())
             .pipeline_description(pipeline_description)
-            .read(self.uniform_buffer)
+            .read(ubo_handle)
             .render_target(render_target)
             .fill_commands(Box::new(
                 move |render_ctx: &VulkanRenderContext,
@@ -125,6 +128,49 @@ impl UBOPass {
                       resolved_copy_dests: &ResolvedResourceMap|
                     {
                         println!("I'm doing something!");
+                        let viewport = vk::Viewport::builder()
+                            .x(0.0)
+                            .y(0.0)
+                            .width(100.0)
+                            .height(100.0)
+                            .min_depth(0.0)
+                            .max_depth(1.0)
+                            .build();
+
+                        let scissor = vk::Rect2D::builder()
+                            .offset(vk::Offset2D{x: 0, y: 0})
+                            .extent(vk::Extent2D::builder().width(100).height(100).build())
+                            .build();
+
+                        unsafe {
+                            render_ctx.get_device().get().cmd_set_viewport(
+                                *command_buffer,
+                                0,
+                                std::slice::from_ref(&viewport));
+
+                            render_ctx.get_device().get().cmd_set_scissor(
+                                *command_buffer,
+                                0,
+                                std::slice::from_ref(&scissor));
+                        }
+
+                        let resolved_ubo = inputs.get(&ubo_handle)
+                            .expect("No uniform buffer resolved in UBO pass");
+                        if let ResourceType::Buffer(ubo) = &resolved_ubo.resource {
+                            let descriptor_buffer = vk::DescriptorBufferInfo::builder()
+                                .buffer(ubo.buffer)
+                                .offset(0)
+                                .range(std::mem::size_of::<OffsetUBO>() as vk::DeviceSize);
+
+                            // let descriptor_write = vk::WriteDescriptorSet::builder()
+                        } else {
+                            panic!("Resolved UBO was not a buffer");
+                        }
+
+                        // update UBO
+                        // let descriptor_buffer = vk::DescriptorBufferInfo::builder()
+                        //     .buffer
+
                         // let render_target = outputs.get(&render_target) .expect("No resolved render target");
                         // let ubo = inputs.get(&uniform_buffer)
                         //     .expect("No resolved UBO");

@@ -192,13 +192,6 @@ impl FrameGraph for VulkanFrameGraph {
         self.compiled = true;
     }
 
-    // fn resolve_resource_type(resource_manager: &mut ResourceManager, resources: &[ResourceHandle], resolved_map: &mut ResolvedResourceMap) {
-    //     for resource in resources {
-    //         let resolved = resource_manager.resolve_resource(resource);
-    //         resolved_map.insert(*resource, resolved.clone());
-    //     }
-    // }
-
     fn end(
         &mut self,
         resource_manager: &mut Self::RM,
