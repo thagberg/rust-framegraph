@@ -8,6 +8,7 @@ pub mod graphics_pass_node;
 pub mod renderpass_manager;
 pub mod frame_graph;
 pub mod vulkan_frame_graph;
+pub mod binding;
 
 #[cfg(test)]
 mod tests

@@ -8,7 +8,8 @@ use context::api_types::buffer::BufferCreateInfo;
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 
-use framegraph::graphics_pass_node::{GraphicsPassNode};
+use framegraph::binding::ResourceBinding;
+use framegraph::graphics_pass_node::{GraphicsPassNode, ResolvedBinding};
 use framegraph::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, VulkanResourceManager, ResourceType};
 use framegraph::pipeline::{PipelineDescription, RasterizationType, DepthStencilType, BlendType, Pipeline};
 
@@ -114,6 +115,9 @@ impl UBOPass {
         let render_target = handle;
 
         // TODO: need to do this to avoid lifetime issue of &self for when the UBO handle is used during callback
+        // let ubo_binding = ResourceBinding {
+        //     handle: self.uniform_buffer,
+        // }
         let ubo_handle = self.uniform_buffer.clone();
         let passnode = GraphicsPassNode::builder("ubo_pass".to_string())
             .pipeline_description(pipeline_description)

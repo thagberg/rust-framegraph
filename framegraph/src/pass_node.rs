@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use context::render_context::{RenderContext, CommandBuffer};
 use crate::resource::resource_manager::ResourceManager;
 use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap};
+use crate::binding::ResourceBinding;
 
 pub trait PassNode {
     type RC;
@@ -10,9 +11,9 @@ pub trait PassNode {
 
     fn get_name(&self) -> &str;
 
-    fn get_inputs(&self) -> &[ResourceHandle];
+    fn get_inputs(&self) -> &[ResourceBinding];
 
-    fn get_outputs(&self) -> &[ResourceHandle];
+    fn get_outputs(&self) -> &[ResourceBinding];
 
     fn get_rendertargets(&self) -> &[ResourceHandle];
 

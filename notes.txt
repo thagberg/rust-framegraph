@@ -140,3 +140,9 @@ Global resources
 	outside of DeviceWrapper implementation.
 	e.g. instead of calling `render_ctx.get_device().get().create_graphics_pipeline(...)` I should
 	implement a `create_graphics_pipeline` on the DeviceWrapper (or something similar)
+
+25 October 22 - Resource binding API
+	What's needed for a resource binding to create a descriptor write?
+		* Resource handle
+		* Descriptor set (handled by framegraph?)
+		* Binding within descriptor set

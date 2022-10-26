@@ -1,20 +1,28 @@
+use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use ash::vk;
 use context::api_types::renderpass::VulkanRenderPass;
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
 use crate::pass_node::PassNode;
-use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, VulkanResourceManager};
+use crate::binding::ResourceBinding;
+use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, VulkanResourceManager, ResolvedResource};
 use context::render_context::{RenderContext, CommandBuffer};
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::pipeline::{PipelineDescription};
+
+pub struct ResolvedBinding {
+    pub binding: ResourceBinding,
+    pub resolved_resource: ResolvedResource
+}
+pub type ResolvedBindingMap = HashMap<ResourceHandle, ResolvedBinding>;
 
 type FillCallback = dyn (
     Fn(
         &VulkanRenderContext,
         // &VulkanCommandBuffer,
         &vk::CommandBuffer,
-        &ResolvedResourceMap,
-        &ResolvedResourceMap,
+        &ResolvedBindingMap,
+        &ResolvedBindingMap,
         &ResolvedResourceMap,
         &ResolvedResourceMap
     )
@@ -23,8 +31,8 @@ type FillCallback = dyn (
 pub struct GraphicsPassNode {
     pipeline_description: Option<PipelineDescription>,
     render_targets: Vec<ResourceHandle>,
-    inputs: Vec<ResourceHandle>,
-    outputs: Vec<ResourceHandle>,
+    inputs: Vec<ResourceBinding>,
+    outputs: Vec<ResourceBinding>,
     copy_sources: Vec<ResourceHandle>,
     copy_dests: Vec<ResourceHandle>,
     fill_callback: Box<FillCallback>,
@@ -35,8 +43,8 @@ pub struct GraphicsPassNode {
 pub struct PassNodeBuilder {
     pipeline_description: Option<PipelineDescription>,
     render_targets: Vec<ResourceHandle>,
-    inputs: Vec<ResourceHandle>,
-    outputs: Vec<ResourceHandle>,
+    inputs: Vec<ResourceBinding>,
+    outputs: Vec<ResourceBinding>,
     copy_sources: Vec<ResourceHandle>,
     copy_dests: Vec<ResourceHandle>,
     fill_callback: Option<Box<FillCallback>>,
@@ -53,11 +61,11 @@ impl PassNode for GraphicsPassNode  {
         &self.name
     }
 
-   fn get_inputs(&self) -> &[ResourceHandle] {
+   fn get_inputs(&self) -> &[ResourceBinding] {
         &self.inputs
     }
 
-   fn get_outputs(&self) -> &[ResourceHandle] {
+   fn get_outputs(&self) -> &[ResourceBinding] {
         &self.outputs
     }
 
@@ -72,19 +80,25 @@ impl PassNode for GraphicsPassNode  {
     }
 
     fn get_dependencies(&self) -> Vec<ResourceHandle> {
-        [self.get_inputs(), self.get_copy_sources()].concat()
+        let input_handles = self.get_inputs().into_iter().map(|binding| {
+            binding.handle
+        }).collect();
+        [input_handles, self.get_copy_sources()].concat()
     }
 
     fn get_writes(&self) -> Vec<ResourceHandle> {
-        [self.get_outputs(), self.get_rendertargets(), self.get_copy_dests()].concat()
+        let output_handles = self.get_outputs().into_iter().map(|binding| {
+            binding.handle
+        }).collect();
+        [output_handles, self.get_rendertargets(), self.get_copy_dests()].concat()
     }
 
    fn execute(
         &self,
         render_context: &mut Self::RC,
         command_buffer: &Self::CB,
-        resolved_inputs: &ResolvedResourceMap,
-        resolved_outputs: &ResolvedResourceMap,
+        resolved_inputs: &ResolvedBindingMap,
+        resolved_outputs: &ResolvedBindingMap,
         resolved_copy_sources: &ResolvedResourceMap,
         resolved_copy_dests: &ResolvedResourceMap)
     {
@@ -125,12 +139,12 @@ impl PassNodeBuilder {
         self
     }
 
-    pub fn read(mut self, input: ResourceHandle) -> Self {
+    pub fn read(mut self, input: ResourceBinding) -> Self {
         self.inputs.push(input);
         self
     }
 
-    pub fn write(mut self, output: ResourceHandle) -> Self {
+    pub fn write(mut self, output: ResourceBinding) -> Self {
         self.outputs.push(output);
         self
     }

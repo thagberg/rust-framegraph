@@ -10,10 +10,11 @@ use context::render_context::{RenderContext, CommandBuffer};
 use ash::vk;
 use crate::frame_graph::FrameGraph;
 use crate::pass_node::PassNode;
-// use crate::pass_node::{GraphicsPassNode};
+use crate::binding::ResourceBinding;
+use crate::graphics_pass_node::{GraphicsPassNode, ResolvedBinding, ResolvedBindingMap};
 use crate::pipeline::{PipelineManager, VulkanPipelineManager};
 use crate::resource::resource_manager::ResourceManager;
-use crate::resource::vulkan_resource_manager::{ResolvedResourceMap, ResourceHandle, ResourceType, VulkanResourceManager};
+use crate::resource::vulkan_resource_manager::{ResolvedResource, ResolvedResourceMap, ResourceHandle, ResourceType, VulkanResourceManager};
 use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager};
 
 use std::collections::HashMap;
@@ -21,8 +22,6 @@ use std::marker::PhantomData;
 use petgraph::visit::EdgeRef;
 use context::api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
-use crate::graphics_pass_node::GraphicsPassNode;
-
 
 pub struct VulkanFrameGraph {
     nodes: stable_graph::StableDiGraph<GraphicsPassNode, u32>,
@@ -220,8 +219,21 @@ impl FrameGraph for VulkanFrameGraph {
                         resolved_map
                     };
 
-                    let resolved_inputs = resolve_resource_type(inputs);
-                    let resolved_outputs = resolve_resource_type(outputs);
+                    let mut resolve_binding_type = | bindings: &[ResourceBinding] | -> ResolvedBindingMap {
+                        let mut resolved_map = ResolvedBindingMap::new();
+                        for binding in bindings {
+                            let resolved = resource_manager.resolve_resource(&binding.handle);
+                            resolved_map.inesrt(
+                                binding.handle,
+                                ResolvedBinding {
+                                    binding: binding.clone(),
+                                    resolved_resource: resolved});
+                        }
+                        resolved_map
+                    };
+
+                    let resolved_inputs = resolve_binding_type(inputs);
+                    let resolved_outputs = resolve_binding_type(outputs);
                     // let resolved_render_targets = resolve_resource_type(render_targets);
                     let resolved_copy_sources = resolve_resource_type(copy_sources);
                     let resolved_copy_dests = resolve_resource_type(copy_dests);
