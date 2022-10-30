@@ -1,20 +1,13 @@
-use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use ash::vk;
 use context::api_types::renderpass::VulkanRenderPass;
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
-use crate::pass_node::PassNode;
+use crate::pass_node::{PassNode, ResolvedBindingMap};
 use crate::binding::ResourceBinding;
 use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, VulkanResourceManager, ResolvedResource};
 use context::render_context::{RenderContext, CommandBuffer};
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::pipeline::{PipelineDescription};
-
-pub struct ResolvedBinding {
-    pub binding: ResourceBinding,
-    pub resolved_resource: ResolvedResource
-}
-pub type ResolvedBindingMap = HashMap<ResourceHandle, ResolvedBinding>;
 
 type FillCallback = dyn (
     Fn(
@@ -80,17 +73,17 @@ impl PassNode for GraphicsPassNode  {
     }
 
     fn get_dependencies(&self) -> Vec<ResourceHandle> {
-        let input_handles = self.get_inputs().into_iter().map(|binding| {
+        let input_handles : Vec<ResourceHandle> = self.get_inputs().into_iter().map(|binding| {
             binding.handle
         }).collect();
-        [input_handles, self.get_copy_sources()].concat()
+        [&input_handles, self.get_copy_sources()].concat()
     }
 
     fn get_writes(&self) -> Vec<ResourceHandle> {
-        let output_handles = self.get_outputs().into_iter().map(|binding| {
+        let output_handles: Vec<ResourceHandle> = self.get_outputs().into_iter().map(|binding| {
             binding.handle
         }).collect();
-        [output_handles, self.get_rendertargets(), self.get_copy_dests()].concat()
+        [&output_handles, self.get_rendertargets(), self.get_copy_dests()].concat()
     }
 
    fn execute(

@@ -6,6 +6,7 @@ use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, ResourceType};
 use framegraph::graphics_pass_node::GraphicsPassNode;
+use framegraph::pass_node::ResolvedBindingMap;
 
 pub fn generate_pass(
     source: ResourceHandle,
@@ -20,8 +21,8 @@ pub fn generate_pass(
         .fill_commands(Box::new(
             move |render_ctx: &VulkanRenderContext,
                     command_buffer: &vk::CommandBuffer,
-                    inputs: &ResolvedResourceMap,
-                    outputs: &ResolvedResourceMap,
+                    inputs: &ResolvedBindingMap,
+                    outputs: &ResolvedBindingMap,
                     resolved_copy_sources: &ResolvedResourceMap,
                     resolved_copy_dests: &ResolvedResourceMap| {
 

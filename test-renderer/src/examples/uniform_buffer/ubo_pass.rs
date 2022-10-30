@@ -9,7 +9,8 @@ use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 
 use framegraph::binding::ResourceBinding;
-use framegraph::graphics_pass_node::{GraphicsPassNode, ResolvedBinding};
+use framegraph::pass_node::{ResolvedBinding, ResolvedBindingMap};
+use framegraph::graphics_pass_node::{GraphicsPassNode};
 use framegraph::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, VulkanResourceManager, ResourceType};
 use framegraph::pipeline::{PipelineDescription, RasterizationType, DepthStencilType, BlendType, Pipeline};
 
@@ -121,13 +122,13 @@ impl UBOPass {
         let ubo_handle = self.uniform_buffer.clone();
         let passnode = GraphicsPassNode::builder("ubo_pass".to_string())
             .pipeline_description(pipeline_description)
-            .read(ubo_handle)
+            // .read(ubo_handle)
             .render_target(render_target)
             .fill_commands(Box::new(
                 move |render_ctx: &VulkanRenderContext,
                       command_buffer: &vk::CommandBuffer,
-                      inputs: &ResolvedResourceMap,
-                      outputs: &ResolvedResourceMap,
+                      inputs: &ResolvedBindingMap,
+                      outputs: &ResolvedBindingMap,
                       resolved_copy_sources: &ResolvedResourceMap,
                       resolved_copy_dests: &ResolvedResourceMap|
                     {
@@ -160,7 +161,7 @@ impl UBOPass {
 
                         let resolved_ubo = inputs.get(&ubo_handle)
                             .expect("No uniform buffer resolved in UBO pass");
-                        if let ResourceType::Buffer(ubo) = &resolved_ubo.resource {
+                        if let ResourceType::Buffer(ubo) = &resolved_ubo.binding.resource_type {
                             let descriptor_buffer = vk::DescriptorBufferInfo::builder()
                                 .buffer(ubo.buffer)
                                 .offset(0)

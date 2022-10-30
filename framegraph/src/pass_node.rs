@@ -1,8 +1,15 @@
+use std::collections::HashMap;
 use std::fmt::Debug;
 use context::render_context::{RenderContext, CommandBuffer};
 use crate::resource::resource_manager::ResourceManager;
-use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap};
+use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, ResolvedResource};
 use crate::binding::ResourceBinding;
+
+pub struct ResolvedBinding {
+    pub binding: ResourceBinding,
+    pub resolved_resource: ResolvedResource
+}
+pub type ResolvedBindingMap = HashMap<ResourceHandle, ResolvedBinding>;
 
 pub trait PassNode {
     type RC;
@@ -31,8 +38,8 @@ pub trait PassNode {
         &self,
         render_context: &mut Self::RC,
         command_buffer: &Self::CB,
-        resolved_inputs: &ResolvedResourceMap,
-        resolved_outputs: &ResolvedResourceMap,
+        resolved_inputs: &ResolvedBindingMap,
+        resolved_outputs: &ResolvedBindingMap,
         resolved_copy_sources: &ResolvedResourceMap,
         resolved_copy_dests: &ResolvedResourceMap);
 }

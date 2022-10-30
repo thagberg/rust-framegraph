@@ -11,7 +11,8 @@ use ash::vk;
 use crate::frame_graph::FrameGraph;
 use crate::pass_node::PassNode;
 use crate::binding::ResourceBinding;
-use crate::graphics_pass_node::{GraphicsPassNode, ResolvedBinding, ResolvedBindingMap};
+use crate::pass_node::{ResolvedBinding, ResolvedBindingMap};
+use crate::graphics_pass_node::{GraphicsPassNode};
 use crate::pipeline::{PipelineManager, VulkanPipelineManager};
 use crate::resource::resource_manager::ResourceManager;
 use crate::resource::vulkan_resource_manager::{ResolvedResource, ResolvedResourceMap, ResourceHandle, ResourceType, VulkanResourceManager};
@@ -210,33 +211,40 @@ impl FrameGraph for VulkanFrameGraph {
                     let copy_sources = node.get_copy_sources();
                     let copy_dests = node.get_copy_dests();
 
-                    let mut resolve_resource_type = | resources: &[ResourceHandle] | -> ResolvedResourceMap {
-                        let mut resolved_map = ResolvedResourceMap::new();
-                        for resource in resources {
-                            let resolved = resource_manager.resolve_resource(resource);
-                            resolved_map.insert(*resource, resolved.clone());
-                        }
-                        resolved_map
+                    // let resolved_inputs = resolve_binding_type(inputs);
+                    // let resolved_outputs = resolve_binding_type(outputs);
+                    let (resolved_inputs, resolved_outputs) = {
+                        let mut resolve_binding_type = | bindings: &[ResourceBinding] | -> ResolvedBindingMap {
+                            let mut resolved_map = ResolvedBindingMap::new();
+                            for binding in bindings {
+                                let resolved = resource_manager.resolve_resource(&binding.handle);
+                                resolved_map.insert(
+                                    binding.handle,
+                                    ResolvedBinding {
+                                        binding: binding.clone(),
+                                        resolved_resource: resolved});
+                            }
+                            resolved_map
+                        };
+
+                        (resolve_binding_type(inputs), resolve_binding_type(outputs))
                     };
 
-                    let mut resolve_binding_type = | bindings: &[ResourceBinding] | -> ResolvedBindingMap {
-                        let mut resolved_map = ResolvedBindingMap::new();
-                        for binding in bindings {
-                            let resolved = resource_manager.resolve_resource(&binding.handle);
-                            resolved_map.inesrt(
-                                binding.handle,
-                                ResolvedBinding {
-                                    binding: binding.clone(),
-                                    resolved_resource: resolved});
-                        }
-                        resolved_map
-                    };
-
-                    let resolved_inputs = resolve_binding_type(inputs);
-                    let resolved_outputs = resolve_binding_type(outputs);
                     // let resolved_render_targets = resolve_resource_type(render_targets);
-                    let resolved_copy_sources = resolve_resource_type(copy_sources);
-                    let resolved_copy_dests = resolve_resource_type(copy_dests);
+                    // let resolved_copy_sources = resolve_resource_type(copy_sources);
+                    // let resolved_copy_dests = resolve_resource_type(copy_dests);
+                    let (resolved_copy_sources, resolved_copy_dests) = {
+                        let mut resolve_resource_type = | resources: &[ResourceHandle] | -> ResolvedResourceMap {
+                            let mut resolved_map = ResolvedResourceMap::new();
+                            for resource in resources {
+                                let resolved = resource_manager.resolve_resource(resource);
+                                resolved_map.insert(*resource, resolved.clone());
+                            }
+                            resolved_map
+                        };
+
+                        (resolve_resource_type(copy_sources), resolve_resource_type(copy_dests))
+                    };
 
                     let resolved_render_targets = {
                         let mut rts: Vec<ImageWrapper> = Vec::new();
@@ -262,6 +270,20 @@ impl FrameGraph for VulkanFrameGraph {
                                 }
                             }
                         }
+                    }
+
+                    // update descriptor sets
+                    {
+                        let image_bindings: Vec<vk::DescriptorImageInfo> = Vec::new();
+                        let buffer_bindings: Vec<vk::DescriptorBufferInfo> = Vec::new();
+                        for (handle, binding) in &resolved_inputs {
+                            match &binding.binding.resource_type {
+                                ResourceType::Image(_) => {},
+                                ResourceType::Buffer(_) => {}
+                            }
+                        }
+
+                        // let buffer_write = vk::WriteDescriptorSet::builder()
                     }
 
                     let mut image_memory_barriers: Vec<vk::ImageMemoryBarrier> = Vec::new();
