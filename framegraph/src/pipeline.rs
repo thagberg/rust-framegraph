@@ -57,7 +57,9 @@ impl Hash for PipelineDescription
 #[derive(Clone)]
 pub struct Pipeline
 {
-    pub graphics_pipeline: vk::Pipeline
+    pub graphics_pipeline: vk::Pipeline,
+    pub descriptor_sets: Vec<vk::DescriptorSet>,
+    pub pipeline_layout: vk::PipelineLayout
 }
 
 pub trait PipelineManager {
@@ -212,10 +214,15 @@ fn generate_blend_state(blend_type: BlendType, attachments: &[vk::PipelineColorB
 
 impl Pipeline
 {
-    pub fn new(graphics_pipeline: vk::Pipeline) -> Pipeline
+    pub fn new(
+        graphics_pipeline: vk::Pipeline,
+        descriptor_sets: Vec<vk::DescriptorSet>,
+        pipeline_layout: vk::PipelineLayout) -> Pipeline
     {
         Pipeline {
-            graphics_pipeline
+            graphics_pipeline,
+            descriptor_sets,
+            pipeline_layout
         }
     }
 }
@@ -266,12 +273,81 @@ impl PipelineManager for VulkanPipelineManager {
         match pipeline_val {
             Some(pipeline) => { pipeline.clone() },
             None => {
-                let vertex_shader_module = self.shader_manager.load_shader(
+                let mut vertex_shader_module = self.shader_manager.load_shader(
                     render_context,
                     &pipeline_description.vertex_name);
-                let frag_shader_module = self.shader_manager.load_shader(
+                let mut frag_shader_module = self.shader_manager.load_shader(
                     render_context,
                     &pipeline_description.fragment_name);
+
+                let mut full_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>> = HashMap::new();
+                for (set, bindings) in &mut vertex_shader_module.descriptor_bindings {
+                    let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
+                    // set_bindings.copy_from_slice(&bindings);
+                    set_bindings.extend(bindings.iter());
+                    for binding in set_bindings {
+                        binding.stage_flags = vk::ShaderStageFlags::VERTEX;
+                    }
+                }
+                for (set, bindings) in &mut frag_shader_module.descriptor_bindings {
+                    let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
+                    for binding in bindings {
+                        let mut duplicate = set_bindings.iter_mut().find(|x| {
+                            x.binding == binding.binding && x.descriptor_count == binding.descriptor_count && x.descriptor_type == binding.descriptor_type
+                        });
+                        match duplicate {
+                            Some(mut dupe_binding) => {
+                               dupe_binding.stage_flags |= vk::ShaderStageFlags::FRAGMENT;
+                            },
+                            None => {
+                                binding.stage_flags = vk::ShaderStageFlags::FRAGMENT;
+                                set_bindings.push(binding.clone());
+                            }
+                        }
+                    }
+                }
+
+                let mut descriptor_set_layouts: Vec<vk::DescriptorSetLayout> = Vec::new();
+                for (set, bindings) in full_bindings {
+                    let layout_create_info = vk::DescriptorSetLayoutCreateInfo::builder()
+                        .bindings(&bindings)
+                        .build();
+
+                    let layout = unsafe {
+                        render_context.get_device().get().create_descriptor_set_layout(
+                            &layout_create_info,
+                            None)
+                            .expect("Failed to create descriptor set layout")
+                    };
+                    descriptor_set_layouts.push(layout);
+                }
+
+                let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
+
+                let pipeline_layout = {
+                        let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
+                            .set_layouts(&descriptor_set_layouts);
+                        unsafe {
+                            render_context.get_device().get().create_pipeline_layout(&pipeline_layout_create, None)
+                                .expect("Failed to create pipeline layout")
+                        }
+                };
+
+                // let (descriptor_sets, pipeline_layout) = {
+                //     let descriptor_set_layouts = [
+                //         vertex_shader_module.descriptor_set_layouts,
+                //         frag_shader_module.descriptor_set_layouts].concat();
+                //
+                //     let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
+                //     let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
+                //         .set_layouts(&descriptor_set_layouts);
+                //     let pipeline_layout = unsafe {
+                //         render_context.get_device().get().create_pipeline_layout(&pipeline_layout_create, None)
+                //             .expect("Failed to create pipeline layout")
+                //     };
+                //     (descriptor_sets, pipeline_layout)
+                // };
+
                 let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo {
                     s_type: vk::StructureType::PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
                     flags: vk::PipelineInputAssemblyStateCreateFlags::empty(),
@@ -347,7 +423,7 @@ impl PipelineManager for VulkanPipelineManager {
                     // .dynamic_state(&pipeline_description.dynamic_state)
                     .dynamic_state(&dynamic_state)
                     // .layout(frag_shader_module.pipeline_layout)
-                    .layout(vertex_shader_module.pipeline_layout)
+                    .layout(pipeline_layout)
                     .render_pass(render_pass)
                     .subpass(0); // TODO: this shouldn't be static
                 // .build();
@@ -359,7 +435,10 @@ impl PipelineManager for VulkanPipelineManager {
                         None
                     ).expect("Failed to create Graphics Pipeline")
                 };
-                let pipeline = Pipeline::new(graphics_pipeline[0]);
+                let pipeline = Pipeline::new(
+                    graphics_pipeline[0],
+                    descriptor_sets,
+                    pipeline_layout);
                 self.pipeline_cache.insert(pipeline_key, pipeline.clone());
                 pipeline
             }

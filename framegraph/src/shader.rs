@@ -10,9 +10,7 @@ use context::vulkan_render_context::VulkanRenderContext;
 pub struct ShaderModule
 {
     pub shader: vk::ShaderModule,
-    pub descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
-    pub descriptor_sets: Vec<vk::DescriptorSet>,
-    pub pipeline_layout: vk::PipelineLayout
+    pub descriptor_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>>
 }
 
 pub struct ShaderManager
@@ -89,7 +87,7 @@ fn create_shader_module(render_context: &VulkanRenderContext, file_name: &str) -
 
     // TODO: Add support for compute descriptor set bindings (could just use VK_SHADER_STAGE_ALL)
     // TODO: Add support for immutable samplers
-    let mut descriptor_set_layouts: Vec<vk::DescriptorSetLayout> = Vec::new();
+    let mut binding_map : HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>> = HashMap::new();
     if let Ok(descriptor_sets_reflection) = reflection_module.enumerate_descriptor_sets(None)
     {
         for set in descriptor_sets_reflection
@@ -100,53 +98,29 @@ fn create_shader_module(render_context: &VulkanRenderContext, file_name: &str) -
                 descriptor_set_bindings.push(
                     vk::DescriptorSetLayoutBinding::builder()
                         .binding(binding_reflect.binding)
-                        .stage_flags(vk::ShaderStageFlags::ALL_GRAPHICS)
+                        .stage_flags(vk::ShaderStageFlags::empty())
                         .descriptor_count(binding_reflect.count)
                         .descriptor_type(translate_descriptor_type(binding_reflect.descriptor_type))
                         .build()
                 );
             }
 
-            let layout_create_info = vk::DescriptorSetLayoutCreateInfo::builder()
-                .bindings(&descriptor_set_bindings)
-                .build();
-
-            let layout = unsafe {
-                render_context.get_device().get().create_descriptor_set_layout(
-                    &layout_create_info,
-                    None)
-                    .expect("Failed to create descriptor set layout")
-            };
-
-            descriptor_set_layouts.push(layout);
+            binding_map.insert(set.set, descriptor_set_bindings);
         }
     }
 
-    let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
-
-    let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
-        .set_layouts(&descriptor_set_layouts);
-    let pipeline_layout = unsafe {
-        render_context.get_device().get().create_pipeline_layout(&pipeline_layout_create, None)
-            .expect("Failed to create pipeline layout")
-    };
-
-    ShaderModule::new(shader, descriptor_set_layouts, descriptor_sets, pipeline_layout)
+    ShaderModule::new(shader, binding_map)
 }
 
 impl ShaderModule
 {
     pub fn new(
         shader: vk::ShaderModule,
-        descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
-        descriptor_sets: Vec<vk::DescriptorSet>,
-        pipeline_layout: vk::PipelineLayout) -> ShaderModule
+        descriptor_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>>) -> ShaderModule
     {
         ShaderModule {
             shader,
-            descriptor_set_layouts,
-            descriptor_sets,
-            pipeline_layout
+            descriptor_bindings
         }
     }
 }
