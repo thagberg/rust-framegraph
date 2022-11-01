@@ -280,6 +280,9 @@ impl PipelineManager for VulkanPipelineManager {
                     render_context,
                     &pipeline_description.fragment_name);
 
+                // Need to reconcile descriptor bindings between vertex and fragment stages
+                //  i.e. - Could have duplicate bindings for descriptors used in both stages, or
+                //  bindings only used in a single stage but are part of a larger descriptor set
                 let mut full_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>> = HashMap::new();
                 for (set, bindings) in &mut vertex_shader_module.descriptor_bindings {
                     let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
