@@ -2,7 +2,7 @@
 
 layout(location = 0) out vec3 fragColor;
 
-layout(binding = 0) uniform Offset {
+layout(set = 0, binding = 0) uniform Offset {
     vec3 offset;
 } ubo;
 

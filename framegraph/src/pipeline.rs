@@ -311,6 +311,7 @@ impl PipelineManager for VulkanPipelineManager {
                 }
 
                 let mut descriptor_set_layouts: Vec<vk::DescriptorSetLayout> = Vec::new();
+                descriptor_set_layouts.resize(full_bindings.len(), vk::DescriptorSetLayout::null());
                 for (set, bindings) in full_bindings {
                     let layout_create_info = vk::DescriptorSetLayoutCreateInfo::builder()
                         .bindings(&bindings)
@@ -322,7 +323,7 @@ impl PipelineManager for VulkanPipelineManager {
                             None)
                             .expect("Failed to create descriptor set layout")
                     };
-                    descriptor_set_layouts.push(layout);
+                    descriptor_set_layouts[set as usize] = layout;
                 }
 
                 let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
@@ -335,21 +336,6 @@ impl PipelineManager for VulkanPipelineManager {
                                 .expect("Failed to create pipeline layout")
                         }
                 };
-
-                // let (descriptor_sets, pipeline_layout) = {
-                //     let descriptor_set_layouts = [
-                //         vertex_shader_module.descriptor_set_layouts,
-                //         frag_shader_module.descriptor_set_layouts].concat();
-                //
-                //     let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
-                //     let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
-                //         .set_layouts(&descriptor_set_layouts);
-                //     let pipeline_layout = unsafe {
-                //         render_context.get_device().get().create_pipeline_layout(&pipeline_layout_create, None)
-                //             .expect("Failed to create pipeline layout")
-                //     };
-                //     (descriptor_sets, pipeline_layout)
-                // };
 
                 let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo {
                     s_type: vk::StructureType::PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
