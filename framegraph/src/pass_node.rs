@@ -3,13 +3,9 @@ use std::fmt::Debug;
 use context::render_context::{RenderContext, CommandBuffer};
 use crate::resource::resource_manager::ResourceManager;
 use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, ResolvedResource};
-use crate::binding::ResourceBinding;
+use crate::binding::{ResourceBinding, ResolvedResourceBinding};
 
-pub struct ResolvedBinding {
-    pub binding: ResourceBinding,
-    pub resolved_resource: ResolvedResource
-}
-pub type ResolvedBindingMap = HashMap<ResourceHandle, ResolvedBinding>;
+pub type ResolvedBindingMap = HashMap<ResourceHandle, ResolvedResourceBinding>;
 
 pub trait PassNode {
     type RC;

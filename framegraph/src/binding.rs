@@ -1,9 +1,33 @@
-use crate::resource::vulkan_resource_manager::{ResourceHandle, ResourceType};
+use ash::vk;
+use crate::resource::vulkan_resource_manager::{ResolvedResource, ResourceHandle, ResourceType};
+
+pub struct ImageBindingInfo {
+    pub sampler: vk::Sampler
+}
+
+pub struct BufferBindingInfo {
+    pub offset: vk::DeviceSize,
+    pub range: vk::DeviceSize
+}
+
+pub enum BindingType {
+    Buffer(BufferBindingInfo),
+    Image(ImageBindingInfo)
+}
+
+#[derive(Clone)]
+pub struct BindingInfo {
+    pub binding_type: BindingType,
+    pub set: u64,
+    pub slot: u32
+}
 
 #[derive(Clone)]
 pub struct ResourceBinding {
     pub handle: ResourceHandle,
-    pub resource_type: ResourceType,
-    pub binding: u32
+    pub binding_info: BindingInfo
 }
 
+pub struct ResolvedResourceBinding {
+    pub resolved_resource: ResolvedResource
+}

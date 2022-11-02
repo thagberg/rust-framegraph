@@ -10,8 +10,8 @@ use context::render_context::{RenderContext, CommandBuffer};
 use ash::vk;
 use crate::frame_graph::FrameGraph;
 use crate::pass_node::PassNode;
-use crate::binding::ResourceBinding;
-use crate::pass_node::{ResolvedBinding, ResolvedBindingMap};
+use crate::binding::{ResourceBinding, ResolvedResourceBinding, BindingInfo, ImageBindingInfo, BufferBindingInfo};
+use crate::pass_node::ResolvedBindingMap;
 use crate::graphics_pass_node::{GraphicsPassNode};
 use crate::pipeline::{PipelineManager, VulkanPipelineManager};
 use crate::resource::resource_manager::ResourceManager;
@@ -211,17 +211,37 @@ impl FrameGraph for VulkanFrameGraph {
                     let copy_sources = node.get_copy_sources();
                     let copy_dests = node.get_copy_dests();
 
-                    // let resolved_inputs = resolve_binding_type(inputs);
-                    // let resolved_outputs = resolve_binding_type(outputs);
+                    // resolve bindings and also prepare to update descriptors
+                    let mut descriptor_writes: Vec<vk::WriteDescriptorSet> = Vec::new();
                     let (resolved_inputs, resolved_outputs) = {
                         let mut resolve_binding_type = | bindings: &[ResourceBinding] | -> ResolvedBindingMap {
                             let mut resolved_map = ResolvedBindingMap::new();
                             for binding in bindings {
                                 let resolved = resource_manager.resolve_resource(&binding.handle);
+                                let binding_info = match (&resolved.resource, &binding.binding_info.binding_type) {
+                                    (ResourceType::Image(image), BindingInfo::Image(image_binding)) => {
+                                        vk::DescriptorImageInfo::builder()
+                                            .image_view(image.view)
+                                            .layout(image.layout)
+                                            .sampler(vk::Sampler::null()) // TODO: implement samplers
+                                            .build()
+                                    },
+                                    (ResourceType::Buffer(buffer), BindingInfo::Buffer(buffer_binding)) => {
+                                        vk::DescriptorBufferInfo::builder()
+                                            .buffer(buffer.buffer)
+                                            .offset(buffer_binding.offset) // TODO: support offsets for shared allocation buffers
+                                            .range(buffer_binding.range)
+                                            .build()
+                                    },
+                                    (_,_) => {
+                                        panic!("Illegal combination of resource type and binding type provided");
+                                    }
+                                };
+                                // let descriptor_write = vk::WriteDescriptorSet::builder()
+
                                 resolved_map.insert(
                                     binding.handle,
-                                    ResolvedBinding {
-                                        binding: binding.clone(),
+                                    ResolvedResourceBinding {
                                         resolved_resource: resolved});
                             }
                             resolved_map
@@ -270,20 +290,6 @@ impl FrameGraph for VulkanFrameGraph {
                                 }
                             }
                         }
-                    }
-
-                    // update descriptor sets
-                    {
-                        let image_bindings: Vec<vk::DescriptorImageInfo> = Vec::new();
-                        let buffer_bindings: Vec<vk::DescriptorBufferInfo> = Vec::new();
-                        for (handle, binding) in &resolved_inputs {
-                            match &binding.binding.resource_type {
-                                ResourceType::Image(_) => {},
-                                ResourceType::Buffer(_) => {}
-                            }
-                        }
-
-                        // let buffer_write = vk::WriteDescriptorSet::builder()
                     }
 
                     let mut image_memory_barriers: Vec<vk::ImageMemoryBarrier> = Vec::new();
@@ -368,6 +374,24 @@ impl FrameGraph for VulkanFrameGraph {
                                 float32: [0.1, 0.1, 0.1, 1.0]
                             }
                         };
+
+                        // update and bind descriptors
+                        unsafe {
+                            // update descriptorsets
+                            // TODO: support descriptor copies?
+                            render_context.get_device().get().update_descriptor_sets(
+                                &descriptor_writes,
+                                &[]);
+                            // bind descriptorsets
+                            // TODO: COMPUTE SUPPORT
+                            render_context.get_device().get().cmd_bind_descriptor_sets(
+                                *command_buffer,
+                                vk::PipelineBindPoint::GRAPHICS,
+                                pipeline.pipeline_layout,
+                                0,
+                                &pipeline.descriptor_sets,
+                                &[]);
+                        }
 
                         let render_pass_begin = vk::RenderPassBeginInfo::builder()
                             .render_pass(renderpass)

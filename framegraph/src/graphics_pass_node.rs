@@ -3,7 +3,7 @@ use ash::vk;
 use context::api_types::renderpass::VulkanRenderPass;
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
 use crate::pass_node::{PassNode, ResolvedBindingMap};
-use crate::binding::ResourceBinding;
+use crate::binding::{ResourceBinding, ResolvedResourceBinding};
 use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, VulkanResourceManager, ResolvedResource};
 use context::render_context::{RenderContext, CommandBuffer};
 use context::vulkan_render_context::VulkanRenderContext;

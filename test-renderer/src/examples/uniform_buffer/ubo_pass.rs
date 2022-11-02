@@ -9,7 +9,7 @@ use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 
 use framegraph::binding::ResourceBinding;
-use framegraph::pass_node::{ResolvedBinding, ResolvedBindingMap};
+use framegraph::pass_node::ResolvedBindingMap;
 use framegraph::graphics_pass_node::{GraphicsPassNode};
 use framegraph::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, VulkanResourceManager, ResourceType};
 use framegraph::pipeline::{PipelineDescription, RasterizationType, DepthStencilType, BlendType, Pipeline};
@@ -161,16 +161,16 @@ impl UBOPass {
 
                         let resolved_ubo = inputs.get(&ubo_handle)
                             .expect("No uniform buffer resolved in UBO pass");
-                        if let ResourceType::Buffer(ubo) = &resolved_ubo.binding.resource_type {
-                            let descriptor_buffer = vk::DescriptorBufferInfo::builder()
-                                .buffer(ubo.buffer)
-                                .offset(0)
-                                .range(std::mem::size_of::<OffsetUBO>() as vk::DeviceSize);
-
-                            // let descriptor_write = vk::WriteDescriptorSet::builder()
-                        } else {
-                            panic!("Resolved UBO was not a buffer");
-                        }
+                        // if let ResourceType::Buffer(ubo) = &resolved_ubo.binding.resource_type {
+                        //     let descriptor_buffer = vk::DescriptorBufferInfo::builder()
+                        //         .buffer(ubo.buffer)
+                        //         .offset(0)
+                        //         .range(std::mem::size_of::<OffsetUBO>() as vk::DeviceSize);
+                        //
+                        //     // let descriptor_write = vk::WriteDescriptorSet::builder()
+                        // } else {
+                        //     panic!("Resolved UBO was not a buffer");
+                        // }
 
                         // update UBO
                         // let descriptor_buffer = vk::DescriptorBufferInfo::builder()
