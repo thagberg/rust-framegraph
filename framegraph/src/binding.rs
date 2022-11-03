@@ -1,15 +1,18 @@
 use ash::vk;
 use crate::resource::vulkan_resource_manager::{ResolvedResource, ResourceHandle, ResourceType};
 
+#[derive(Clone)]
 pub struct ImageBindingInfo {
     pub sampler: vk::Sampler
 }
 
+#[derive(Clone)]
 pub struct BufferBindingInfo {
     pub offset: vk::DeviceSize,
     pub range: vk::DeviceSize
 }
 
+#[derive(Clone)]
 pub enum BindingType {
     Buffer(BufferBindingInfo),
     Image(ImageBindingInfo)

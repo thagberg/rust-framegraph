@@ -10,7 +10,7 @@ use context::render_context::{RenderContext, CommandBuffer};
 use ash::vk;
 use crate::frame_graph::FrameGraph;
 use crate::pass_node::PassNode;
-use crate::binding::{ResourceBinding, ResolvedResourceBinding, BindingInfo, ImageBindingInfo, BufferBindingInfo};
+use crate::binding::{ResourceBinding, ResolvedResourceBinding, BindingInfo, ImageBindingInfo, BufferBindingInfo, BindingType};
 use crate::pass_node::ResolvedBindingMap;
 use crate::graphics_pass_node::{GraphicsPassNode};
 use crate::pipeline::{PipelineManager, VulkanPipelineManager};
@@ -213,30 +213,41 @@ impl FrameGraph for VulkanFrameGraph {
 
                     // resolve bindings and also prepare to update descriptors
                     let mut descriptor_writes: Vec<vk::WriteDescriptorSet> = Vec::new();
+                    let mut descriptor_buffers: Vec<vk::DescriptorBufferInfo> = Vec::new();
+                    let mut descriptor_images: Vec<vk::DescriptorImageInfo> = Vec::new();
                     let (resolved_inputs, resolved_outputs) = {
                         let mut resolve_binding_type = | bindings: &[ResourceBinding] | -> ResolvedBindingMap {
                             let mut resolved_map = ResolvedBindingMap::new();
                             for binding in bindings {
                                 let resolved = resource_manager.resolve_resource(&binding.handle);
-                                let binding_info = match (&resolved.resource, &binding.binding_info.binding_type) {
-                                    (ResourceType::Image(image), BindingInfo::Image(image_binding)) => {
-                                        vk::DescriptorImageInfo::builder()
+                                let descriptor_type = match (&resolved.resource, &binding.binding_info.binding_type) {
+                                    (ResourceType::Image(image), BindingType::Image(image_binding)) => {
+                                        descriptor_images.push(vk::DescriptorImageInfo::builder()
                                             .image_view(image.view)
-                                            .layout(image.layout)
+                                            .image_layout(image.layout)
                                             .sampler(vk::Sampler::null()) // TODO: implement samplers
-                                            .build()
+                                            .build());
+                                        vk::DescriptorType::COMBINED_IMAGE_SAMPLER
                                     },
-                                    (ResourceType::Buffer(buffer), BindingInfo::Buffer(buffer_binding)) => {
-                                        vk::DescriptorBufferInfo::builder()
+                                    (ResourceType::Buffer(buffer), BindingType::Buffer(buffer_binding)) => {
+                                        descriptor_buffers.push(vk::DescriptorBufferInfo::builder()
                                             .buffer(buffer.buffer)
                                             .offset(buffer_binding.offset) // TODO: support offsets for shared allocation buffers
                                             .range(buffer_binding.range)
-                                            .build()
+                                            .build());
+                                        vk::DescriptorType::UNIFORM_BUFFER
                                     },
                                     (_,_) => {
                                         panic!("Illegal combination of resource type and binding type provided");
                                     }
                                 };
+                                let mut descriptor_write = vk::WriteDescriptorSet::builder()
+                                    .dst_set(binding.binding_info.set)
+                                    .dst_binding(binding.binding_info.slot)
+                                    .dst_array_element(0)
+                                    .descriptor_type(descriptor_type)
+                                    .buffer_info(&descriptor_buffers)
+                                    .image_info(&descriptor_images);
                                 // let descriptor_write = vk::WriteDescriptorSet::builder()
 
                                 resolved_map.insert(
