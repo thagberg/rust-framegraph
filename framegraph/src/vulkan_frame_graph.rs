@@ -212,47 +212,11 @@ impl FrameGraph for VulkanFrameGraph {
                     let copy_dests = node.get_copy_dests();
 
                     // resolve bindings and also prepare to update descriptors
-                    let mut descriptor_buffers: HashMap<u64, Vec<vk::DescriptorBufferInfo>> = HashMap::new();
-                    let mut descriptor_images: HashMap<u64, Vec<vk::DescriptorImageInfo>> = HashMap::new();
-                    let (resolved_inputs, resolved_outputs) = {
-                        let mut resolve_binding_type = | bindings: &[ResourceBinding] | -> ResolvedBindingMap {
-                            let mut resolved_map = ResolvedBindingMap::new();
-                            for binding in bindings {
-                                let resolved = resource_manager.resolve_resource(&binding.handle);
-                                let descriptor_type = match (&resolved.resource, &binding.binding_info.binding_type) {
-                                    (ResourceType::Image(image), BindingType::Image(image_binding)) => {
-                                        let images = descriptor_images.entry(binding.binding_info.set).or_default();
-                                        images.push(vk::DescriptorImageInfo::builder()
-                                            .image_view(image.view)
-                                            .image_layout(image.layout)
-                                            .sampler(vk::Sampler::null()) // TODO: implement samplers
-                                            .build());
-                                        vk::DescriptorType::COMBINED_IMAGE_SAMPLER
-                                    },
-                                    (ResourceType::Buffer(buffer), BindingType::Buffer(buffer_binding)) => {
-                                        let buffers = descriptor_buffers.entry(binding.binding_info.set).or_default();
-                                        buffers.push(vk::DescriptorBufferInfo::builder()
-                                            .buffer(buffer.buffer)
-                                            .offset(buffer_binding.offset) // TODO: support offsets for shared allocation buffers
-                                            .range(buffer_binding.range)
-                                            .build());
-                                        vk::DescriptorType::UNIFORM_BUFFER
-                                    },
-                                    (_,_) => {
-                                        panic!("Illegal combination of resource type and binding type provided");
-                                    }
-                                };
+                    // let mut descriptor_buffers: HashMap<u64, Vec<vk::DescriptorBufferInfo>> = HashMap::new();
+                    // let mut descriptor_images: HashMap<u64, Vec<vk::DescriptorImageInfo>> = HashMap::new();
 
-                                resolved_map.insert(
-                                    binding.handle,
-                                    ResolvedResourceBinding {
-                                        resolved_resource: resolved});
-                            }
-                            resolved_map
-                        };
-
-                        (resolve_binding_type(inputs), resolve_binding_type(outputs))
-                    };
+                    let mut resolved_inputs: ResolvedBindingMap = HashMap::new();
+                    let mut resolved_outputs: ResolvedBindingMap = HashMap::new();
 
                     // let resolved_render_targets = resolve_resource_type(render_targets);
                     // let resolved_copy_sources = resolve_resource_type(copy_sources);
@@ -381,22 +345,60 @@ impl FrameGraph for VulkanFrameGraph {
 
                         // TODO: potential optimization in doing multiple descriptors in a single WriteDescriptorSet?
                         let mut descriptor_writes: Vec<vk::WriteDescriptorSet> = Vec::new();
-                        for (set, images) in &descriptor_images {
-                            let descriptor_set = pipeline.descriptor_sets[set];
-                            for image_info in images {
-                                let descriptor_write = vk::WriteDescriptorSet::builder()
-                                    .dst_set(descriptor_set)
-                                    .dst_binding(image_info.)
-                            }
-                        }
-                        let mut descriptor_write = vk::WriteDescriptorSet::builder()
-                            .dst_set(binding.binding_info.set)
-                            .dst_binding(binding.binding_info.slot)
-                            .dst_array_element(0)
-                            .descriptor_type(descriptor_type)
-                            .buffer_info(&descriptor_buffers)
-                            .image_info(&descriptor_images);
-                        // let descriptor_write = vk::WriteDescriptorSet::builder()
+                        let mut image_bindings: Vec<vk::DescriptorImageInfo> = Vec::new();
+                        let mut buffer_bindings: Vec<vk::DescriptorBufferInfo> = Vec::new();
+                        let (resolved_inputs, resolved_outputs) = {
+                            let mut resolve_binding_type = | bindings: &[ResourceBinding] | -> ResolvedBindingMap {
+                                let mut resolved_map = ResolvedBindingMap::new();
+                                for binding in bindings {
+                                    let descriptor_set = pipeline.descriptor_sets[binding.binding_info.set as usize];
+                                    let mut descriptor_write_builder = vk::WriteDescriptorSet::builder()
+                                        .dst_set(descriptor_set)
+                                        .dst_binding(binding.binding_info.slot)
+                                        .dst_array_element(0);
+                                    let resolved = resource_manager.resolve_resource(&binding.handle);
+                                    let mut image_info: vk::DescriptorImageInfo;
+                                    let mut buffer_info: vk::DescriptorBufferInfo;
+                                    match (&resolved.resource, &binding.binding_info.binding_type) {
+                                        (ResourceType::Image(image), BindingType::Image(image_binding)) => {
+                                            image_info = vk::DescriptorImageInfo::builder()
+                                                .image_view(image.view)
+                                                .image_layout(image.layout)
+                                                .sampler(vk::Sampler::null()) // TODO: implement samplers
+                                                .build();
+                                            image_bindings.push(image_info);
+                                            descriptor_write_builder = descriptor_write_builder
+                                                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                                                .image_info(std::slice::from_ref(image_bindings.last().unwrap()));
+                                        },
+                                        (ResourceType::Buffer(buffer), BindingType::Buffer(buffer_binding)) => {
+                                            buffer_info = vk::DescriptorBufferInfo::builder()
+                                                .buffer(buffer.buffer)
+                                                .offset(buffer_binding.offset) // TODO: support offsets for shared allocation buffers
+                                                .range(buffer_binding.range)
+                                                .build();
+                                            buffer_bindings.push(buffer_info);
+                                            descriptor_write_builder = descriptor_write_builder
+                                                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                                                .buffer_info(std::slice::from_ref(buffer_bindings.last().unwrap()));
+                                        },
+                                        (_,_) => {
+                                            panic!("Illegal combination of resource type and binding type provided");
+                                        }
+                                    };
+
+                                    descriptor_writes.push(descriptor_write_builder.build());
+
+                                    resolved_map.insert(
+                                        binding.handle,
+                                        ResolvedResourceBinding {
+                                            resolved_resource: resolved});
+                                }
+                                resolved_map
+                            };
+
+                            (resolve_binding_type(inputs), resolve_binding_type(outputs))
+                        };
 
                         // update and bind descriptors
                         unsafe {
