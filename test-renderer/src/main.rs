@@ -264,7 +264,7 @@ impl VulkanApp {
                     .base_mip_level(0)
                     .build();
                 vk::ImageMemoryBarrier::builder()
-                    .old_layout(vk::ImageLayout::UNDEFINED)
+                    .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
                     .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
                     .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
                     .dst_access_mask(vk::AccessFlags::NONE)

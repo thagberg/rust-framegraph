@@ -8,7 +8,7 @@ use context::api_types::buffer::BufferCreateInfo;
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 
-use framegraph::binding::ResourceBinding;
+use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding};
 use framegraph::pass_node::ResolvedBindingMap;
 use framegraph::graphics_pass_node::{GraphicsPassNode};
 use framegraph::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, VulkanResourceManager, ResourceType};
@@ -115,14 +115,23 @@ impl UBOPass {
                 "ubo_rendertarget".to_string()));
         let render_target = handle;
 
+        let ubo_binding = ResourceBinding {
+            handle: self.uniform_buffer,
+            binding_info: BindingInfo {
+                binding_type: BindingType::Buffer(BufferBindingInfo {
+                    offset: 0,
+                    range: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize
+                }),
+                set: 0,
+                slot: 0
+            }
+        };
+
         // TODO: need to do this to avoid lifetime issue of &self for when the UBO handle is used during callback
-        // let ubo_binding = ResourceBinding {
-        //     handle: self.uniform_buffer,
-        // }
         let ubo_handle = self.uniform_buffer.clone();
         let passnode = GraphicsPassNode::builder("ubo_pass".to_string())
             .pipeline_description(pipeline_description)
-            // .read(ubo_handle)
+            .read(ubo_binding)
             .render_target(render_target)
             .fill_commands(Box::new(
                 move |render_ctx: &VulkanRenderContext,
@@ -136,15 +145,15 @@ impl UBOPass {
                         let viewport = vk::Viewport::builder()
                             .x(0.0)
                             .y(0.0)
-                            .width(100.0)
-                            .height(100.0)
+                            .width(1200.0)
+                            .height(900.0)
                             .min_depth(0.0)
                             .max_depth(1.0)
                             .build();
 
                         let scissor = vk::Rect2D::builder()
                             .offset(vk::Offset2D{x: 0, y: 0})
-                            .extent(vk::Extent2D::builder().width(100).height(100).build())
+                            .extent(vk::Extent2D::builder().width(1200).height(900).build())
                             .build();
 
                         unsafe {
@@ -157,10 +166,13 @@ impl UBOPass {
                                 *command_buffer,
                                 0,
                                 std::slice::from_ref(&scissor));
+
+                            render_ctx.get_device().get().cmd_draw(*command_buffer, 3, 1, 0, 0);
                         }
 
-                        let resolved_ubo = inputs.get(&ubo_handle)
-                            .expect("No uniform buffer resolved in UBO pass");
+                        //             device.cmd_draw(command_buffer, 3, 1, 0, 0);
+                        // let resolved_ubo = inputs.get(&ubo_handle)
+                        //     .expect("No uniform buffer resolved in UBO pass");
                         // if let ResourceType::Buffer(ubo) = &resolved_ubo.binding.resource_type {
                         //     let descriptor_buffer = vk::DescriptorBufferInfo::builder()
                         //         .buffer(ubo.buffer)

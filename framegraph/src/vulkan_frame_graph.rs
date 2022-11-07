@@ -274,7 +274,8 @@ impl FrameGraph for VulkanFrameGraph {
                                 .build();
                             let barrier = vk::ImageMemoryBarrier::builder()
                                 .image(image.image)
-                                .old_layout(image.layout)
+                                // .old_layout(image.layout)
+                                .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
                                 .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
                                 .src_access_mask(vk::AccessFlags::NONE)
                                 .dst_access_mask(vk::AccessFlags::SHADER_READ)
@@ -345,6 +346,9 @@ impl FrameGraph for VulkanFrameGraph {
 
                         // TODO: potential optimization in doing multiple descriptors in a single WriteDescriptorSet?
                         let mut descriptor_writes: Vec<vk::WriteDescriptorSet> = Vec::new();
+                        // WriteDescriptorSet requires a reference to image or buffer bindings,
+                        // so we have to keep these alive by placing them in vectors until after
+                        // we call vkCommandUpdateDescriptorSets
                         let mut image_bindings: Vec<vk::DescriptorImageInfo> = Vec::new();
                         let mut buffer_bindings: Vec<vk::DescriptorBufferInfo> = Vec::new();
                         let (resolved_inputs, resolved_outputs) = {

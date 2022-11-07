@@ -102,7 +102,7 @@ fn generate_rasteration_state(rasterization_type: RasterizationType) -> vk::Pipe
                 p_next: std::ptr::null(),
                 flags: vk::PipelineRasterizationStateCreateFlags::empty(),
                 depth_clamp_enable: vk::FALSE,
-                cull_mode: vk::CullModeFlags::BACK,
+                cull_mode: vk::CullModeFlags::NONE,
                 front_face: vk::FrontFace::CLOCKWISE,
                 line_width: 1.0,
                 polygon_mode: vk::PolygonMode::FILL,
@@ -176,6 +176,7 @@ fn generate_blend_attachments(blend_type: BlendType) -> [vk::PipelineColorBlendA
             [vk::PipelineColorBlendAttachmentState::builder()
                 .blend_enable(false)
                 .color_blend_op(vk::BlendOp::ADD)
+                .color_write_mask(vk::ColorComponentFlags::RGBA)
                 .build()]
         },
         _ => {
