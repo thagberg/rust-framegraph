@@ -39,7 +39,7 @@ impl RenderpassManager for VulkanRenderpassManager {
         resource_manager: &Self::RM,
         render_context: &Self::RC) -> Self::RP {
 
-        *self.renderpass_map.entry(pass_node.get_name().to_string()).or_insert({
+        *self.renderpass_map.entry(pass_node.get_name().to_string()).or_insert_with_key(|pass_name| {
             // no cached renderpass found, create it and cache it now
             let mut color_attachments: Vec<vk::AttachmentDescription> = Vec::new();
             let mut attachment_refs: Vec<vk::AttachmentReference> = Vec::new();
