@@ -16,13 +16,30 @@ use crate::graphics_pass_node::{GraphicsPassNode};
 use crate::pipeline::{PipelineManager, VulkanPipelineManager};
 use crate::resource::resource_manager::ResourceManager;
 use crate::resource::vulkan_resource_manager::{ResolvedResource, ResolvedResourceMap, ResourceHandle, ResourceType, VulkanResourceManager};
-use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager};
+use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager, AttachmentInfo, StencilAttachmentInfo, PassAttachment};
 
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use petgraph::data::DataMap;
 use petgraph::visit::EdgeRef;
 use context::api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
+
+pub struct Frame {
+    pass_attachments: HashMap<ResourceHandle, PassAttachment>
+}
+
+impl Frame {
+    pub fn new() -> Frame {
+        Frame {
+            pass_attachments: HashMap::new()
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.pass_attachments.clear();
+    }
+}
 
 pub struct VulkanFrameGraph {
     nodes: stable_graph::StableDiGraph<GraphicsPassNode, u32>,
@@ -31,7 +48,8 @@ pub struct VulkanFrameGraph {
     pipeline_manager: VulkanPipelineManager,
     renderpass_manager: VulkanRenderpassManager,
     sorted_nodes: Option<Vec<NodeIndex>>,
-    root_index: Option<NodeIndex>
+    root_index: Option<NodeIndex>,
+    frame: Frame
 }
 
 impl VulkanFrameGraph {
@@ -46,7 +64,8 @@ impl VulkanFrameGraph {
             pipeline_manager,
             renderpass_manager,
             sorted_nodes: None,
-            root_index: None
+            root_index: None,
+            frame: Frame::new()
         }
     }
 
@@ -108,7 +127,8 @@ impl FrameGraph for VulkanFrameGraph {
                 Some(matched_outputs) => {
                     // input/output match defines a graph edge
                     for matched_output in matched_outputs {
-                        self.nodes.add_edge(
+                        // use update_edge instead of add_edge to avoid duplicates
+                        self.nodes.update_edge(
                             *matched_output,
                             *node_index,
                             0);
@@ -116,21 +136,6 @@ impl FrameGraph for VulkanFrameGraph {
                 },
                 _ => {
                     unresolved_passes.push(node_index);
-                }
-            }
-        }
-
-        // need to also do a pass over the output map just to find unused
-        // passes which can be culled from the framegraph
-        let mut unused_passes = Vec::new();
-        for (output, node_index) in output_map.iter() {
-            let find_inputs = input_map.get_vec(output);
-            match find_inputs {
-                Some(_) => {
-                    // These would have already been found during the input map pass
-                },
-                _ => {
-                    unused_passes.push(node_index);
                 }
             }
         }
@@ -189,6 +194,22 @@ impl FrameGraph for VulkanFrameGraph {
             }
         }
 
+        // iterate over the sorted nodes list to generate usage aliases for each resource
+        match &self.sorted_nodes {
+            Some(sorted_nodes) => {
+                for node_index in sorted_nodes {
+                    if let Some(node) = self.nodes.node_weight(*node_index) {
+                        for rt in node.get_rendertargets() {
+
+                        }
+                    }
+                }
+            },
+            _ => {
+
+            }
+        }
+
         self.compiled = true;
     }
 
@@ -211,16 +232,9 @@ impl FrameGraph for VulkanFrameGraph {
                     let copy_sources = node.get_copy_sources();
                     let copy_dests = node.get_copy_dests();
 
-                    // resolve bindings and also prepare to update descriptors
-                    // let mut descriptor_buffers: HashMap<u64, Vec<vk::DescriptorBufferInfo>> = HashMap::new();
-                    // let mut descriptor_images: HashMap<u64, Vec<vk::DescriptorImageInfo>> = HashMap::new();
-
                     let mut resolved_inputs: ResolvedBindingMap = HashMap::new();
                     let mut resolved_outputs: ResolvedBindingMap = HashMap::new();
 
-                    // let resolved_render_targets = resolve_resource_type(render_targets);
-                    // let resolved_copy_sources = resolve_resource_type(copy_sources);
-                    // let resolved_copy_dests = resolve_resource_type(copy_dests);
                     let (resolved_copy_sources, resolved_copy_dests) = {
                         let mut resolve_resource_type = | resources: &[ResourceHandle] | -> ResolvedResourceMap {
                             let mut resolved_map = ResolvedResourceMap::new();
@@ -244,21 +258,6 @@ impl FrameGraph for VulkanFrameGraph {
                         }
                         rts
                     };
-
-                    // Ensure all rendertargets are the same dimensions
-                    let mut framebuffer_extent: Option<vk::Extent3D> = None;
-                    {
-                        for resolved in &resolved_render_targets {
-                            match framebuffer_extent {
-                                Some(extent) => {
-                                    assert_eq!(extent, resolved.extent, "All framebuffer attachments must be the same dimensions");
-                                },
-                                None => {
-                                    framebuffer_extent = Some(resolved.extent.clone());
-                                }
-                            }
-                        }
-                    }
 
                     let mut image_memory_barriers: Vec<vk::ImageMemoryBarrier> = Vec::new();
                     for (handle, resource) in &resolved_copy_sources {
@@ -323,12 +322,26 @@ impl FrameGraph for VulkanFrameGraph {
 
                     let active_pipeline = node.get_pipeline_description();
                     if let Some(pipeline_description) = active_pipeline {
-                        let framebuffer_extent = framebuffer_extent
-                            .expect("Framebuffer required for renderpass");
+                        // Ensure all rendertargets are the same dimensions
+                        let framebuffer_extent = {
+                            let mut extent: Option<vk::Extent3D> = None;
+                            for rt in &resolved_render_targets {
+                                match extent {
+                                    Some(extent) => {
+                                        assert_eq!(extent, rt.extent, "All framebuffer attachments must be the same dimensions");
+                                    },
+                                    None => {
+                                        extent = Some(rt.extent.clone());
+                                    }
+                                }
+                            }
+                            extent.expect("Framebuffer required for renderpass")
+                        };
 
+                        let mut color_attachments: Vec<PassAttachment> = Vec::new();
                         let renderpass = self.renderpass_manager.create_or_fetch_renderpass(
                             node,
-                            resource_manager,
+                            &mut color_attachments,
                             render_context);
 
                         let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass, pipeline_description);
@@ -471,6 +484,7 @@ impl FrameGraph for VulkanFrameGraph {
             sorted_indices.clear();
         }
         self.nodes.clear();
+        self.frame.reset();
         self.compiled = false;
         self.frame_started = false;
     }

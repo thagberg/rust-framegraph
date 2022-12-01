@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::vec_deque::VecDeque;
 use crate::pass_node::PassNode;
 use crate::resource::resource_manager::{ResourceManager};
 use crate::resource::vulkan_resource_manager::{ResourceHandle, ResourceCreateInfo, VulkanResourceManager};
@@ -9,16 +10,33 @@ use ash::vk;
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::graphics_pass_node::GraphicsPassNode;
 
+pub struct StencilAttachmentInfo {
+    pub stencil_load_op: vk::AttachmentLoadOp,
+    pub stencil_store_op: vk::AttachmentStoreOp
+}
+
+pub struct AttachmentInfo {
+    pub samples: vk::SampleCountFlags,
+    pub format: vk::Format,
+    pub layout: vk::ImageLayout,
+    pub load_op: vk::AttachmentLoadOp,
+    pub store_op: vk::AttachmentStoreOp,
+    pub stencil_attachment: Option<StencilAttachmentInfo>
+}
+
+pub struct PassAttachment {
+    pub attachment: VecDeque<AttachmentInfo>
+}
+
 pub trait RenderpassManager {
     type PN;
-    type RM;
     type RC;
     type RP;
 
     fn create_or_fetch_renderpass(
         &mut self,
         pass_node: &Self::PN,
-        resource_manager: &Self::RM,
+        color_attachments: &mut [PassAttachment],
         render_context: &Self::RC
     ) -> Self::RP;
 }
@@ -29,50 +47,49 @@ pub struct VulkanRenderpassManager {
 
 impl RenderpassManager for VulkanRenderpassManager {
     type PN = GraphicsPassNode;
-    type RM = VulkanResourceManager;
     type RC = VulkanRenderContext;
     type RP = vk::RenderPass;
 
     fn create_or_fetch_renderpass(
         &mut self,
         pass_node: &Self::PN,
-        resource_manager: &Self::RM,
+        color_attachments: &mut [PassAttachment],
         render_context: &Self::RC) -> Self::RP {
 
         *self.renderpass_map.entry(pass_node.get_name().to_string()).or_insert_with_key(|pass_name| {
             // no cached renderpass found, create it and cache it now
-            let mut color_attachments: Vec<vk::AttachmentDescription> = Vec::new();
+            let mut color_attachment_descs: Vec<vk::AttachmentDescription> = Vec::new();
             let mut attachment_refs: Vec<vk::AttachmentReference> = Vec::new();
-            for (i, render_target) in pass_node.get_rendertargets().into_iter().enumerate() {
-                match resource_manager.get_resource_description(render_target) {
-                    Some(create_info) => {
-                        match create_info {
-                            ResourceCreateInfo::Image(rt_description) => {
-                                let rt_create_info = rt_description.get_create_info();
-                                color_attachments.push(vk::AttachmentDescription::builder()
-                                    .format(rt_create_info.format)
-                                    .samples(rt_create_info.samples)
-                                    .initial_layout(rt_create_info.initial_layout)
-                                    // .final_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)// TODO: this needs to be paramateried
-                                    .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)// TODO: this needs to be paramateried
-                                    .load_op(vk::AttachmentLoadOp::CLEAR)
-                                    .store_op(vk::AttachmentStoreOp::STORE)
-                                    .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
-                                    .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
-                                    .build());
-                                attachment_refs.push(vk::AttachmentReference::builder()
-                                    .attachment(i as u32)
-                                    .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                                    .build());
-                            },
-                            ResourceCreateInfo::Buffer(_) => {
-                                panic!("Expected image description, found buffer instead")
-                            }
+
+            let mut attachment_index = 0;
+            for color_attachment in color_attachments {
+                let attachment_info = color_attachment.attachment.pop_front();
+                let peek_info = color_attachment.attachment.front();
+
+                if let Some(attachment_info) = attachment_info {
+                    let next_layout = {
+                        if let Some(peek_info) = peek_info {
+                            peek_info.layout
                         }
-                    },
-                    None => {
-                        panic!("RenderpassManager could not find description for rendertarget")
-                    }
+                        else {
+                            vk::ImageLayout::UNDEFINED
+                        }
+                    };
+                    color_attachment_descs.push(vk::AttachmentDescription::builder()
+                        .format(attachment_info.format)
+                        .samples(attachment_info.samples)
+                        .load_op(attachment_info.load_op)
+                        .store_op(attachment_info.store_op)
+                        .initial_layout(attachment_info.layout)
+                        .final_layout(next_layout)
+                        .build());
+                    attachment_refs.push(vk::AttachmentReference::builder()
+                        .attachment(attachment_index)
+                        .layout(attachment_info.layout)
+                        .build());
+                }
+                else {
+                    panic!("Empty color attachment was provided")
                 }
             }
 
@@ -92,7 +109,7 @@ impl RenderpassManager for VulkanRenderpassManager {
 
             let renderpass_create_info = vk::RenderPassCreateInfo::builder()
                 .flags(vk::RenderPassCreateFlags::empty())
-                .attachments(&color_attachments)
+                .attachments(&color_attachment_descs)
                 .subpasses(std::slice::from_ref(&subpass))
                 .dependencies(std::slice::from_ref(&subpass_dependency)).build();
 
@@ -109,28 +126,3 @@ impl VulkanRenderpassManager {
     }
 
 }
-
-// let render_target = render_context.create_transient_image(
-// vk::ImageCreateInfo::builder()
-// .image_type(vk::ImageType::TYPE_2D)
-// .format(vk::Format::R8G8B8A8_SRGB)
-// .sharing_mode(vk::SharingMode::EXCLUSIVE)
-// // .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-// .initial_layout(vk::ImageLayout::UNDEFINED)
-// .samples(vk::SampleCountFlags::TYPE_1)
-// .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT | vk::ImageUsageFlags::SAMPLED)
-// .extent(vk::Extent3D::builder().height(100).width(100).depth(1).build())
-// .mip_levels(1)
-// .array_layers(1)
-// .build()
-//
-// let color_attachment = vk::AttachmentDescription::builder()
-// .format(vk::Format::R8G8B8A8_SRGB)
-// .flags(vk::AttachmentDescriptionFlags::empty())
-// .samples(vk::SampleCountFlags::TYPE_1)
-// .load_op(vk::AttachmentLoadOp::CLEAR)
-// .store_op(vk::AttachmentStoreOp::STORE)
-// .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
-// .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
-// .initial_layout(vk::ImageLayout::UNDEFINED)
-// .final_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
