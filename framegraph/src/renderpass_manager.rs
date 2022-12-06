@@ -28,6 +28,14 @@ pub struct PassAttachment {
     pub attachment: VecDeque<AttachmentInfo>
 }
 
+impl PassAttachment {
+    pub fn new() -> Self {
+        PassAttachment {
+            attachment: VecDeque::new()
+        }
+    }
+}
+
 pub trait RenderpassManager {
     type PN;
     type RC;

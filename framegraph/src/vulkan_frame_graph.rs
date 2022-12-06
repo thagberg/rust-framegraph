@@ -26,7 +26,7 @@ use context::api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
 
 pub struct Frame {
-    pass_attachments: HashMap<ResourceHandle, PassAttachment>
+    pub pass_attachments: HashMap<ResourceHandle, PassAttachment>
 }
 
 impl Frame {
@@ -200,7 +200,14 @@ impl FrameGraph for VulkanFrameGraph {
                 for node_index in sorted_nodes {
                     if let Some(node) = self.nodes.node_weight(*node_index) {
                         for rt in node.get_rendertargets() {
+                            let pass_attachment = self.frame.pass_attachments.entry(*rt).or_insert_with_key(|handle| {
+                                PassAttachment::new()
+                            });
 
+
+                            // pub struct Frame {
+                            //     pub pass_attachments: HashMap<ResourceHandle, PassAttachment>
+                            // }
                         }
                     }
                 }
