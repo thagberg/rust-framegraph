@@ -68,16 +68,6 @@ impl VulkanFrameGraph {
             frame: Frame::new()
         }
     }
-
-    fn _mark_unused(&self, visited_nodes: &mut Vec<bool>, edges: Edges<u32, Directed>)  {
-        for edge in edges {
-            let node_index = edge.source();
-            visited_nodes[node_index.index()] = true;
-            let incoming = self.nodes.edges_directed(node_index, Direction::Incoming);
-            self._mark_unused(visited_nodes, incoming);
-        }
-    }
-
 }
 
 impl FrameGraph for VulkanFrameGraph {
@@ -141,43 +131,22 @@ impl FrameGraph for VulkanFrameGraph {
         }
 
         // Ensure root node is valid, then mark any passes which don't contribute to root node as unused
-        let mut visited_nodes: Vec<bool> = vec![false; self.nodes.node_count()];
         match self.root_index {
             Some(root_index) => {
                 let root_node = self.nodes.node_weight(root_index);
-                match root_node {
-                    Some(node) => {
-                        visited_nodes[root_index.index()] = true;
-                        let mut incoming = self.nodes.edges_directed(root_index, Direction::Incoming);
-                        self._mark_unused(&mut visited_nodes, incoming);
-                    },
-                    None => {
-                        panic!("Root node is invalid");
-                    }
+                if root_node.is_none() {
+                    panic!("Root node is invalid");
                 }
             },
-            None => {
-                panic!("Root node was elided from frame graph, might have an unresolved dependency");
+            _ => {
+                panic!("A root node is required");
             }
         }
 
-        // now remove unused passes
-        for i in 0..visited_nodes.len() {
-            if visited_nodes[i] == false {
-                let node_index = NodeIndex::new(i);
-                {
-                    let node = self.nodes.node_weight(node_index).unwrap();
-                    println!("Removing unused node: {:?}", node.get_name());
-                }
-                self.nodes.remove_node(node_index);
-            }
-        }
-
-        if self.root_index.is_some() {
-            let root_node = self.nodes.node_weight(self.root_index.unwrap());
-        } else {
-            panic!("Root node was elided from frame graph, might have an unresolved dependency");
-        }
+        // use Dijkstra's Algorithm to find paths to each node from the root node
+        let path_lengths = petgraph::algo::dijkstra(&self.nodes, self.root_index.unwrap(), None, |_| 1);
+        // remove all nodes which are unreachable from the root node
+        self.nodes.retain_nodes(|_graph, node_index| path_lenghts.contains_key(node_index));
 
         // unresolved and unused passes have been removed from the graph,
         // so now we can use a topological sort to generate an execution order
@@ -193,6 +162,13 @@ impl FrameGraph for VulkanFrameGraph {
                 println!("A cycle was detected in the framegraph: {:?}", cycle_error);
             }
         }
+
+        // for each node in sorted nodes
+        //      for each resource
+        //          get last usage
+        //          cache this node's usage
+        //          create PassAttachment with last usage and this usage
+        //          When creating RenderPass we'll then have last and current usage for layouts
 
         // iterate over the sorted nodes list to generate usage aliases for each resource
         match &self.sorted_nodes {
