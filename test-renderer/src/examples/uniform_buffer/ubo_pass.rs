@@ -94,6 +94,8 @@ impl UBOPass {
             concat!(env!("OUT_DIR"), "/shaders/hello-frag.spv")
         );
 
+        // let color_attachment = create_color_attachment_transient(image_description);
+
         let handle = resource_manager.create_image_transient(
             ImageCreateInfo::new(
             vk::ImageCreateInfo::builder()

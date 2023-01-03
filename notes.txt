@@ -146,3 +146,53 @@ Global resources
 		* Resource handle
 		* Descriptor set (handled by framegraph?)
 		* Binding within descriptor set
+
+07 December 22 - Framebuffer Attachments
+	One pass creates a transient color attachment
+	Another pass needs that transient image resource as a a texture...
+	Framegraph::create_attachment_transient(description) -> ColorAttachmentReference
+	Framegraph::create_attachment_global(handle) -> ColorAttachmentReference
+		Fetches the description from the resource manager?
+	ColorAttachmentReference
+		handle
+		description?
+	Pass owners - instead of creating a transient resource, create a color attachment with image description
+
+ResourceReference contains a queue
+Queue records usage per pass
+But not all usages of a resource will execute... passes get elided from framegraph during compilation
+ResourceReferences should be generated after compilation, during "linking" then and stored on the framegraph?
+CreateResourceRef
+
+Create a ResourceRef with description
+Pass ResourceRef as rendertarget to PassNode
+	* Create ColorAttachmentRef in PassNode
+Use ResourceRef in other passes
+	* Create TextureRef in PassNode
+Framegraph::compile
+	* Sort graph nodes, elide unneeded nodes
+	* Iterate sorted nodes
+		* Build queue on ResourceRef
+	
+
+
+Generating Graph
+----------------
+
+Nodes have inputs and outputs
+
+Parse inputs/outputs
+For each node
+	For each input
+		Add node ID to input map
+	For each output
+		Add node ID to output map
+
+Add edges
+For each node
+	For each input
+		Match to output map
+		For each match
+			Create edge
+
+

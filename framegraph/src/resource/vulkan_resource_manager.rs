@@ -28,6 +28,11 @@ impl PartialEq for ResourceHandle {
     }
 }
 
+pub enum ResourceReference {
+    Image {
+        handle: ResourceHandle
+    }
+}
 
 pub enum ResourceCreateInfo {
     Buffer(BufferCreateInfo),
