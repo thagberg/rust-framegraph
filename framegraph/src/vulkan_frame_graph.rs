@@ -163,33 +163,28 @@ impl FrameGraph for VulkanFrameGraph {
             }
         }
 
-        // for each node in sorted nodes
-        //      for each resource
-        //          get last usage
-        //          cache this node's usage
-        //          create PassAttachment with last usage and this usage
-        //          When creating RenderPass we'll then have last and current usage for layouts
+        // All image bindings and attachments require the most recent usage for that resource
+        // in case layout transitions are necessary. Since the graph has already been sorted,
+        // we can just iterate over the sorted nodes to do this
+        let mut usage_cache: HashMap<ResourceHandle, vk::ImageLayout> = HashMap::new();
+        for node_index in &self.sorted_nodes.unwrap() {
+            if let Some(node) = self.nodes.node_weight_mut(*node_index) {
 
-        // iterate over the sorted nodes list to generate usage aliases for each resource
-        match &self.sorted_nodes {
-            Some(sorted_nodes) => {
-                for node_index in sorted_nodes {
-                    if let Some(node) = self.nodes.node_weight(*node_index) {
-                        for rt in node.get_rendertargets() {
-                            let pass_attachment = self.frame.pass_attachments.entry(*rt).or_insert_with_key(|handle| {
-                                PassAttachment::new()
-                            });
+                let update_usage = |handle: ResourceHandle, new_usage: vk::ImageLayout| -> vk::ImageLayout {
+                    let last_usage = usage_cache.entry(handle).or_insert(vk::ImageLayout::UNDEFINED);
+                    usage_cache.entry(handle).and_modify(new_usage);
+                    *last_usage
+                };
 
+                for rt in node.get_rendertargets_mut() {
+                    rt.last_usage = update_usage(rt.handle, vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+                }
 
-                            // pub struct Frame {
-                            //     pub pass_attachments: HashMap<ResourceHandle, PassAttachment>
-                            // }
-                        }
+                for input in node.get_inputs_mut() {
+                    if let BindingType::Image(image_binding) = input {
+                        image_binding.last_usage = update_usage(input.handle, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
                     }
                 }
-            },
-            _ => {
-
             }
         }
 

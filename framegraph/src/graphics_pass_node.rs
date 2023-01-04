@@ -7,6 +7,7 @@ use crate::binding::{ResourceBinding, ResolvedResourceBinding};
 use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, VulkanResourceManager, ResolvedResource};
 use context::render_context::{RenderContext, CommandBuffer};
 use context::vulkan_render_context::VulkanRenderContext;
+use crate::attachment::AttachmentReference;
 use crate::pipeline::{PipelineDescription};
 
 type FillCallback = dyn (
@@ -23,7 +24,7 @@ type FillCallback = dyn (
 
 pub struct GraphicsPassNode {
     pipeline_description: Option<PipelineDescription>,
-    render_targets: Vec<ResourceHandle>,
+    render_targets: Vec<AttachmentReference>,
     inputs: Vec<ResourceBinding>,
     outputs: Vec<ResourceBinding>,
     copy_sources: Vec<ResourceHandle>,
@@ -35,7 +36,7 @@ pub struct GraphicsPassNode {
 #[derive(Default)]
 pub struct PassNodeBuilder {
     pipeline_description: Option<PipelineDescription>,
-    render_targets: Vec<ResourceHandle>,
+    render_targets: Vec<AttachmentReference>,
     inputs: Vec<ResourceBinding>,
     outputs: Vec<ResourceBinding>,
     copy_sources: Vec<ResourceHandle>,
@@ -58,11 +59,21 @@ impl PassNode for GraphicsPassNode  {
         &self.inputs
     }
 
+    fn get_inputs_mut(&mut self) -> &mut [ResourceBinding] {
+        &mut self.inputs
+    }
+
    fn get_outputs(&self) -> &[ResourceBinding] {
         &self.outputs
     }
 
-   fn get_rendertargets(&self) -> &[ResourceHandle] { &self.render_targets }
+    fn get_outputs_mut(&mut self) -> &mut [ResourceBinding] {
+        &mut self.outputs
+    }
+
+   fn get_rendertargets(&self) -> &[AttachmentReference] { &self.render_targets }
+
+    fn get_rendertargets_mut(&mut self) -> &mut [AttachmentReference] { &mut self.render_targets }
 
     fn get_copy_sources(&self) -> &[ResourceHandle] { &self.copy_sources }
 
@@ -83,7 +94,10 @@ impl PassNode for GraphicsPassNode  {
         let output_handles: Vec<ResourceHandle> = self.get_outputs().into_iter().map(|binding| {
             binding.handle
         }).collect();
-        [&output_handles, self.get_rendertargets(), self.get_copy_dests()].concat()
+        let rt_handles: Vec<ResourceHandle> = self.get_rendertargets().into_iter().map(|attachment_ref| {
+            attachment_ref.handle
+        }).collect();
+        [&output_handles, rt_handles, self.get_copy_dests()].concat()
     }
 
    fn execute(
@@ -142,7 +156,7 @@ impl PassNodeBuilder {
         self
     }
 
-    pub fn render_target(mut self, render_target: ResourceHandle) -> Self {
+    pub fn render_target(mut self, render_target: AttachmentReference) -> Self {
         self.render_targets.push(render_target);
         self
     }

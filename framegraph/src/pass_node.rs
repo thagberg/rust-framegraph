@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use context::render_context::{RenderContext, CommandBuffer};
+use crate::attachment::AttachmentReference;
 use crate::resource::resource_manager::ResourceManager;
 use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, ResolvedResource};
 use crate::binding::{ResourceBinding, ResolvedResourceBinding};
@@ -16,9 +17,15 @@ pub trait PassNode {
 
     fn get_inputs(&self) -> &[ResourceBinding];
 
+    fn get_inputs_mut(&mut self) -> &mut [ResourceBinding];
+
     fn get_outputs(&self) -> &[ResourceBinding];
 
-    fn get_rendertargets(&self) -> &[ResourceHandle];
+    fn get_outputs_mut(&self) -> &mut [ResourceBinding];
+
+    fn get_rendertargets(&self) -> &[AttachmentReference];
+
+    fn get_rendertargets_mut(&mut self) -> &mut [AttachmentReference];
 
     fn get_copy_sources(&self) -> &[ResourceHandle];
 

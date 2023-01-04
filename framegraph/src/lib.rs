@@ -9,6 +9,7 @@ pub mod renderpass_manager;
 pub mod frame_graph;
 pub mod vulkan_frame_graph;
 pub mod binding;
+pub mod attachment;
 
 #[cfg(test)]
 mod tests
