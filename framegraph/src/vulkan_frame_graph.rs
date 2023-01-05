@@ -20,8 +20,9 @@ use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager, Atta
 
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use petgraph::adj::DefaultIx;
 use petgraph::data::DataMap;
-use petgraph::visit::EdgeRef;
+use petgraph::visit::{Dfs, EdgeRef, NodeCount};
 use context::api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
 
@@ -119,8 +120,8 @@ impl FrameGraph for VulkanFrameGraph {
                     for matched_output in matched_outputs {
                         // use update_edge instead of add_edge to avoid duplicates
                         self.nodes.update_edge(
-                            *matched_output,
                             *node_index,
+                            *matched_output,
                             0);
                     }
                 },
@@ -143,23 +144,39 @@ impl FrameGraph for VulkanFrameGraph {
             }
         }
 
-        // use Dijkstra's Algorithm to find paths to each node from the root node
-        let path_lengths = petgraph::algo::dijkstra(&self.nodes, self.root_index.unwrap(), None, |_| 1);
-        // remove all nodes which are unreachable from the root node
-        self.nodes.retain_nodes(|_graph, node_index| path_lengths.contains_key(&node_index));
+        // Use DFS to find all accessible nodes from the root node
+        {
+            let root_index = self.root_index.unwrap();
+
+            let mut retained_nodes: Vec<bool> = Vec::new();
+            retained_nodes.resize(self.nodes.node_count(), false);
+
+            let mut dfs = Dfs::new(&self.nodes, root_index);
+            while let Some(node_id) = dfs.next(&self.nodes) {
+                retained_nodes[node_id.index()] = true;
+            }
+
+            self.nodes.retain_nodes(|_graph, node_index| {
+                retained_nodes[node_index.index()]
+            });
+        }
 
         // unresolved and unused passes have been removed from the graph,
         // so now we can use a topological sort to generate an execution order
-        let sort_result = petgraph::algo::toposort(&self.nodes, None);
-        match sort_result {
-            Ok(sorted_list) => {
-                for i in &sorted_list {
-                    println!("Node: {:?}", self.nodes.node_weight(*i).unwrap().get_name());
+        {
+            let mut sort_result = petgraph::algo::toposort(&self.nodes, None);
+            match sort_result {
+                Ok(mut sorted_list) => {
+                    // DFS requires we order nodes as input -> output, but for sorting we want output -> input
+                    sorted_list.reverse();
+                    for i in &sorted_list {
+                        println!("Node: {:?}", self.nodes.node_weight(*i).unwrap().get_name());
+                    }
+                    self.sorted_nodes = Some(sorted_list);
+                },
+                Err(cycle_error) => {
+                    println!("A cycle was detected in the framegraph: {:?}", cycle_error);
                 }
-                self.sorted_nodes = Some(sorted_list);
-            },
-            Err(cycle_error) => {
-                println!("A cycle was detected in the framegraph: {:?}", cycle_error);
             }
         }
 
