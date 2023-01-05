@@ -1,4 +1,5 @@
 pub mod blit;
+pub mod imgui;
 
 #[cfg(test)]
 mod tests {

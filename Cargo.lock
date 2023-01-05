@@ -159,6 +159,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "chlorine"
+version = "1.0.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75476fe966a8af7c0ceae2a3e514afa87d4451741fcdfab8bfaa07ad301842ec"
+
+[[package]]
 name = "cocoa"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -552,6 +558,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "imgui"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fed69cf982eee638cb1a2f1cf1d4b20626ea1813b7d37df6f7d3a2d5086c8cc"
+dependencies = [
+ "bitflags",
+ "cfg-if 1.0.0",
+ "imgui-sys",
+ "mint",
+ "parking_lot 0.12.1",
+]
+
+[[package]]
+name = "imgui-sys"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2efc4bf8f1638a573e262ce131f870226d172e986fe966a141c2c60602589b71"
+dependencies = [
+ "cc",
+ "cfg-if 1.0.0",
+ "chlorine",
+ "mint",
+]
+
+[[package]]
 name = "indexmap"
 version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -621,9 +652,9 @@ dependencies = [
 
 [[package]]
 name = "lock_api"
-version = "0.4.5"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "712a4d093c9976e24e7dbca41db895dabcbac38eb5f4045393d17a95bdfb1109"
+checksum = "88943dd7ef4a2e5a4bfa2753aaab3013e34ce2533d1996fb18ef591e315e2b3b"
 dependencies = [
  "scopeguard",
 ]
@@ -694,6 +725,12 @@ dependencies = [
  "adler",
  "autocfg",
 ]
+
+[[package]]
+name = "mint"
+version = "0.5.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e53debba6bda7a793e5f99b8dacf19e626084f525f7829104ba9898f367d85ff"
 
 [[package]]
 name = "mio"
@@ -955,7 +992,17 @@ checksum = "7d17b78036a60663b797adeaee46f5c9dfebb86948d1255007a1d6be0271ff99"
 dependencies = [
  "instant",
  "lock_api",
- "parking_lot_core",
+ "parking_lot_core 0.8.5",
+]
+
+[[package]]
+name = "parking_lot"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3742b2c103b9f06bc9fff0a37ff4912935851bee6d36f3c02bcc755bcfec228f"
+dependencies = [
+ "lock_api",
+ "parking_lot_core 0.9.5",
 ]
 
 [[package]]
@@ -973,6 +1020,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "parking_lot_core"
+version = "0.9.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ff9f3fef3968a3ec5945535ed654cb38ff72d7495a25619e2247fb15a2ed9ba"
+dependencies = [
+ "cfg-if 1.0.0",
+ "libc",
+ "redox_syscall",
+ "smallvec",
+ "windows-sys",
+]
+
+[[package]]
 name = "passes"
 version = "0.1.0"
 dependencies = [
@@ -980,6 +1040,7 @@ dependencies = [
  "context",
  "framegraph",
  "glam",
+ "imgui",
 ]
 
 [[package]]
@@ -1469,6 +1530,63 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
+name = "windows-sys"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a3e1820f08b8513f676f7ab6c1f99ff312fb97b553d30ff4dd86f9f15728aa7"
+dependencies = [
+ "windows_aarch64_gnullvm",
+ "windows_aarch64_msvc",
+ "windows_i686_gnu",
+ "windows_i686_msvc",
+ "windows_x86_64_gnu",
+ "windows_x86_64_gnullvm",
+ "windows_x86_64_msvc",
+]
+
+[[package]]
+name = "windows_aarch64_gnullvm"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41d2aa71f6f0cbe00ae5167d90ef3cfe66527d6f613ca78ac8024c3ccab9a19e"
+
+[[package]]
+name = "windows_aarch64_msvc"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd0f252f5a35cac83d6311b2e795981f5ee6e67eb1f9a7f64eb4500fbc4dcdb4"
+
+[[package]]
+name = "windows_i686_gnu"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fbeae19f6716841636c28d695375df17562ca208b2b7d0dc47635a50ae6c5de7"
+
+[[package]]
+name = "windows_i686_msvc"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84c12f65daa39dd2babe6e442988fc329d6243fdce47d7d2d155b8d874862246"
+
+[[package]]
+name = "windows_x86_64_gnu"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf7b1b21b5362cbc318f686150e5bcea75ecedc74dd157d874d754a2ca44b0ed"
+
+[[package]]
+name = "windows_x86_64_gnullvm"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09d525d2ba30eeb3297665bd434a54297e4170c7f1a44cad4ef58095b4cd2028"
+
+[[package]]
+name = "windows_x86_64_msvc"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f40009d85759725a34da6d89a94e63d7bdc50a862acf0dbc7c8e488f1edcb6f5"
+
+[[package]]
 name = "winit"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1489,7 +1607,7 @@ dependencies = [
  "ndk-glue",
  "ndk-sys",
  "objc",
- "parking_lot",
+ "parking_lot 0.11.2",
  "percent-encoding",
  "raw-window-handle 0.4.2",
  "smithay-client-toolkit",
