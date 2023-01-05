@@ -8,6 +8,7 @@ use context::render_context::{RenderContext, CommandBuffer};
 
 use ash::vk;
 use context::vulkan_render_context::VulkanRenderContext;
+use crate::attachment::AttachmentReference;
 use crate::graphics_pass_node::GraphicsPassNode;
 
 pub struct StencilAttachmentInfo {
@@ -44,7 +45,7 @@ pub trait RenderpassManager {
     fn create_or_fetch_renderpass(
         &mut self,
         pass_node: &Self::PN,
-        color_attachments: &mut [PassAttachment],
+        color_attachments: &[AttachmentReference],
         render_context: &Self::RC
     ) -> Self::RP;
 }
@@ -61,7 +62,7 @@ impl RenderpassManager for VulkanRenderpassManager {
     fn create_or_fetch_renderpass(
         &mut self,
         pass_node: &Self::PN,
-        color_attachments: &mut [PassAttachment],
+        color_attachments: &[AttachmentReference],
         render_context: &Self::RC) -> Self::RP {
 
         *self.renderpass_map.entry(pass_node.get_name().to_string()).or_insert_with_key(|pass_name| {
@@ -71,34 +72,18 @@ impl RenderpassManager for VulkanRenderpassManager {
 
             let mut attachment_index = 0;
             for color_attachment in color_attachments {
-                let attachment_info = color_attachment.attachment.pop_front();
-                let peek_info = color_attachment.attachment.front();
-
-                if let Some(attachment_info) = attachment_info {
-                    let next_layout = {
-                        if let Some(peek_info) = peek_info {
-                            peek_info.layout
-                        }
-                        else {
-                            vk::ImageLayout::UNDEFINED
-                        }
-                    };
-                    color_attachment_descs.push(vk::AttachmentDescription::builder()
-                        .format(attachment_info.format)
-                        .samples(attachment_info.samples)
-                        .load_op(attachment_info.load_op)
-                        .store_op(attachment_info.store_op)
-                        .initial_layout(attachment_info.layout)
-                        .final_layout(next_layout)
-                        .build());
-                    attachment_refs.push(vk::AttachmentReference::builder()
-                        .attachment(attachment_index)
-                        .layout(attachment_info.layout)
-                        .build());
-                }
-                else {
-                    panic!("Empty color attachment was provided")
-                }
+                color_attachment_descs.push(vk::AttachmentDescription::builder()
+                    .format(color_attachment.format)
+                    .samples(color_attachment.samples)
+                    .load_op(color_attachment.load_op)
+                    .store_op(color_attachment.store_op)
+                    .initial_layout(color_attachment.last_usage)
+                    .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                    .build());
+                attachment_refs.push(vk::AttachmentReference::builder()
+                    .attachment(attachment_index)
+                    .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                    .build());
             }
 
             let subpass = vk::SubpassDescription::builder()

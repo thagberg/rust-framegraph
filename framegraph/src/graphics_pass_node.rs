@@ -97,7 +97,7 @@ impl PassNode for GraphicsPassNode  {
         let rt_handles: Vec<ResourceHandle> = self.get_rendertargets().into_iter().map(|attachment_ref| {
             attachment_ref.handle
         }).collect();
-        [&output_handles, rt_handles, self.get_copy_dests()].concat()
+        [&output_handles, &rt_handles, self.get_copy_dests()].concat()
     }
 
    fn execute(

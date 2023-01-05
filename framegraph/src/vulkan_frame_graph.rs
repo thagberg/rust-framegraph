@@ -146,7 +146,7 @@ impl FrameGraph for VulkanFrameGraph {
         // use Dijkstra's Algorithm to find paths to each node from the root node
         let path_lengths = petgraph::algo::dijkstra(&self.nodes, self.root_index.unwrap(), None, |_| 1);
         // remove all nodes which are unreachable from the root node
-        self.nodes.retain_nodes(|_graph, node_index| path_lenghts.contains_key(node_index));
+        self.nodes.retain_nodes(|_graph, node_index| path_lengths.contains_key(&node_index));
 
         // unresolved and unused passes have been removed from the graph,
         // so now we can use a topological sort to generate an execution order
@@ -167,22 +167,23 @@ impl FrameGraph for VulkanFrameGraph {
         // in case layout transitions are necessary. Since the graph has already been sorted,
         // we can just iterate over the sorted nodes to do this
         let mut usage_cache: HashMap<ResourceHandle, vk::ImageLayout> = HashMap::new();
-        for node_index in &self.sorted_nodes.unwrap() {
-            if let Some(node) = self.nodes.node_weight_mut(*node_index) {
+        if let Some(sorted_nodes) = &self.sorted_nodes {
+            for node_index in sorted_nodes {
+                if let Some(node) = self.nodes.node_weight_mut(*node_index) {
+                    let mut update_usage = |handle: ResourceHandle, new_usage: vk::ImageLayout| -> vk::ImageLayout {
+                        let last_usage = *usage_cache.entry(handle).or_insert(vk::ImageLayout::UNDEFINED);
+                        usage_cache.entry(handle).and_modify(|usage| *usage = new_usage);
+                        last_usage
+                    };
 
-                let update_usage = |handle: ResourceHandle, new_usage: vk::ImageLayout| -> vk::ImageLayout {
-                    let last_usage = usage_cache.entry(handle).or_insert(vk::ImageLayout::UNDEFINED);
-                    usage_cache.entry(handle).and_modify(new_usage);
-                    *last_usage
-                };
+                    for rt in node.get_rendertargets_mut() {
+                        rt.last_usage = update_usage(rt.handle, vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+                    }
 
-                for rt in node.get_rendertargets_mut() {
-                    rt.last_usage = update_usage(rt.handle, vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
-                }
-
-                for input in node.get_inputs_mut() {
-                    if let BindingType::Image(image_binding) = input {
-                        image_binding.last_usage = update_usage(input.handle, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+                    for input in node.get_inputs_mut() {
+                        if let BindingType::Image(image_binding) = &mut input.binding_info.binding_type {
+                            image_binding.last_usage = update_usage(input.handle, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+                        }
                     }
                 }
             }
@@ -228,8 +229,8 @@ impl FrameGraph for VulkanFrameGraph {
 
                     let resolved_render_targets = {
                         let mut rts: Vec<ImageWrapper> = Vec::new();
-                        for rt_handle in render_targets {
-                            let resolved = resource_manager.resolve_resource(rt_handle);
+                        for rt_ref in render_targets {
+                            let resolved = resource_manager.resolve_resource(&rt_ref.handle);
                             if let ResourceType::Image(rt_image) = resolved.resource {
                                 rts.push(rt_image);
                             }
@@ -316,10 +317,9 @@ impl FrameGraph for VulkanFrameGraph {
                             extent.expect("Framebuffer required for renderpass")
                         };
 
-                        let mut color_attachments: Vec<PassAttachment> = Vec::new();
                         let renderpass = self.renderpass_manager.create_or_fetch_renderpass(
                             node,
-                            &mut color_attachments,
+                            node.get_rendertargets(),
                             render_context);
 
                         let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass, pipeline_description);

@@ -7,6 +7,7 @@ use context::api_types::image::ImageCreateInfo;
 use context::api_types::buffer::BufferCreateInfo;
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
+use framegraph::attachment::AttachmentReference;
 
 use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding};
 use framegraph::pass_node::ResolvedBindingMap;
@@ -115,7 +116,13 @@ impl UBOPass {
                 .array_layers(1)
                 .build(),
                 "ubo_rendertarget".to_string()));
-        let render_target = handle;
+        // let render_target = handle;
+        let render_target = AttachmentReference::new(
+            handle,
+            vk::Format::R8G8B8A8_SRGB,
+            vk::SampleCountFlags::TYPE_1,
+            vk::AttachmentLoadOp::CLEAR,
+            vk::AttachmentStoreOp::STORE);
 
         let ubo_binding = ResourceBinding {
             handle: self.uniform_buffer,
@@ -324,6 +331,6 @@ impl UBOPass {
             .build()
             .expect("Failed to create PassNode");
 
-        return (passnode, render_target);
+        return (passnode, handle);
     }
 }

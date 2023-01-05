@@ -21,7 +21,7 @@ pub trait PassNode {
 
     fn get_outputs(&self) -> &[ResourceBinding];
 
-    fn get_outputs_mut(&self) -> &mut [ResourceBinding];
+    fn get_outputs_mut(&mut self) -> &mut [ResourceBinding];
 
     fn get_rendertargets(&self) -> &[AttachmentReference];
 
