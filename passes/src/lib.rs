@@ -1,5 +1,7 @@
 pub mod blit;
-pub mod imgui;
+pub mod imgui_draw;
+
+extern crate imgui;
 
 #[cfg(test)]
 mod tests {
