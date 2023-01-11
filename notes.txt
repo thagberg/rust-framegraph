@@ -196,3 +196,5 @@ For each node
 			Create edge
 
 
+11 Jan 2023 - Ideas for filling transient buffer on CPU-side
+Some refactoring required. ResourceManager should no longer be aware of transient vs persistent resources. Instead, transient resources should just be regular resources which are owned by the Frame they're created on. When updating a transient buffer the Frame could then immediately resolve the buffer so we can map the memory.
