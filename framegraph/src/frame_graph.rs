@@ -1,3 +1,5 @@
+use crate::frame::Frame;
+
 pub trait FrameGraph
 {
     type PN;
@@ -8,15 +10,13 @@ pub trait FrameGraph
     type RC;
     type Index;
 
-    fn start(&mut self, root_node: Self::PN);
+    fn start(&mut self) -> Frame;
 
-    fn compile(&mut self);
+    fn end(&mut self, frame: Frame, command_buffer: &Self::CB);
 
-    fn end(
-        &mut self,
-        resource_manager: &mut Self::RM,
-        render_context: &mut Self::RC,
-        command_buffer: &Self::CB);
-
-    fn add_node(&mut self, node: Self::PN) -> Self::Index;
+    // fn end(
+    //     &mut self,
+    //     resource_manager: &mut Self::RM,
+    //     render_context: &mut Self::RC,
+    //     command_buffer: &Self::CB);
 }
