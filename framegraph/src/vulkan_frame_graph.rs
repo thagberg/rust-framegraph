@@ -8,6 +8,7 @@ extern crate context;
 use context::render_context::{RenderContext, CommandBuffer};
 
 use ash::vk;
+use crate::frame::Frame;
 use crate::frame_graph::FrameGraph;
 use crate::pass_node::PassNode;
 use crate::binding::{ResourceBinding, ResolvedResourceBinding, BindingInfo, ImageBindingInfo, BufferBindingInfo, BindingType};
@@ -16,7 +17,7 @@ use crate::graphics_pass_node::{GraphicsPassNode};
 use crate::pipeline::{PipelineManager, VulkanPipelineManager};
 use crate::resource::resource_manager::ResourceManager;
 use crate::resource::vulkan_resource_manager::{ResolvedResource, ResolvedResourceMap, ResourceHandle, ResourceType, VulkanResourceManager};
-use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager, AttachmentInfo, StencilAttachmentInfo, PassAttachment};
+use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager, AttachmentInfo, StencilAttachmentInfo};
 
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -26,31 +27,11 @@ use petgraph::visit::{Dfs, EdgeRef, NodeCount};
 use context::api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
 
-pub struct Frame {
-    pub pass_attachments: HashMap<ResourceHandle, PassAttachment>
-}
-
-impl Frame {
-    pub fn new() -> Frame {
-        Frame {
-            pass_attachments: HashMap::new()
-        }
-    }
-
-    pub fn reset(&mut self) {
-        self.pass_attachments.clear();
-    }
-}
-
 pub struct VulkanFrameGraph {
-    nodes: stable_graph::StableDiGraph<GraphicsPassNode, u32>,
     frame_started: bool,
     compiled: bool,
     pipeline_manager: VulkanPipelineManager,
-    renderpass_manager: VulkanRenderpassManager,
-    sorted_nodes: Option<Vec<NodeIndex>>,
-    root_index: Option<NodeIndex>,
-    frame: Frame
+    renderpass_manager: VulkanRenderpassManager
 }
 
 impl VulkanFrameGraph {
@@ -59,46 +40,21 @@ impl VulkanFrameGraph {
         pipeline_manager: VulkanPipelineManager) -> VulkanFrameGraph {
 
         VulkanFrameGraph {
-            nodes: stable_graph::StableDiGraph::new(),
             frame_started: false,
             compiled: false,
             pipeline_manager,
-            renderpass_manager,
-            sorted_nodes: None,
-            root_index: None,
-            frame: Frame::new()
+            renderpass_manager
         }
     }
-}
 
-impl FrameGraph for VulkanFrameGraph {
-    type PN = GraphicsPassNode;
-    type RPM = VulkanRenderpassManager;
-    type PM = VulkanPipelineManager;
-    type CB = vk::CommandBuffer;
-    type RM = VulkanResourceManager;
-    type RC = VulkanRenderContext;
-    type Index = NodeIndex;
-
-    fn start(&mut self, root_node: Self::PN) {
-        assert!(!self.frame_started, "Can't start a frame that's already been started");
-        self.frame_started = true;
-        self.root_index = Some(self.add_node(root_node));
-    }
-
-    fn add_node(&mut self, node: Self::PN) -> Self::Index {
-        assert!(self.frame_started, "Can't add PassNode before frame has been started");
-        assert!(!self.compiled, "Can't add PassNode after frame has been compiled");
-        self.nodes.add_node(node)
-    }
-
-    fn compile(&mut self) {
+    fn compile(&mut self, frame: &mut Frame) {
         assert!(self.frame_started, "Can't compile FrameGraph before it's been started");
         assert!(!self.compiled, "FrameGraph has already been compiled");
 
         // create input/output maps to detect graph edges
         let mut input_map = MultiMap::new();
         let mut output_map = MultiMap::new();
+        let nodes = frame.take_nodes();
         for node_index in self.nodes.node_indices() {
             let node = &self.nodes[node_index];
             for input in node.get_dependencies() {
@@ -208,8 +164,26 @@ impl FrameGraph for VulkanFrameGraph {
 
         self.compiled = true;
     }
+}
 
-    fn end(
+impl FrameGraph for VulkanFrameGraph {
+    type PN = GraphicsPassNode;
+    type RPM = VulkanRenderpassManager;
+    type PM = VulkanPipelineManager;
+    type CB = vk::CommandBuffer;
+    type RM = VulkanResourceManager;
+    type RC = VulkanRenderContext;
+    type Index = NodeIndex;
+
+    fn start(&mut self) -> Frame {
+        Frame::new()
+    }
+
+    fn end(&mut self, frame: Frame, command_buffer: &Self::CB) {
+
+    }
+
+    fn end_old(
         &mut self,
         resource_manager: &mut Self::RM,
         render_context: &mut Self::RC,

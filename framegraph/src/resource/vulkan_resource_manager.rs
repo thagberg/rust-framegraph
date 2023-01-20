@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use core::ffi::c_void;
+use std::cell::RefCell;
 use std::rc::Rc;
 use ash::{Device, vk};
 use gpu_allocator::vulkan::*;
@@ -12,23 +13,8 @@ use context::api_types::buffer::{BufferCreateInfo, BufferWrapper};
 
 use crate::resource::resource_manager::{ResourceManager};
 
-#[derive(Clone, Copy, Hash, std::cmp::Eq)]
-pub enum ResourceHandle {
-    Transient(u32),
-    Persistent(u32)
-}
+pub type ResourceHandle = u32;
 
-impl PartialEq for ResourceHandle {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (ResourceHandle::Transient(x), ResourceHandle::Transient(y)) => x == y,
-            (ResourceHandle::Persistent(x), ResourceHandle::Persistent(y)) => x == y,
-            _ => false
-        }
-    }
-}
-
-pub enum ResourceReference {
     Image {
         handle: ResourceHandle
     }
@@ -82,7 +68,7 @@ pub type ResolvedResourceMap = HashMap<ResourceHandle, ResolvedResource>;
 type ResolvedResourceInternalMap = HashMap<ResourceHandle, ResolvedResourceInternal>;
 
 pub struct VulkanResourceManager {
-    next_handle: u32,
+    next_handle: RefCell<u32>,
     allocator: Allocator,
     transient_resource_map: HashMap<ResourceHandle, TransientResource>,
     resolved_resource_map: ResolvedResourceInternalMap,
@@ -286,13 +272,18 @@ impl VulkanResourceManager {
         }).expect("Failed to create GPU memory allocator");
 
         VulkanResourceManager {
-            next_handle: 0,
+            next_handle: RefCell::new(0u32),
             allocator,
             transient_resource_map: HashMap::new(),
             resolved_resource_map: HashMap::new(),
             persistent_resource_map: HashMap::new(),
             device
         }
+    }
+
+    pub fn reserve_handle(&self) -> ResourceHandle {
+        let handle = self.next_handle.borrow_mut();
+        handle.replace(*handle+1)
     }
 
     pub fn create_buffer_transient(
