@@ -1,4 +1,5 @@
 use crate::frame::Frame;
+use crate::resource::vulkan_resource_manager::VulkanResourceManager;
 
 pub trait FrameGraph
 {
@@ -10,9 +11,9 @@ pub trait FrameGraph
     type RC;
     type Index;
 
-    fn start(&mut self) -> Frame;
+    fn start(&mut self, resource_manager: &VulkanResourceManager) -> Frame;
 
-    fn end(&mut self, frame: Frame, command_buffer: &Self::CB);
+    fn end(&mut self, mut frame: Frame, command_buffer: &Self::CB);
 
     // fn end(
     //     &mut self,

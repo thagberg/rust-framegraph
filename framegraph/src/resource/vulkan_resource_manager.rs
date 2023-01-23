@@ -15,11 +15,6 @@ use crate::resource::resource_manager::{ResourceManager};
 
 pub type ResourceHandle = u32;
 
-    Image {
-        handle: ResourceHandle
-    }
-}
-
 pub enum ResourceCreateInfo {
     Buffer(BufferCreateInfo),
     Image(ImageCreateInfo)
@@ -43,23 +38,23 @@ pub struct PersistentResource {
     pub allocation: Allocation
 }
 
-pub struct ResolvedResourceInternal {
-    resource: ResolvedResource,
-    allocation: Allocation
-}
-
 #[derive(Clone)]
 pub struct ResolvedResource {
     pub handle: ResourceHandle,
     pub resource: ResourceType
 }
 
-pub struct ResolvedBuffer {
+struct ResolvedResourceInternal {
+    resource: ResolvedResource,
+    allocation: Allocation
+}
+
+struct ResolvedBuffer {
     buffer: BufferWrapper,
     allocation: Allocation
 }
 
-pub struct ResolvedImage {
+struct ResolvedImage {
     image: ImageWrapper,
     allocation: Allocation
 }
