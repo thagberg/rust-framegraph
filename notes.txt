@@ -198,3 +198,55 @@ For each node
 
 11 Jan 2023 - Ideas for filling transient buffer on CPU-side
 Some refactoring required. ResourceManager should no longer be aware of transient vs persistent resources. Instead, transient resources should just be regular resources which are owned by the Frame they're created on. When updating a transient buffer the Frame could then immediately resolve the buffer so we can map the memory.
+
+23 Jan 2023 - Resource Types
+
+ResolvedResource
+	ResourceHandle
+	ResourceType
+		ResolvedImage
+			ImageWrapper
+		ResolvedBuffer
+			BufferWrapper
+
+	used in ResolvedResourceMap
+	used for creating memory barriers
+	passed to passnode fill callbacks
+
+ResolvedResourceInternal
+	Only used by ResourceManager
+	Keeps track of allocation
+
+TransientResource
+	Handle
+	CreateInfo
+
+	Caches createinfo until a resource needs to be resolved
+
+ResolvedBuffer
+	BufferWrapper
+	Allocation
+
+	Used when a transient buffer is resolved; only survives a narrow scope before a ResolvedResourceInternal is created
+
+ResolvedImage
+	ImageWrapper
+	Allocation
+	
+	Used when a transient image is resolved; only survives a narrow scope before a ResolvedResourceInternal is created
+
+PersistentResource
+	Handle
+	ResourceType
+		ResolvedImage
+		ResolvedBuffer
+	Allocation
+
+	Used when a system creates a persistent / owned resource
+
+
+ResourceManager should be refactored to remove transient / persistent resource; transient resources should be owned resources managed by the frame / framegraph
+
+23 Jan 2023 - Add Transient/Persistent info to ResourceBinding
+The ResourceBinding is a Framegraph concept, not a ResourceManager concept.
+When the Framegraph is processing nodes, it will recognize when a transient ResourceBinding must be resolved / freed.

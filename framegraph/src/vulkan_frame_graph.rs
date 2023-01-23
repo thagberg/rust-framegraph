@@ -1,6 +1,6 @@
 extern crate petgraph;
 use petgraph::{graph, stable_graph, Direction, Directed};
-use petgraph::stable_graph::{Edges, NodeIndex};
+use petgraph::stable_graph::{Edges, NodeIndex, StableDiGraph};
 extern crate multimap;
 use multimap::MultiMap;
 
@@ -28,8 +28,6 @@ use context::api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
 
 pub struct VulkanFrameGraph {
-    frame_started: bool,
-    compiled: bool,
     pipeline_manager: VulkanPipelineManager,
     renderpass_manager: VulkanRenderpassManager
 }
@@ -40,23 +38,17 @@ impl VulkanFrameGraph {
         pipeline_manager: VulkanPipelineManager) -> VulkanFrameGraph {
 
         VulkanFrameGraph {
-            frame_started: false,
-            compiled: false,
             pipeline_manager,
             renderpass_manager
         }
     }
 
-    fn compile(&mut self, frame: &mut Frame) {
-        assert!(self.frame_started, "Can't compile FrameGraph before it's been started");
-        assert!(!self.compiled, "FrameGraph has already been compiled");
-
+    fn compile(&mut self, nodes: &mut StableDiGraph<GraphicsPassNode, u32>, root_index: NodeIndex) -> Vec<NodeIndex>{
         // create input/output maps to detect graph edges
         let mut input_map = MultiMap::new();
         let mut output_map = MultiMap::new();
-        let nodes = frame.take_nodes();
-        for node_index in self.nodes.node_indices() {
-            let node = &self.nodes[node_index];
+        for node_index in nodes.node_indices() {
+            let node = &nodes[node_index];
             for input in node.get_dependencies() {
                 input_map.insert(input, node_index);
             }
@@ -87,48 +79,34 @@ impl VulkanFrameGraph {
             }
         }
 
-        // Ensure root node is valid, then mark any passes which don't contribute to root node as unused
-        match self.root_index {
-            Some(root_index) => {
-                let root_node = self.nodes.node_weight(root_index);
-                if root_node.is_none() {
-                    panic!("Root node is invalid");
-                }
-            },
-            _ => {
-                panic!("A root node is required");
-            }
-        }
-
         // Use DFS to find all accessible nodes from the root node
         {
-            let root_index = self.root_index.unwrap();
-
             let mut retained_nodes: Vec<bool> = Vec::new();
-            retained_nodes.resize(self.nodes.node_count(), false);
+            retained_nodes.resize(nodes.node_count(), false);
 
-            let mut dfs = Dfs::new(&self.nodes, root_index);
-            while let Some(node_id) = dfs.next(&self.nodes) {
+            let mut dfs = Dfs::new(&nodes, root_index);
+            while let Some(node_id) = dfs.next(&nodes) {
                 retained_nodes[node_id.index()] = true;
             }
 
-            self.nodes.retain_nodes(|_graph, node_index| {
+            nodes.retain_nodes(|_graph, node_index| {
                 retained_nodes[node_index.index()]
             });
         }
 
         // unresolved and unused passes have been removed from the graph,
         // so now we can use a topological sort to generate an execution order
+        let mut sorted_nodes: Vec<NodeIndex> = Vec::new();
         {
-            let mut sort_result = petgraph::algo::toposort(&self.nodes, None);
+            let mut sort_result = petgraph::algo::toposort(nodes, None);
             match sort_result {
                 Ok(mut sorted_list) => {
                     // DFS requires we order nodes as input -> output, but for sorting we want output -> input
                     sorted_list.reverse();
                     for i in &sorted_list {
-                        println!("Node: {:?}", self.nodes.node_weight(*i).unwrap().get_name());
+                        println!("Node: {:?}", nodes.node_weight(*i).unwrap().get_name());
                     }
-                    self.sorted_nodes = Some(sorted_list);
+                    sorted_nodes = sorted_list;
                 },
                 Err(cycle_error) => {
                     println!("A cycle was detected in the framegraph: {:?}", cycle_error);
@@ -136,33 +114,40 @@ impl VulkanFrameGraph {
             }
         }
 
+        self.compiled = true;
+        sorted_nodes
+    }
+
+    fn link(
+        &mut self,
+        nodes: &mut StableDiGraph<GraphicsPassNode, u32>,
+        sorted_nodes: &Vec<NodeIndex>) -> HashMap<ResourceHandle, vk::ImageLayout> {
+
         // All image bindings and attachments require the most recent usage for that resource
         // in case layout transitions are necessary. Since the graph has already been sorted,
         // we can just iterate over the sorted nodes to do this
         let mut usage_cache: HashMap<ResourceHandle, vk::ImageLayout> = HashMap::new();
-        if let Some(sorted_nodes) = &self.sorted_nodes {
-            for node_index in sorted_nodes {
-                if let Some(node) = self.nodes.node_weight_mut(*node_index) {
-                    let mut update_usage = |handle: ResourceHandle, new_usage: vk::ImageLayout| -> vk::ImageLayout {
-                        let last_usage = *usage_cache.entry(handle).or_insert(vk::ImageLayout::UNDEFINED);
-                        usage_cache.entry(handle).and_modify(|usage| *usage = new_usage);
-                        last_usage
-                    };
+        for node_index in sorted_nodes {
+            if let Some(node) = nodes.node_weight_mut(*node_index) {
+                let mut update_usage = |handle: ResourceHandle, new_usage: vk::ImageLayout| -> vk::ImageLayout {
+                    let last_usage = *usage_cache.entry(handle).or_insert(vk::ImageLayout::UNDEFINED);
+                    usage_cache.entry(handle).and_modify(|usage| *usage = new_usage);
+                    last_usage
+                };
 
-                    for rt in node.get_rendertargets_mut() {
-                        rt.last_usage = update_usage(rt.handle, vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
-                    }
+                for rt in node.get_rendertargets_mut() {
+                    rt.last_usage = update_usage(rt.handle, vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+                }
 
-                    for input in node.get_inputs_mut() {
-                        if let BindingType::Image(image_binding) = &mut input.binding_info.binding_type {
-                            image_binding.last_usage = update_usage(input.handle, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
-                        }
+                for input in node.get_inputs_mut() {
+                    if let BindingType::Image(image_binding) = &mut input.binding_info.binding_type {
+                        image_binding.last_usage = update_usage(input.handle, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
                     }
                 }
             }
         }
 
-        self.compiled = true;
+        usage_cache
     }
 }
 
@@ -175,11 +160,81 @@ impl FrameGraph for VulkanFrameGraph {
     type RC = VulkanRenderContext;
     type Index = NodeIndex;
 
-    fn start(&mut self) -> Frame {
-        Frame::new()
+    fn start(&mut self, resource_manager: &VulkanResourceManager) -> Frame {
+        Frame::new(resource_manager)
     }
 
-    fn end(&mut self, frame: Frame, command_buffer: &Self::CB) {
+    fn end(
+        &mut self,
+        mut frame: Frame,
+        render_context: &mut Self::RC,
+        command_buffer: &Self::CB) {
+
+        frame.end();
+
+        let nodes = frame.get_nodes();
+        let resource_info = frame.get_create_info();
+        let root_index = frame.get_root_index();
+
+        // compile and link frame
+        {
+            let sorted_nodes = self.compile(nodes, root_index);
+            let image_usage_cache = self.link(nodes, &sorted_nodes);
+            frame.set_sorted_nodes(sorted_nodes);
+            frame.set_image_usage_cache(image_usage_cache);
+        }
+
+        for index in frame.get_sorted_nodes() {
+            let node = nodes.node_weight(*index).unwrap();
+
+            let inputs = node.get_inputs();
+            let outputs = node.get_outputs();
+            let render_targets = node.get_rendertargets();
+            let copy_sources = node.get_copy_sources();
+            let copy_dests = node.get_copy_dests();
+
+            // resolve copy sources and dests for this node
+
+            // resolve render targets for this node
+
+            // create image memory barriers for this node
+
+            // create memory barriers for copies for this node
+
+            // write memory barriers to commandbuffer
+
+            // prepare pipeline for execution (node's fill callback)
+            let active_pipeline = node.get_pipeline_description();
+            if let Some(pipeline_description) = active_pipeline {
+                // Ensure all rendertargets are the same dimensions
+
+                let renderpass = self.renderpass_manager.create_or_fetch_renderpass(
+                    node,
+                    node.get_rendertargets(),
+                    render_context);
+
+                let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass, pipeline_description);
+
+                // create framebuffer
+                // TODO: should cache framebuffer objects to avoid creating the same ones each frame
+
+                // TODO: parameterize this per framebuffer attachment
+                let clear_value = vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.1, 0.1, 0.1, 1.0]
+                    }
+                };
+
+                // prepare and perform descriptor writes
+                {
+
+                }
+
+                // begin render pass and bind pipeline
+
+                // execute this node
+            }
+        }
 
     }
 
@@ -189,12 +244,10 @@ impl FrameGraph for VulkanFrameGraph {
         render_context: &mut Self::RC,
         command_buffer: &Self::CB) {
 
-        assert!(self.frame_started, "Can't end frame before it's been started");
-        assert!(self.compiled, "Can't end frame before it's been compiled");
         match &self.sorted_nodes {
             Some(indices) => {
                 for index in indices {
-                    let node = self.nodes.node_weight(*index).unwrap();
+                    let node = nodes.node_weight(*index).unwrap();
 
                     let inputs = node.get_inputs();
                     let outputs = node.get_outputs();
