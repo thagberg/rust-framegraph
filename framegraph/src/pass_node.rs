@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
+use ash::vk;
 use context::render_context::{RenderContext, CommandBuffer};
 use crate::attachment::AttachmentReference;
 use crate::resource::resource_manager::ResourceManager;
@@ -36,6 +37,10 @@ pub trait PassNode {
     fn get_dependencies(&self) -> Vec<ResourceHandle>;
 
     fn get_writes(&self) -> Vec<ResourceHandle>;
+
+    fn get_memory_barriers(&self) -> &[vk::MemoryBarrier];
+
+    fn get_image_barriers(&self) -> &[vk::ImageMemoryBarrier];
 
     fn execute(
         &self,

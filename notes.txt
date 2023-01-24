@@ -250,3 +250,10 @@ ResourceManager should be refactored to remove transient / persistent resource; 
 23 Jan 2023 - Add Transient/Persistent info to ResourceBinding
 The ResourceBinding is a Framegraph concept, not a ResourceManager concept.
 When the Framegraph is processing nodes, it will recognize when a transient ResourceBinding must be resolved / freed.
+
+23 Jan 2023 - Update to linking
+The linking phase should deal with generating memory barriers / layout transitions. With this, we don't need to worry about persisting the data required for this for later in the framegraph execution and we know unused nodes have already been elided.
+
+Image barriers should be added to the passnode so that they can be added to the command buffer at the appropriate position
+
+Will need to define my own type for barriers, as we can't resolve resources at link-time to have an actual vk::Image or vk::Buffer handle for vk::ImageMemoryBarrier or vk::BufferMemoryBarrier

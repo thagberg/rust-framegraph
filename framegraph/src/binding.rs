@@ -26,9 +26,15 @@ pub struct BindingInfo {
     pub slot: u32
 }
 
+pub enum ResourceScope {
+    Transient,
+    Persistent
+}
+
 #[derive(Clone)]
 pub struct ResourceBinding {
     pub handle: ResourceHandle,
+    pub scope: ResourceScope,
     pub binding_info: BindingInfo
 }
 
