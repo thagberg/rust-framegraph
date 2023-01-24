@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Formatter};
 use ash::vk;
+use ash::vk::{ImageMemoryBarrier, MemoryBarrier};
 use context::api_types::renderpass::VulkanRenderPass;
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
 use crate::pass_node::{PassNode, ResolvedBindingMap};
@@ -29,6 +30,8 @@ pub struct GraphicsPassNode {
     outputs: Vec<ResourceBinding>,
     copy_sources: Vec<ResourceHandle>,
     copy_dests: Vec<ResourceHandle>,
+    memory_barriers: Vec<vk::MemoryBarrier>,
+    image_barriers: Vec<vk::ImageMemoryBarrier>,
     fill_callback: Box<FillCallback>,
     name: String
 }
@@ -41,6 +44,8 @@ pub struct PassNodeBuilder {
     outputs: Vec<ResourceBinding>,
     copy_sources: Vec<ResourceHandle>,
     copy_dests: Vec<ResourceHandle>,
+    memory_barriers: Vec<vk::MemoryBarrier>,
+    image_barriers: Vec<vk::ImageMemoryBarrier>,
     fill_callback: Option<Box<FillCallback>>,
     name: String
 }
@@ -100,6 +105,14 @@ impl PassNode for GraphicsPassNode  {
         [&output_handles, &rt_handles, self.get_copy_dests()].concat()
     }
 
+    fn get_memory_barriers(&self) -> &[vk::MemoryBarrier] {
+        &self.memory_barriers
+    }
+
+    fn get_image_barriers(&self) -> &[ImageMemoryBarrier] {
+        &self.image_barriers
+    }
+
    fn execute(
         &self,
         render_context: &mut Self::RC,
@@ -138,6 +151,13 @@ impl GraphicsPassNode  {
 
     pub fn get_pipeline_description(&self) -> &Option<PipelineDescription> { &self.pipeline_description }
 
+    pub fn add_memory_barrier(&mut self, memory_barrier: vk::MemoryBarrier) {
+        self.memory_barriers.push(memory_barrier);
+    }
+
+    pub fn add_image_barrier(&mut self, image_barrier: vk::ImageMemoryBarrier) {
+        self.image_barriers.push(image_barrier);
+    }
 }
 
 impl PassNodeBuilder {
@@ -177,6 +197,16 @@ impl PassNodeBuilder {
         self
     }
 
+    pub fn memory_barrier(mut self, memory_barrier: vk::MemoryBarrier) -> Self {
+        self.memory_barriers.push(memory_barrier);
+        self
+    }
+
+    pub fn image_barrier(mut self, image_barrier: vk::ImageMemoryBarrier) -> Self {
+        self.image_barriers.push(image_barrier);
+        self
+    }
+
     pub fn build(mut self) -> Result<GraphicsPassNode, &'static str> {
         assert!(self.fill_callback.is_some(), "No fill callback set");
 
@@ -186,6 +216,8 @@ impl PassNodeBuilder {
             let outputs_len = self.outputs.len();
             let copy_sources_len = self.copy_sources.len();
             let copy_dests_len = self.copy_dests.len();
+            let memory_barriers_len = self.memory_barriers.len();
+            let image_barriers_len = self.image_barriers.len();
             Ok(GraphicsPassNode {
                 name: self.name,
                 pipeline_description: self.pipeline_description,
@@ -194,6 +226,8 @@ impl PassNodeBuilder {
                 outputs: self.outputs.into_iter().take(outputs_len).collect(),
                 copy_sources: self.copy_sources.into_iter().take(copy_sources_len).collect(),
                 copy_dests: self.copy_dests.into_iter().take(copy_dests_len).collect(),
+                memory_barriers: self.memory_barriers.into_iter().take(memory_barriers_len).collect(),
+                image_barriers: self.image_barriers.into_iter().take(image_barriers_len).collect(),
                 fill_callback: self.fill_callback.take().unwrap()
             })
         } else {

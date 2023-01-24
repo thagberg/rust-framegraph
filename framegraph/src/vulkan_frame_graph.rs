@@ -26,6 +26,76 @@ use petgraph::data::DataMap;
 use petgraph::visit::{Dfs, EdgeRef, NodeCount};
 use context::api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
+use crate::attachment::AttachmentReference;
+
+fn resolve_copy_resources(
+    resource_manager: &VulkanResourceManager,
+    handles: &[ResourceHandle]) -> ResolvedResourceMap {
+
+    let mut resolved_map = ResolvedResourceMap::new()
+
+    for handle in handles {
+        let resolved = resource_manager.resolve_resoure(handle);
+        resolved_map.insert(*handle, resolved.clone());
+    }
+
+    resolved_map
+}
+
+fn resolve_render_targets(
+    resource_manager: &VulkanResourceManager,
+    attachments: &[AttachmentReference]) -> Vec<ImageWrapper> {
+
+    let mut rts: Vec<ImageWrapper> = Vec::new();
+    for attachment in attachments {
+      let resolved = resource_manager.resolve_resource(&attachment.handle);
+        if let ResourceType::Image(rt_image) = resolved.resource {
+            rts.push(rt_image);
+        } else {
+            panic!("A non-image resource was returned when attempting to resolve a render target");
+        }
+    }
+
+    rts
+}
+
+fn create_image_memory_barriers(
+    resources: &[ResolvedResource],
+    queue_index: u32,
+    old_layout: vk::ImageLayout,
+    new_layout: vk::ImageLayout) -> Vec<vk::ImageMemoryBarrier> {
+
+    let mut barriers: Vec<vk::ImageMemoryBarrier> = Vec::new();
+
+    for resource in resources {
+        if let ResourceType::Image(image) = &resource.resource {
+            // TODO: range should not be static. Maybe pass in a slice of structs which include range values?
+            let range = vk::ImageSubresourceRange::builder()
+                .level_count(1)
+                .base_mip_level(0)
+                .layer_count(1)
+                .base_array_layer(0)
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .build();
+            // TODO: src and dst access masks should not be static
+            let barrier = vk::ImageMemoryBarrier::builder()
+                .image(image.image)
+                .old_layout(old_layout)
+                .new_layout(new_layout)
+                .src_access_mask(vk::AccessFlags::NONE)
+                .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                .src_queue_family_index(queue_index)
+                .dst_queue_family_index(queue_index)
+                .subresource_range(range)
+                .build();
+            barriers.push(barrier);
+        } else {
+            panic!("Attempting to create an ImageMemoryBarrier for non-image resource");
+        }
+    }
+
+    barriers
+}
 
 pub struct VulkanFrameGraph {
     pipeline_manager: VulkanPipelineManager,
@@ -167,6 +237,7 @@ impl FrameGraph for VulkanFrameGraph {
     fn end(
         &mut self,
         mut frame: Frame,
+        resource_manager: &Self::RM,
         render_context: &mut Self::RC,
         command_buffer: &Self::CB) {
 
@@ -184,6 +255,7 @@ impl FrameGraph for VulkanFrameGraph {
             frame.set_image_usage_cache(image_usage_cache);
         }
 
+        // excute nodes
         for index in frame.get_sorted_nodes() {
             let node = nodes.node_weight(*index).unwrap();
 
@@ -194,10 +266,21 @@ impl FrameGraph for VulkanFrameGraph {
             let copy_dests = node.get_copy_dests();
 
             // resolve copy sources and dests for this node
+            let resolved_copy_sources = resolve_copy_resources(resource_manager, copy_sources);
+            let resolved_copy_dests = resolve_copy_resources(resource_manager, copy_dests);
 
-            // resolve render targets for this node
+            // create image memory barriers for copies this node
+            {
+                let graphics_index = render_context.get_device().get_queue_family_indices().graphics
+                    .expect("Expected a valid graphics queue index");
 
-            // create image memory barriers for this node
+                // TODO: should not assume the old layout is color attachment
+                let image_memory_barriers = create_image_memory_barriers(
+                    &resolved_copy_sources.values().collect(),
+                    graphics_index,
+                    vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                    vk::ImageLayout::TRANSFER_SRC_OPTIMAL);
+            }
 
             // create memory barriers for copies for this node
 
@@ -206,6 +289,9 @@ impl FrameGraph for VulkanFrameGraph {
             // prepare pipeline for execution (node's fill callback)
             let active_pipeline = node.get_pipeline_description();
             if let Some(pipeline_description) = active_pipeline {
+                // resolve render targets for this node
+                let resolved_render_targets = resolve_render_targets(resource_manager, render_targets);
+
                 // Ensure all rendertargets are the same dimensions
 
                 let renderpass = self.renderpass_manager.create_or_fetch_renderpass(
