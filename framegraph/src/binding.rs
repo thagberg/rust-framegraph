@@ -23,7 +23,9 @@ pub enum BindingType {
 pub struct BindingInfo {
     pub binding_type: BindingType,
     pub set: u64,
-    pub slot: u32
+    pub slot: u32,
+    pub stage: vk::PipelineStageFlags,
+    pub access: vk::AccessFlags
 }
 
 pub enum ResourceScope {

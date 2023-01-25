@@ -27,6 +27,7 @@ use petgraph::visit::{Dfs, EdgeRef, NodeCount};
 use context::api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::attachment::AttachmentReference;
+use crate::barrier::ImageBarrier;
 
 fn resolve_copy_resources(
     resource_manager: &VulkanResourceManager,
@@ -57,6 +58,19 @@ fn resolve_render_targets(
     }
 
     rts
+}
+
+fn create_image_memory_barrier() -> ImageBarrier {
+    vk::PipelineStageFlags::
+    ImageBarrier {
+        handle: 0,
+        source_stage: Default::default(),
+        dest_stage: Default::default(),
+        source_access: Default::default(),
+        dest_access: Default::default(),
+        old_layout: Default::default(),
+        new_layout: Default::default()
+    }
 }
 
 fn create_image_memory_barriers(
@@ -196,7 +210,13 @@ impl VulkanFrameGraph {
         // All image bindings and attachments require the most recent usage for that resource
         // in case layout transitions are necessary. Since the graph has already been sorted,
         // we can just iterate over the sorted nodes to do this
-        let mut usage_cache: HashMap<ResourceHandle, vk::ImageLayout> = HashMap::new();
+        #[derive(Clone)]
+        struct ResourceUsage {
+            access: vk::AccessFlags,
+            stage: vk::PipelineStageFlags,
+            layout: Option<vk::ImageLayout>
+        }
+        let mut usage_cache: HashMap<ResourceHandle, ResourceUsage> = HashMap::new();
         for node_index in sorted_nodes {
             if let Some(node) = nodes.node_weight_mut(*node_index) {
                 let mut update_usage = |handle: ResourceHandle, new_usage: vk::ImageLayout| -> vk::ImageLayout {
@@ -206,7 +226,32 @@ impl VulkanFrameGraph {
                 };
 
                 for rt in node.get_rendertargets_mut() {
-                    rt.last_usage = update_usage(rt.handle, vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+                    // rendertargets always write, so if this isn't the first usage of this resource
+                    // then we know we need a barrier
+                    let last_usage = usage_cache.get(&rt.handle);
+                    if let Some(usage) = last_usage {
+                        let new_usage = ResourceUsage {
+                            access: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                            stage: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                            layout: Some(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                        };
+
+                        let image_barrier = ImageBarrier {
+                            handle: rt.handle,
+                            source_stage: usage.stage,
+                            dest_stage: new_usage.stage,
+                            source_access: usage.access,
+                            dest_access: new_usage.access,
+                            old_layout: usage.layout.expect("Tried to get image layout from non-image"),
+                            new_layout: new_usage.layout.expect("Should never hit this")
+                        };
+                        node.add_image_barrier(image_barrier);
+                    }
+
+                    // rt.last_usage = update_usage(rt.handle, vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+                    let new_usage = vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL;
+                    let last_usage = update_usage(rt.handle, vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+                    rt.last_usage = last_usage;
                 }
 
                 for input in node.get_inputs_mut() {

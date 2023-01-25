@@ -9,6 +9,7 @@ use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceM
 use context::render_context::{RenderContext, CommandBuffer};
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::attachment::AttachmentReference;
+use crate::barrier::{BufferBarrier, ImageBarrier};
 use crate::pipeline::{PipelineDescription};
 
 type FillCallback = dyn (
@@ -30,8 +31,8 @@ pub struct GraphicsPassNode {
     outputs: Vec<ResourceBinding>,
     copy_sources: Vec<ResourceHandle>,
     copy_dests: Vec<ResourceHandle>,
-    memory_barriers: Vec<vk::MemoryBarrier>,
-    image_barriers: Vec<vk::ImageMemoryBarrier>,
+    buffer_barriers: Vec<BufferBarrier>,
+    image_barriers: Vec<ImageBarrier>,
     fill_callback: Box<FillCallback>,
     name: String
 }
@@ -44,8 +45,8 @@ pub struct PassNodeBuilder {
     outputs: Vec<ResourceBinding>,
     copy_sources: Vec<ResourceHandle>,
     copy_dests: Vec<ResourceHandle>,
-    memory_barriers: Vec<vk::MemoryBarrier>,
-    image_barriers: Vec<vk::ImageMemoryBarrier>,
+    memory_barriers: Vec<BufferBarrier>,
+    image_barriers: Vec<ImageBarrier>,
     fill_callback: Option<Box<FillCallback>>,
     name: String
 }
@@ -105,12 +106,16 @@ impl PassNode for GraphicsPassNode  {
         [&output_handles, &rt_handles, self.get_copy_dests()].concat()
     }
 
-    fn get_memory_barriers(&self) -> &[vk::MemoryBarrier] {
-        &self.memory_barriers
+    fn get_buffer_barriers(&self) -> &[BufferBarrier] {
+        &self.buffer_barriers
     }
 
-    fn get_image_barriers(&self) -> &[ImageMemoryBarrier] {
+    fn get_image_barriers(&self) -> &[ImageBarrier] {
         &self.image_barriers
+    }
+
+    fn add_image_barrier(&mut self, image_barrier: ImageBarrier) {
+        self.image_barriers.push(image_barrier);
     }
 
    fn execute(
@@ -151,11 +156,11 @@ impl GraphicsPassNode  {
 
     pub fn get_pipeline_description(&self) -> &Option<PipelineDescription> { &self.pipeline_description }
 
-    pub fn add_memory_barrier(&mut self, memory_barrier: vk::MemoryBarrier) {
-        self.memory_barriers.push(memory_barrier);
+    pub fn add_buffer_barrier(&mut self, buffer_barrier: BufferBarrier) {
+        self.buffer_barriers.push(buffer_barrier);
     }
 
-    pub fn add_image_barrier(&mut self, image_barrier: vk::ImageMemoryBarrier) {
+    pub fn add_image_barrier(&mut self, image_barrier: ImageBarrier) {
         self.image_barriers.push(image_barrier);
     }
 }
@@ -197,12 +202,12 @@ impl PassNodeBuilder {
         self
     }
 
-    pub fn memory_barrier(mut self, memory_barrier: vk::MemoryBarrier) -> Self {
+    pub fn buffer_barrier(mut self, buffer_barrier: BufferBarrier) -> Self {
         self.memory_barriers.push(memory_barrier);
         self
     }
 
-    pub fn image_barrier(mut self, image_barrier: vk::ImageMemoryBarrier) -> Self {
+    pub fn image_barrier(mut self, image_barrier: ImageBarrier) -> Self {
         self.image_barriers.push(image_barrier);
         self
     }
@@ -226,7 +231,7 @@ impl PassNodeBuilder {
                 outputs: self.outputs.into_iter().take(outputs_len).collect(),
                 copy_sources: self.copy_sources.into_iter().take(copy_sources_len).collect(),
                 copy_dests: self.copy_dests.into_iter().take(copy_dests_len).collect(),
-                memory_barriers: self.memory_barriers.into_iter().take(memory_barriers_len).collect(),
+                buffer_barriers: self.memory_barriers.into_iter().take(memory_barriers_len).collect(),
                 image_barriers: self.image_barriers.into_iter().take(image_barriers_len).collect(),
                 fill_callback: self.fill_callback.take().unwrap()
             })

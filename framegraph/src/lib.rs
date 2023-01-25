@@ -11,6 +11,7 @@ pub mod vulkan_frame_graph;
 pub mod binding;
 pub mod attachment;
 pub mod frame;
+pub mod barrier;
 
 #[cfg(test)]
 mod tests
