@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use ash::vk;
 use context::render_context::{RenderContext, CommandBuffer};
 use crate::attachment::AttachmentReference;
+use crate::barrier::{BufferBarrier, ImageBarrier};
 use crate::resource::resource_manager::ResourceManager;
 use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, ResolvedResource};
 use crate::binding::{ResourceBinding, ResolvedResourceBinding};
@@ -38,9 +39,11 @@ pub trait PassNode {
 
     fn get_writes(&self) -> Vec<ResourceHandle>;
 
-    fn get_memory_barriers(&self) -> &[vk::MemoryBarrier];
+    fn get_buffer_barriers(&self) -> &[BufferBarrier];
 
-    fn get_image_barriers(&self) -> &[vk::ImageMemoryBarrier];
+    fn get_image_barriers(&self) -> &[ImageBarrier];
+
+    fn add_image_barrier(&mut self, image_barrier: ImageBarrier);
 
     fn execute(
         &self,

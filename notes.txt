@@ -257,3 +257,14 @@ The linking phase should deal with generating memory barriers / layout transitio
 Image barriers should be added to the passnode so that they can be added to the command buffer at the appropriate position
 
 Will need to define my own type for barriers, as we can't resolve resources at link-time to have an actual vk::Image or vk::Buffer handle for vk::ImageMemoryBarrier or vk::BufferMemoryBarrier
+
+24 Jan 2023 - Barriers during linking
+Added ImageBarrier and BufferBarrier types to PassNode.
+During linking we iterate over the sorted set of nodes
+	* Guaranteed that we touch each resource in the order it's used
+Each node should receive barriers for its dependencies on prior passes
+	* Add barriers before the node
+Write -> Read requires barrier (prevent read-after-write hazard)
+Read -> Write requires barrier (prevent write-after-read hazard)
+Write -> Write requires barrier (prevent write-after-write hazard)
+
