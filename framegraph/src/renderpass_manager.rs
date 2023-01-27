@@ -65,7 +65,7 @@ impl RenderpassManager for VulkanRenderpassManager {
                     .samples(color_attachment.samples)
                     .load_op(color_attachment.load_op)
                     .store_op(color_attachment.store_op)
-                    .initial_layout(color_attachment.last_usage)
+                    .initial_layout(color_attachment.layout)
                     .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
                     .build());
                 attachment_refs.push(vk::AttachmentReference::builder()
