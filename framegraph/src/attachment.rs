@@ -7,7 +7,7 @@ pub struct AttachmentReference {
     pub samples: vk::SampleCountFlags,
     pub load_op: vk::AttachmentLoadOp,
     pub store_op: vk::AttachmentStoreOp,
-    pub last_usage: vk::ImageLayout
+    pub layout: vk::ImageLayout
 }
 
 impl AttachmentReference {
@@ -24,7 +24,7 @@ impl AttachmentReference {
             samples,
             load_op,
             store_op,
-            last_usage: vk::ImageLayout::UNDEFINED
+            layout: vk::ImageLayout::UNDEFINED
         }
     }
 }

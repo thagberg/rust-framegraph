@@ -219,22 +219,29 @@ impl VulkanFrameGraph {
         let mut usage_cache: HashMap<ResourceHandle, ResourceUsage> = HashMap::new();
         for node_index in sorted_nodes {
             if let Some(node) = nodes.node_weight_mut(*node_index) {
-                let mut update_usage = |handle: ResourceHandle, new_usage: vk::ImageLayout| -> vk::ImageLayout {
-                    let last_usage = *usage_cache.entry(handle).or_insert(vk::ImageLayout::UNDEFINED);
-                    usage_cache.entry(handle).and_modify(|usage| *usage = new_usage);
-                    last_usage
+                let is_write = |access: vk::AccessFlags, stage: vk::PipelineStageFlags|-> bool {
+                    let write_access=
+                        vk::AccessFlags::COLOR_ATTACHMENT_WRITE |
+                        vk::AccessFlags::SHADER_WRITE |
+                        vk::AccessFlags::TRANSFER_WRITE |
+                        vk::AccessFlags::HOST_WRITE |
+                        vk::AccessFlags::MEMORY_WRITE;
+
+                    let pipeline_write = vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT;
+
+                    write_access | access > 0 || pipeline_write | stage > 0
                 };
 
                 for rt in node.get_rendertargets_mut() {
                     // rendertargets always write, so if this isn't the first usage of this resource
                     // then we know we need a barrier
                     let last_usage = usage_cache.get(&rt.handle);
+                    let new_usage = ResourceUsage {
+                        access: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                        stage: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                        layout: Some(new_usage.layout)
+                    };
                     if let Some(usage) = last_usage {
-                        let new_usage = ResourceUsage {
-                            access: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-                            stage: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-                            layout: Some(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                        };
 
                         let image_barrier = ImageBarrier {
                             handle: rt.handle,
@@ -248,15 +255,57 @@ impl VulkanFrameGraph {
                         node.add_image_barrier(image_barrier);
                     }
 
-                    // rt.last_usage = update_usage(rt.handle, vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
-                    let new_usage = vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL;
-                    let last_usage = update_usage(rt.handle, vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
-                    rt.last_usage = last_usage;
+                    usage_cache.insert(rt.handle, new_usage);
                 }
 
                 for input in node.get_inputs_mut() {
+                    let last_usage = usage_cache.get(&input.handle);
+                    // barrier required if:
+                    //  * last usage was a write
+                    //  * image layout has changed
+                    let prev_write = {
+                        if let Some(usage) = last_usage {
+                            is_write(usage.access, usage.stage)
+                        }
+                        false
+                    };
                     if let BindingType::Image(image_binding) = &mut input.binding_info.binding_type {
-                        image_binding.last_usage = update_usage(input.handle, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+                        let new_usage = ResourceUsage{
+                            access: input.binding_info.access,
+                            stage: input.binding_info.stage,
+                            layout: Some(image_binding.layout)
+                        };
+
+                        let layout_changed = {
+                            if let Some(usage) = last_usage {
+                                if let Some(layout) = usage.layout {
+                                    layout != image_binding.layout
+                                }
+                            }
+                            true
+                        };
+
+                        // need a barrier
+                        if layout_changed || prev_write {
+                            let old_layout = {
+                                match old_usage.layout {
+                                    Some(layout) => { layout },
+                                    _ => { vk::ImageLayout::UNDEFINED } // TODO: not sure if this is actually valid
+                                }
+                            };
+                            let image_barrier = ImageBarrier {
+                                handle: input.handle,
+                                source_stage: usage.stage,
+                                dest_stage: new_usage.stage,
+                                source_access: usage.access,
+                                dest_access: new_usage.access,
+                                old_layout: old_layout,
+                                new_layout: new_usage.layout.unwrap()
+                            };
+                            node.add_image_barrier(image_barrier);
+                        }
+
+                        image_binding.layout = update_usage(input.handle, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
                     }
                 }
             }

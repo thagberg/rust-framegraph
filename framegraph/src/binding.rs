@@ -4,7 +4,7 @@ use crate::resource::vulkan_resource_manager::{ResolvedResource, ResourceHandle,
 #[derive(Clone)]
 pub struct ImageBindingInfo {
     pub sampler: vk::Sampler,
-    pub last_usage: vk::ImageLayout
+    pub layout: vk::ImageLayout
 }
 
 #[derive(Clone)]
