@@ -7,7 +7,5 @@ pub trait ResourceManager {
 
     fn resolve_resource(&mut self, handle: &ResourceHandle) -> ResolvedResource;
 
-    fn get_resource_description(&self, handle: &ResourceHandle) -> Option<&ResourceCreateInfo>;
-
-    fn flush(&mut self, device: &DeviceWrapper);
+    fn reset(&mut self, device: &DeviceWrapper);
 }

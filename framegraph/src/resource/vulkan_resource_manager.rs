@@ -27,35 +27,13 @@ pub enum ResourceType {
     Image(ImageWrapper)
 }
 
-pub struct TransientResource {
+pub(crate) struct ResolvedResource {
     handle: ResourceHandle,
-    create_info: ResourceCreateInfo
-}
-
-pub struct PersistentResource {
-    pub handle: ResourceHandle,
-    pub resource: ResourceType,
-    pub allocation: Allocation
-}
-
-#[derive(Clone)]
-pub struct ResolvedResource {
-    pub handle: ResourceHandle,
-    pub resource: ResourceType
+    resource: ResourceType
 }
 
 struct ResolvedResourceInternal {
-    resource: ResolvedResource,
-    allocation: Allocation
-}
-
-struct ResolvedBuffer {
-    buffer: BufferWrapper,
-    allocation: Allocation
-}
-
-struct ResolvedImage {
-    image: ImageWrapper,
+    resource: ResourceType,
     allocation: Allocation
 }
 
@@ -65,23 +43,17 @@ type ResolvedResourceInternalMap = HashMap<ResourceHandle, ResolvedResourceInter
 pub struct VulkanResourceManager {
     next_handle: RefCell<u32>,
     allocator: Allocator,
-    transient_resource_map: HashMap<ResourceHandle, TransientResource>,
-    resolved_resource_map: ResolvedResourceInternalMap,
-    persistent_resource_map: HashMap<ResourceHandle, PersistentResource>,
+    resource_map: RefCell<ResolvedResourceInternalMap>,
+    /// Registered resources are those created / managed elsewhere but for which we still want
+    /// a resource handle and to be resolveable (such as swapchain images)
+    registered_resource_map: ResolvedResourceMap,
     device: Rc<DeviceWrapper>
-}
-
-fn create_resolved_image(
-    allocator: &mut Allocator,
-    device: &DeviceWrapper,
-    create_info: &ImageCreateInfo) -> ResolvedImage {
-    create_image(allocator, device, create_info)
 }
 
 fn create_image(
     allocator: &mut Allocator,
     device: &DeviceWrapper,
-    create_info: &ImageCreateInfo) -> ResolvedImage
+    create_info: &ImageCreateInfo) -> ResolvedResourceInternal
 {
     let mut image_alloc: Allocation = Default::default();
     let image = device.create_image(
@@ -98,23 +70,16 @@ fn create_image(
             }
         });
 
-    ResolvedImage {
-        image,
+    ResolvedResourceInternal {
+        resource: ResourceType::Image(image),
         allocation: image_alloc
     }
 }
 
-fn create_resolved_buffer(
+fn create_buffer(
     allocator: &mut Allocator,
     device: &DeviceWrapper,
-    create_info: &BufferCreateInfo) -> ResolvedBuffer {
-    create_uniform_buffer(allocator, device, create_info)
-}
-
-fn create_uniform_buffer(
-    allocator: &mut Allocator,
-    device: &DeviceWrapper,
-    create_info: &BufferCreateInfo) -> ResolvedBuffer {
+    create_info: &BufferCreateInfo) -> ResolvedResourceInternal {
 
     let mut buffer_alloc: Allocation = Default::default();
     let buffer = device.create_buffer(
@@ -132,103 +97,37 @@ fn create_uniform_buffer(
         }
     );
 
-    ResolvedBuffer {
-        buffer,
-        allocation: buffer_alloc
+    ResolvedResourceInternal {
+        resource: ResourceType::Buffer(buffer),
+        allocation: Default::default()
     }
 }
 
 impl ResourceManager for VulkanResourceManager {
     fn resolve_resource(
-        &mut self,
+        &self,
         handle: &ResourceHandle) -> ResolvedResource
     {
-        match handle {
-            ResourceHandle::Transient(_) => {
-                let resolved = self.resolved_resource_map.get(handle);
-                match resolved {
-                    Some(found) => {
-                        found.resource.clone()
-                    },
-                    None => {
-                        let transient = self.transient_resource_map.get(handle)
-                            .expect("No transient resource found");
-
-                        let resolved_resource: Option<ResolvedResourceInternal>;
-                        match &transient.create_info {
-                            ResourceCreateInfo::Buffer(buffer_create) => {
-                                let resolved_buffer = create_resolved_buffer(&mut self.allocator, &self.device, buffer_create);
-                                resolved_resource = Some(ResolvedResourceInternal {
-                                    resource: ResolvedResource {
-                                        handle: handle.clone(),
-                                        resource: ResourceType::Buffer(resolved_buffer.buffer)
-                                    },
-                                    allocation: resolved_buffer.allocation
-                                });
-                            },
-                            ResourceCreateInfo::Image(image_create) => {
-                                let resolved_image = create_resolved_image(&mut self.allocator, &self.device, image_create);
-                                resolved_resource = Some(ResolvedResourceInternal {
-                                    resource: ResolvedResource {
-                                        handle: handle.clone(),
-                                        resource: ResourceType::Image(resolved_image.image)
-                                    },
-                                    allocation: resolved_image.allocation
-                                });
-                            }
-                        }
-
-                        match resolved_resource {
-                            Some(rr) => {
-                                let return_resource = rr.resource.clone();
-                                self.resolved_resource_map.insert(handle.clone(), rr);
-                                return_resource
-                            },
-                            None => {
-                                panic!("Failed to find or create resource during resolution");
-                            }
-                        }
-                        // resolved_resource
-                        //     .expect("Failed to create transient resource")
-                    }
-                }
-                // let resolved = self.transient_resource_map.get(handle)
-                //     .expect("Transient resource was not added");
-            },
-            ResourceHandle::Persistent(_) => {
-                let resolved = self.persistent_resource_map.get(handle)
-                    .expect("Need to handle not found resources");
-                ResolvedResource {
-                    handle: handle.clone(),
-                    resource: resolved.resource.clone()
-                }
+        let resolved = {
+            // first check the resource_map, if not found there look in the registered_resource_map
+            // most resources will not be registered resources, so it should be checked last
+            let found = self.resource_map.borrow().get(handle);
+            if None = found {
+                self.registered_resource_map.get(handle)
+                    .expect("Attempted to resolve a resource which doesn't exist")
+            } else {
+                found.unwrap()
             }
+        };
+
+        ResolvedResource {
+            handle: *handle,
+            resource: *resolved.resource
         }
     }
 
-    fn get_resource_description(&self, handle: &ResourceHandle) -> Option<&ResourceCreateInfo> {
-        match handle {
-            ResourceHandle::Transient(t) => {
-                let resource = self.transient_resource_map.get(handle);
-                match resource {
-                    Some(found) => {
-                        return Some(&found.create_info);
-                    },
-                    _ => {
-                        panic!("Trying to get description of non-existant resource");
-                    }
-                }
-            },
-            ResourceHandle::Persistent(p) => {
-                panic!("get_resource_description not implemented for persistent resources");
-            }
-        }
-
-        None
-    }
-
-    fn flush(&mut self, device: &DeviceWrapper) {
-        for (handle, resolved) in self.resolved_resource_map.drain() {
+    fn reset(&mut self, device: &DeviceWrapper) {
+        for (handle, resolved) in self.resource_map.borrow_mut().drain() {
             match &resolved.resource.resource {
                 ResourceType::Image(resolved_image) => {
                     unsafe {
@@ -247,8 +146,6 @@ impl ResourceManager for VulkanResourceManager {
                 }
             }
         }
-
-        self.transient_resource_map.clear();
     }
 }
 
@@ -269,9 +166,8 @@ impl VulkanResourceManager {
         VulkanResourceManager {
             next_handle: RefCell::new(0u32),
             allocator,
-            transient_resource_map: HashMap::new(),
-            resolved_resource_map: HashMap::new(),
-            persistent_resource_map: HashMap::new(),
+            resource_map: RefCell::new(HashMap::new()),
+            registered_resource_map: HashMap::new(),
             device
         }
     }
@@ -281,52 +177,15 @@ impl VulkanResourceManager {
         handle.replace(*handle+1)
     }
 
-    pub fn create_buffer_transient(
+    pub fn create_buffer(
         &mut self,
         create_info: BufferCreateInfo
     ) -> ResourceHandle {
-        let ret_handle = ResourceHandle::Transient(self.next_handle);
-        self.next_handle += 1;
+        let handle = self.next_handle.borrow_mut();
+        let ret_handle = handle.replace(*handle+1);
 
-        self.transient_resource_map.insert(ret_handle, TransientResource {
-            handle: ret_handle,
-            create_info: ResourceCreateInfo::Buffer(create_info)
-        });
-
-        ret_handle
-    }
-
-    pub fn create_image_transient(
-        &mut self,
-        create_info: ImageCreateInfo
-    ) -> ResourceHandle
-    {
-        let ret_handle = ResourceHandle::Transient(self.next_handle);
-        self.next_handle += 1;
-
-        self.transient_resource_map.insert(ret_handle, TransientResource {
-            handle: ret_handle,
-            create_info: ResourceCreateInfo::Image(create_info)
-        });
-
-        ret_handle
-    }
-
-
-    pub fn create_buffer_persistent(
-        &mut self,
-        create_info: BufferCreateInfo
-    ) -> ResourceHandle {
-        let ret_handle = ResourceHandle::Persistent(self.next_handle);
-        self.next_handle += 1;
-
-        let resolved_buffer = create_uniform_buffer(&mut self.allocator, &self.device, &create_info);
-
-        self.persistent_resource_map.insert(ret_handle, PersistentResource {
-            handle: ret_handle,
-            resource: ResourceType::Buffer(resolved_buffer.buffer),
-            allocation: resolved_buffer.allocation
-        });
+        let resolved_buffer = create_buffer(&mut self.allocator, &self.device, &create_info);
+        self.resource_map.insert(ret_handle, resolved_buffer);
 
         ret_handle
     }
@@ -337,34 +196,28 @@ impl VulkanResourceManager {
         mut fill_callback: F)
         where F: FnMut(*mut c_void)
     {
-        match buffer {
-            ResourceHandle::Transient(_) => panic!("Can't update transient buffer"),
-            ResourceHandle::Persistent(handle) => {
-                let find = self.persistent_resource_map.get(buffer);
-                match find {
-                    None => panic!("Buffer doesn't exist"),
-                    Some(resolved_buffer) => {
-                        let alloc = &resolved_buffer.allocation;
-                        if alloc.mapped_ptr().is_some() {
-                            fill_callback(alloc.mapped_ptr().unwrap().as_ptr());
-                        } else {
-                            unsafe {
-                                let mapped_memory = self.device.get().map_memory(
-                                    alloc.memory(),
-                                    alloc.offset(),
-                                    alloc.size(),
-                                    vk::MemoryMapFlags::empty() )
-                                    .expect("Failed to map buffer");
-                                fill_callback(mapped_memory);
-                                self.device.get().unmap_memory(alloc.memory());
-                            }
-                        }
-                    }
+        let resolved_resource = self.resource_map.get(buffer)
+            .expect("Failed to resolve buffer for update");
+        if let ResourceType::Buffer(buffer) = &resolved_resource.resource {
+            let alloc = &resolved_resource.allocation;
+            if alloc.mapped_ptr().is_some() {
+                fill_callback(alloc.mapped_ptr().unwrap().as_ptr());
+            } else {
+                unsafe {
+                    let mapped_memory = self.device.get().map_memory(
+                        alloc.memory(),
+                        alloc.offset(),
+                        alloc.size(),
+                        vk::MemoryMapFlags::empty() )
+                        .expect("Failed to map buffer");
+                    fill_callback(mapped_memory);
+                    self.device.get().unmap_memory(alloc.memory());
                 }
             }
+        } else {
+            panic!("Attempting to update a non-buffer resource as a buffer");
         }
     }
-
 
     pub fn register_image(
         &mut self,
@@ -372,15 +225,15 @@ impl VulkanResourceManager {
         name: &str
     ) -> ResourceHandle
     {
-        let ret_handle = ResourceHandle::Persistent(self.next_handle);
-        self.next_handle += 1;
+        let handle = self.next_handle.borrow_mut();
+        let ret_handle = handle.replace(*handle+1);
 
-        self.persistent_resource_map.insert(ret_handle, PersistentResource {
-            handle: ret_handle,
-            resource: ResourceType::Image(image.clone()),
-            // allocation: resolved_buffer.allocation
-            allocation: Allocation::default() // TODO: this is really dumb and bad
-        });
+        self.registered_resource_map.insert(
+            ret_handle,
+            ResolvedResource {
+                handle: ret_handle,
+                resource: ResourceType::Image(image.clone())
+            });
 
         self.device.set_image_name(image, name);
 

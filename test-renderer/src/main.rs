@@ -221,7 +221,7 @@ impl VulkanApp {
         Some(self.image_available_semaphores[self.current_frame]),
         None);
 
-        self.resource_manager.flush(self.render_context.get_device());
+        self.resource_manager.reset(self.render_context.get_device());
 
         let command_buffer = self.command_buffers[image_index as usize];
         unsafe {
