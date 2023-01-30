@@ -18,8 +18,7 @@ pub struct Frame<'a> {
     root_index: Option<NodeIndex>,
     create_info: HashMap<ResourceHandle, ResourceCreateInfo>,
     state: FrameState,
-    sorted_nodes: Vec<NodeIndex>,
-    image_usage_cache: HashMap<ResourceHandle, vk::ImageLayout>
+    sorted_nodes: Vec<NodeIndex>
 }
 
 impl Frame {
@@ -30,8 +29,7 @@ impl Frame {
             root_index: None,
             create_info: HashMap::new(),
             state: FrameState::New,
-            sorted_nodes: Vec::new(),
-            image_usage_cache: HashMap::new()
+            sorted_nodes: Vec::new()
         }
     }
 
@@ -71,11 +69,6 @@ impl Frame {
 
     pub (crate) fn get_sorted_nodes(&self) -> &[NodeIndex] {
         &self.sorted_nodes
-    }
-
-    pub (crate) fn set_image_usage_cache(&mut self, image_usage_cache: HashMap<ResourceHandle, vk::ImageLayout>) {
-        assert!(self.state == FrameState::Ended, "Frame must be ended before applying image usage cache");
-        self.image_usage_cache = image_usage_cache;
     }
 
     pub (crate) fn end(&mut self) {

@@ -60,57 +60,6 @@ fn resolve_render_targets(
     rts
 }
 
-fn create_image_memory_barrier() -> ImageBarrier {
-    vk::PipelineStageFlags::
-    ImageBarrier {
-        handle: 0,
-        source_stage: Default::default(),
-        dest_stage: Default::default(),
-        source_access: Default::default(),
-        dest_access: Default::default(),
-        old_layout: Default::default(),
-        new_layout: Default::default()
-    }
-}
-
-fn create_image_memory_barriers(
-    resources: &[ResolvedResource],
-    queue_index: u32,
-    old_layout: vk::ImageLayout,
-    new_layout: vk::ImageLayout) -> Vec<vk::ImageMemoryBarrier> {
-
-    let mut barriers: Vec<vk::ImageMemoryBarrier> = Vec::new();
-
-    for resource in resources {
-        if let ResourceType::Image(image) = &resource.resource {
-            // TODO: range should not be static. Maybe pass in a slice of structs which include range values?
-            let range = vk::ImageSubresourceRange::builder()
-                .level_count(1)
-                .base_mip_level(0)
-                .layer_count(1)
-                .base_array_layer(0)
-                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                .build();
-            // TODO: src and dst access masks should not be static
-            let barrier = vk::ImageMemoryBarrier::builder()
-                .image(image.image)
-                .old_layout(old_layout)
-                .new_layout(new_layout)
-                .src_access_mask(vk::AccessFlags::NONE)
-                .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                .src_queue_family_index(queue_index)
-                .dst_queue_family_index(queue_index)
-                .subresource_range(range)
-                .build();
-            barriers.push(barrier);
-        } else {
-            panic!("Attempting to create an ImageMemoryBarrier for non-image resource");
-        }
-    }
-
-    barriers
-}
-
 pub struct VulkanFrameGraph {
     pipeline_manager: VulkanPipelineManager,
     renderpass_manager: VulkanRenderpassManager
@@ -344,9 +293,8 @@ impl FrameGraph for VulkanFrameGraph {
         // compile and link frame
         {
             let sorted_nodes = self.compile(nodes, root_index);
-            let image_usage_cache = self.link(nodes, &sorted_nodes);
+            self.link(nodes, &sorted_nodes);
             frame.set_sorted_nodes(sorted_nodes);
-            frame.set_image_usage_cache(image_usage_cache);
         }
 
         // excute nodes
@@ -362,23 +310,6 @@ impl FrameGraph for VulkanFrameGraph {
             // resolve copy sources and dests for this node
             let resolved_copy_sources = resolve_copy_resources(resource_manager, copy_sources);
             let resolved_copy_dests = resolve_copy_resources(resource_manager, copy_dests);
-
-            // create image memory barriers for copies this node
-            {
-                let graphics_index = render_context.get_device().get_queue_family_indices().graphics
-                    .expect("Expected a valid graphics queue index");
-
-                // TODO: should not assume the old layout is color attachment
-                let image_memory_barriers = create_image_memory_barriers(
-                    &resolved_copy_sources.values().collect(),
-                    graphics_index,
-                    vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                    vk::ImageLayout::TRANSFER_SRC_OPTIMAL);
-            }
-
-            // create memory barriers for copies for this node
-
-            // write memory barriers to commandbuffer
 
             // prepare pipeline for execution (node's fill callback)
             let active_pipeline = node.get_pipeline_description();
