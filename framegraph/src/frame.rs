@@ -6,6 +6,7 @@ use context::api_types::image::ImageCreateInfo;
 use crate::graphics_pass_node::GraphicsPassNode;
 use crate::resource::vulkan_resource_manager::{ResourceCreateInfo, ResourceHandle, VulkanResourceManager};
 
+#[derive(Eq, PartialEq)]
 enum FrameState {
     New,
     Started,
@@ -14,15 +15,15 @@ enum FrameState {
 
 pub struct Frame<'a> {
     resource_manager: &'a VulkanResourceManager,
-    nodes: StableDiGraph<GraphicsPassNode, u32>,
+    pub nodes: StableDiGraph<GraphicsPassNode, u32>,
     root_index: Option<NodeIndex>,
-    create_info: HashMap<ResourceHandle, ResourceCreateInfo>,
+    pub create_info: HashMap<ResourceHandle, ResourceCreateInfo>,
     state: FrameState,
-    sorted_nodes: Vec<NodeIndex>
+    pub sorted_nodes: Vec<NodeIndex>
 }
 
-impl Frame {
-    pub fn new(resource_manager: &VulkanResourceManager) -> Self {
+impl<'a> Frame<'a> {
+    pub fn new(resource_manager: &'a VulkanResourceManager) -> Self {
         Frame {
             resource_manager,
             nodes: StableDiGraph::new(),
@@ -34,17 +35,17 @@ impl Frame {
     }
 
     pub fn add_node(&mut self, node: GraphicsPassNode) -> NodeIndex {
-        assert(self.state == FrameState::Started, "Frame must be started before adding nodes");
+        assert!(self.state == FrameState::Started, "Frame must be started before adding nodes");
         self.nodes.add_node(node)
     }
 
     pub fn start(&mut self, root_node: GraphicsPassNode) {
-        assert(self.state == FrameState::New, "Frame has already been started");
+        assert!(self.state == FrameState::New, "Frame has already been started");
         self.root_index = Some(self.add_node(root_node));
     }
 
     pub fn create_image(&mut self, create_info: ImageCreateInfo) -> ResourceHandle {
-        assert(self.state == FrameState::Started, "Frame must be in Started state to add image");
+        assert!(self.state == FrameState::Started, "Frame must be in Started state to add image");
         // reserve handle from resource manager
         let new_handle = self.resource_manager.reserve_handle();
 
@@ -56,7 +57,7 @@ impl Frame {
     }
 
     pub fn create_buffer(&mut self, create_info: BufferCreateInfo) -> ResourceHandle {
-        assert(self.state == FrameState::Started, "Frame must be in Started state to add buffer");
+        assert!(self.state == FrameState::Started, "Frame must be in Started state to add buffer");
         let new_handle = self.resource_manager.reserve_handle();
         self.create_info.insert(new_handle, ResourceCreateInfo::Buffer(create_info));
         new_handle

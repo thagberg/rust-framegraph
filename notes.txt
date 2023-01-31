@@ -268,3 +268,28 @@ Write -> Read requires barrier (prevent read-after-write hazard)
 Read -> Write requires barrier (prevent write-after-read hazard)
 Write -> Write requires barrier (prevent write-after-write hazard)
 
+20 Jan 2023 - Add transient lifecycle info during linking
+During node execution we need to create transient resources
+One option is to just create all transient resources for the frame at the beginning and free them all at the end of the framegraph execution
+Another, potentially better option is create them on-demand and free them as soon as they're unneeded
+If we use the second option we will need to determine transient resource lifespan during the framegraph linking phase
+
+06 Feb 2023 - Add sampler / sampler info to ImageBindingInfo
+
+06 April 2023 -
+Device::create_image
+	creates an image
+	allocates memory from the Device allocator
+	binds image to allocated memory
+	create and return DeviceImage
+
+DeviceImage
+	Image
+	Rc<RefCell<Device>>
+	drop
+		call cleanup on the device
+
+08 April 2023 - Per frame resource management
+ResourceManager still exists to generate and distribute resource handles
+Each frame ResourceManager will clear out its cache?
+	Cache holds Rc resources, so if this is the last ref they'll be cleaned up

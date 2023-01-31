@@ -22,11 +22,11 @@ pub fn generate_pass(draw_data: &DrawData, resource_manager: &mut VulkanResource
         .sharing_mode(vk::SharingMode::EXCLUSIVE)
         .build();
 
-    let vtx_buffer = resource_manager.create_buffer_transient(
-        BufferCreateInfo::new(vtx_create, "imgui_vtx_buffer".to_string()));
+    // let vtx_buffer = resource_manager.create_buffer_transient(
+    //     BufferCreateInfo::new(vtx_create, "imgui_vtx_buffer".to_string()));
 
-    let idx_buffer = resource_manager.create_buffer_transient(
-        BufferCreateInfo::new(idx_create, "imgui_idx_buffer".to_string()));
+    // let idx_buffer = resource_manager.create_buffer_transient(
+    //     BufferCreateInfo::new(idx_create, "imgui_idx_buffer".to_string()));
 
     // let uniform_buffer = resource_manager.create_buffer_persistent(
     //     BufferCreateInfo::new(ubo_create_info,

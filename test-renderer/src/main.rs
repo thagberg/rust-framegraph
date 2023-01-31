@@ -245,11 +245,12 @@ impl VulkanApp {
             let swapchain_handle = self.swapchain_handles[image_index as usize];
             let extent = self.render_context.get_swapchain().as_ref().unwrap().get_extent();
             let blit_offsets = [glam::IVec2::new(0, 0), glam::IVec2::new(extent.width as i32, extent.height as i32)];
-            let (ubo_pass_node, ubo_render_target) = self.ubo_pass.generate_pass(&mut self.resource_manager, self.render_context.get_swapchain().as_ref().unwrap().get_extent());
-            self.frame_graph.start(blit::generate_pass(ubo_render_target, 0, swapchain_handle, 0, blit_offsets));
-            self.frame_graph.add_node(ubo_pass_node);
-            self.frame_graph.compile();
+            let mut new_frame = self.frame_graph.start(&self.resource_manager);
+            let (ubo_pass_node, ubo_render_target) = self.ubo_pass.generate_pass(&mut new_frame, self.render_context.get_swapchain().as_ref().unwrap().get_extent());
+            //self.frame_graph.start(blit::generate_pass(ubo_render_target, 0, swapchain_handle, 0, blit_offsets));
+            new_frame.add_node(ubo_pass_node);
             self.frame_graph.end(
+                new_frame,
                 &mut self.resource_manager,
                 &mut self.render_context,
                 &command_buffer);

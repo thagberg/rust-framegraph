@@ -28,6 +28,7 @@ pub struct BindingInfo {
     pub access: vk::AccessFlags
 }
 
+#[derive(Copy, Clone)]
 pub enum ResourceScope {
     Transient,
     Persistent

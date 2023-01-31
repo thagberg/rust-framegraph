@@ -2,14 +2,19 @@ use core::ffi::c_void;
 
 use ash::vk;
 
+use gpu_allocator::vulkan::*;
+use gpu_allocator::MemoryLocation;
+
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
 use context::api_types::image::ImageCreateInfo;
 use context::api_types::buffer::BufferCreateInfo;
+use context::api_types::device::DeviceWrapper;
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::attachment::AttachmentReference;
 
-use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding};
+use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding, ResourceScope};
+use framegraph::frame::Frame;
 use framegraph::pass_node::ResolvedBindingMap;
 use framegraph::graphics_pass_node::{GraphicsPassNode};
 use framegraph::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, VulkanResourceManager, ResourceType};
@@ -39,7 +44,7 @@ impl UBOPass {
             ..Default::default()
         };
 
-        let uniform_buffer = resource_manager.create_buffer_persistent(
+        let uniform_buffer = resource_manager.create_buffer(
             BufferCreateInfo::new(ubo_create_info,
                 "ubo_persistent_buffer".to_string()));
         let ubo_value = OffsetUBO {
@@ -60,7 +65,26 @@ impl UBOPass {
         }
     }
 
-    pub fn generate_pass(&self, resource_manager: &mut VulkanResourceManager, rendertarget_extent: vk::Extent2D) -> (GraphicsPassNode, ResourceHandle) {
+    pub fn newer(
+        device: &mut DeviceWrapper) -> Self {
+        let ubo_create_info = vk::BufferCreateInfo {
+            s_type: vk::StructureType::BUFFER_CREATE_INFO,
+            size: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize,
+            usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
+            sharing_mode: vk::SharingMode::EXCLUSIVE,
+            ..Default::default()
+        };
+
+        let uniform_buffer = {
+            //let &mut allocator = device.get_allocator();
+            device.create_image()
+        };
+    }
+
+    pub fn generate_pass(
+        &self,
+        frame: &mut Frame,
+        rendertarget_extent: vk::Extent2D) -> (GraphicsPassNode, ResourceHandle) {
 
         let vertex_input_state_create_info = vk::PipelineVertexInputStateCreateInfo {
             s_type: vk::StructureType::PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -86,7 +110,7 @@ impl UBOPass {
 
         // let color_attachment = create_color_attachment_transient(image_description);
 
-        let handle = resource_manager.create_image_transient(
+        let handle = frame.create_image(
             ImageCreateInfo::new(
             vk::ImageCreateInfo::builder()
                 .image_type(vk::ImageType::TYPE_2D)
@@ -115,18 +139,19 @@ impl UBOPass {
 
         let ubo_binding = ResourceBinding {
             handle: self.uniform_buffer,
+            scope: ResourceScope::Persistent,
             binding_info: BindingInfo {
                 binding_type: BindingType::Buffer(BufferBindingInfo {
                     offset: 0,
                     range: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize
                 }),
                 set: 0,
-                slot: 0
+                slot: 0,
+                stage: vk::PipelineStageFlags::ALL_GRAPHICS,
+                access: vk::AccessFlags::SHADER_READ
             }
         };
 
-        // TODO: need to do this to avoid lifetime issue of &self for when the UBO handle is used during callback
-        let ubo_handle = self.uniform_buffer.clone();
         let passnode = GraphicsPassNode::builder("ubo_pass".to_string())
             .pipeline_description(pipeline_description)
             .read(ubo_binding)
