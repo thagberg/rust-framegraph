@@ -39,12 +39,6 @@ pub trait PassNode {
 
     fn get_writes(&self) -> Vec<ResourceHandle>;
 
-    fn get_buffer_barriers(&self) -> &[BufferBarrier];
-
-    fn get_image_barriers(&self) -> &[ImageBarrier];
-
-    fn add_image_barrier(&mut self, image_barrier: ImageBarrier);
-
     fn execute(
         &self,
         render_context: &mut Self::RC,

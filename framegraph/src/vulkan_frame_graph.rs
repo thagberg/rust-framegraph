@@ -14,9 +14,9 @@ use crate::pass_node::PassNode;
 use crate::binding::{ResourceBinding, ResolvedResourceBinding, BindingInfo, ImageBindingInfo, BufferBindingInfo, BindingType};
 use crate::pass_node::ResolvedBindingMap;
 use crate::graphics_pass_node::{GraphicsPassNode};
-use crate::pipeline::{PipelineManager, VulkanPipelineManager};
+use crate::pipeline::{Pipeline, PipelineManager, VulkanPipelineManager};
 use crate::resource::resource_manager::ResourceManager;
-use crate::resource::vulkan_resource_manager::{ResolvedResource, ResolvedResourceMap, ResourceHandle, ResourceType, VulkanResourceManager};
+use crate::resource::vulkan_resource_manager::{ResolvedResource, ResolvedResourceMap, ResourceCreateInfo, ResourceHandle, ResourceType, VulkanResourceManager};
 use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager, AttachmentInfo, StencilAttachmentInfo};
 
 use std::collections::HashMap;
@@ -24,19 +24,20 @@ use std::marker::PhantomData;
 use petgraph::adj::DefaultIx;
 use petgraph::data::DataMap;
 use petgraph::visit::{Dfs, EdgeRef, NodeCount};
+use context::api_types::buffer::BufferWrapper;
 use context::api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::attachment::AttachmentReference;
-use crate::barrier::ImageBarrier;
+use crate::barrier::{BufferBarrier, ImageBarrier};
 
 fn resolve_copy_resources(
     resource_manager: &VulkanResourceManager,
     handles: &[ResourceHandle]) -> ResolvedResourceMap {
 
-    let mut resolved_map = ResolvedResourceMap::new()
+    let mut resolved_map = ResolvedResourceMap::new();
 
     for handle in handles {
-        let resolved = resource_manager.resolve_resoure(handle);
+        let resolved = resource_manager.resolve_resource(handle);
         resolved_map.insert(*handle, resolved.clone());
     }
 
@@ -60,9 +61,87 @@ fn resolve_render_targets(
     rts
 }
 
+fn get_descriptor_image_info(image: &ImageWrapper) -> (vk::DescriptorImageInfo, vk::DescriptorType) {
+    let image_info = vk::DescriptorImageInfo::builder()
+        .image_view(image.view)
+        .image_layout(image.layout)
+        .sampler(vk::Sampler::null()) // TODO: add this as optional to ImageWrapper
+        .build();
+    // TODO: after the above, this could also be COMBINED_IMAGE_SAMPLER
+    let descriptor_type = vk::DescriptorType::SAMPLED_IMAGE;
+
+    (image_info, descriptor_type)
+}
+
+fn get_descriptor_buffer_info(
+    buffer: &BufferWrapper,
+    binding: &BufferBindingInfo) -> (vk::DescriptorBufferInfo, vk::DescriptorType) {
+
+    let buffer_info = vk::DescriptorBufferInfo::builder()
+        .buffer(buffer.buffer)
+        .offset(binding.offset)
+        .range(binding.range)
+        .build();
+    let descriptor_type = vk::DescriptorType::UNIFORM_BUFFER; // TODO: this could also be a storage buffer
+
+    (buffer_info, descriptor_type)
+}
+
+fn resolve_resources_and_descriptors(
+    bindings: &[ResourceBinding],
+    resource_manager: &VulkanResourceManager,
+    pipeline: &mut Pipeline,
+    image_bindings: &mut Vec<vk::DescriptorImageInfo>,
+    buffer_bindings: &mut Vec<vk::DescriptorBufferInfo>,
+    descriptor_writes: &mut Vec<vk::WriteDescriptorSet>) -> ResolvedBindingMap {
+
+    let mut resolved_map = ResolvedBindingMap::new();
+
+    for binding in bindings {
+        //let resolved_binding = resolve_resource(resource_manager, binding.handle);
+        let resolved_binding = resource_manager.resolve_resource(&binding.handle);
+        let descriptor_set = pipeline.descriptor_sets[binding.binding_info.set as usize];
+
+        let mut descriptor_write_builder = vk::WriteDescriptorSet::builder()
+            .dst_set(descriptor_set)
+            .dst_binding(binding.binding_info.slot)
+            .dst_array_element(0); // TODO: parameterize
+
+        match (&resolved_binding.resource, &binding.binding_info.binding_type) {
+            (ResourceType::Image(resolved_image), BindingType::Image(image_binding)) => {
+                let (image_info, descriptor_type) = get_descriptor_image_info(resolved_image);
+                image_bindings.push(image_info);
+                descriptor_write_builder = descriptor_write_builder
+                    .descriptor_type(descriptor_type)
+                    .image_info(std::slice::from_ref(image_bindings.last().unwrap()));
+            },
+            (ResourceType::Buffer(resolved_buffer), BindingType::Buffer(buffer_binding)) => {
+                let (buffer_info, descriptor_type) = get_descriptor_buffer_info(resolved_buffer, buffer_binding);
+                buffer_bindings.push(buffer_info);
+                descriptor_write_builder = descriptor_write_builder
+                    .descriptor_type(descriptor_type)
+                    .buffer_info(std::slice::from_ref(buffer_bindings.last().unwrap()));
+            },
+            _ => {
+                panic!("Invalid type being resolved");
+            }
+        }
+
+        descriptor_writes.push(descriptor_write_builder.build());
+    }
+
+    resolved_map
+}
+
+pub struct NodeBarriers {
+    image_barriers: Vec<ImageBarrier>,
+    buffer_barriers: Vec<BufferBarrier>
+}
+
 pub struct VulkanFrameGraph {
     pipeline_manager: VulkanPipelineManager,
-    renderpass_manager: VulkanRenderpassManager
+    renderpass_manager: VulkanRenderpassManager,
+    node_barriers: HashMap<NodeIndex, NodeBarriers>
 }
 
 impl VulkanFrameGraph {
@@ -72,7 +151,8 @@ impl VulkanFrameGraph {
 
         VulkanFrameGraph {
             pipeline_manager,
-            renderpass_manager
+            renderpass_manager,
+            node_barriers: HashMap::new()
         }
     }
 
@@ -100,7 +180,7 @@ impl VulkanFrameGraph {
                     // input/output match defines a graph edge
                     for matched_output in matched_outputs {
                         // use update_edge instead of add_edge to avoid duplicates
-                        self.nodes.update_edge(
+                        nodes.update_edge(
                             *node_index,
                             *matched_output,
                             0);
@@ -117,8 +197,9 @@ impl VulkanFrameGraph {
             let mut retained_nodes: Vec<bool> = Vec::new();
             retained_nodes.resize(nodes.node_count(), false);
 
-            let mut dfs = Dfs::new(&nodes, root_index);
-            while let Some(node_id) = dfs.next(&nodes) {
+            //let mut dfs = Dfs::new(&nodes, root_index);
+            let mut dfs = Dfs::new(&*nodes, root_index);
+            while let Some(node_id) = dfs.next(&*nodes) {
                 retained_nodes[node_id.index()] = true;
             }
 
@@ -131,7 +212,7 @@ impl VulkanFrameGraph {
         // so now we can use a topological sort to generate an execution order
         let mut sorted_nodes: Vec<NodeIndex> = Vec::new();
         {
-            let mut sort_result = petgraph::algo::toposort(nodes, None);
+            let mut sort_result = petgraph::algo::toposort(&*nodes, None);
             match sort_result {
                 Ok(mut sorted_list) => {
                     // DFS requires we order nodes as input -> output, but for sorting we want output -> input
@@ -147,14 +228,13 @@ impl VulkanFrameGraph {
             }
         }
 
-        self.compiled = true;
         sorted_nodes
     }
 
     fn link(
         &mut self,
         nodes: &mut StableDiGraph<GraphicsPassNode, u32>,
-        sorted_nodes: &Vec<NodeIndex>) -> HashMap<ResourceHandle, vk::ImageLayout> {
+        sorted_nodes: &Vec<NodeIndex>) {
 
         // All image bindings and attachments require the most recent usage for that resource
         // in case layout transitions are necessary. Since the graph has already been sorted,
@@ -178,17 +258,22 @@ impl VulkanFrameGraph {
 
                     let pipeline_write = vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT;
 
-                    write_access | access > 0 || pipeline_write | stage > 0
+                    (write_access & access != vk::AccessFlags::NONE) || (pipeline_write & stage != vk::PipelineStageFlags::NONE)
                 };
 
-                for rt in node.get_rendertargets_mut() {
+                let mut node_barrier = NodeBarriers {
+                    image_barriers: vec![],
+                    buffer_barriers: vec![]
+                };
+
+                for rt in node.get_rendertargets() {
                     // rendertargets always write, so if this isn't the first usage of this resource
                     // then we know we need a barrier
                     let last_usage = usage_cache.get(&rt.handle);
                     let new_usage = ResourceUsage {
                         access: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
                         stage: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-                        layout: Some(new_usage.layout)
+                        layout: Some(rt.layout)
                     };
                     if let Some(usage) = last_usage {
 
@@ -201,24 +286,33 @@ impl VulkanFrameGraph {
                             old_layout: usage.layout.expect("Tried to get image layout from non-image"),
                             new_layout: new_usage.layout.expect("Should never hit this")
                         };
-                        node.add_image_barrier(image_barrier);
+                        node_barrier.image_barriers.push(image_barrier);
                     }
 
                     usage_cache.insert(rt.handle, new_usage);
                 }
 
-                for input in node.get_inputs_mut() {
-                    let last_usage = usage_cache.get(&input.handle);
+                for input in node.get_inputs() {
+                    //let last_usage = usage_cache.get(&input.handle);
+                    let last_usage = {
+                        let usage = usage_cache.get(&input.handle);
+                        match usage {
+                            Some(found_usage) => {found_usage.clone()},
+                            _ => {
+                                ResourceUsage {
+                                    access: vk::AccessFlags::NONE,
+                                    stage: vk::PipelineStageFlags::NONE,
+                                    layout: Some(vk::ImageLayout::UNDEFINED)
+                                }
+                            }
+                        }
+                    };
                     // barrier required if:
                     //  * last usage was a write
                     //  * image layout has changed
-                    let prev_write = {
-                        if let Some(usage) = last_usage {
-                            is_write(usage.access, usage.stage)
-                        }
-                        false
-                    };
-                    if let BindingType::Image(image_binding) = &mut input.binding_info.binding_type {
+                    let prev_write = is_write(last_usage.access, last_usage.stage);
+
+                    if let BindingType::Image(image_binding) = &input.binding_info.binding_type {
                         let new_usage = ResourceUsage{
                             access: input.binding_info.access,
                             stage: input.binding_info.stage,
@@ -226,41 +320,39 @@ impl VulkanFrameGraph {
                         };
 
                         let layout_changed = {
-                            if let Some(usage) = last_usage {
-                                if let Some(layout) = usage.layout {
-                                    layout != image_binding.layout
-                                }
+                            if let Some(layout) = last_usage.layout {
+                                layout != image_binding.layout
+                            } else {
+                                true
                             }
-                            true
                         };
 
                         // need a barrier
                         if layout_changed || prev_write {
-                            let old_layout = {
-                                match old_usage.layout {
-                                    Some(layout) => { layout },
-                                    _ => { vk::ImageLayout::UNDEFINED } // TODO: not sure if this is actually valid
-                                }
-                            };
                             let image_barrier = ImageBarrier {
                                 handle: input.handle,
-                                source_stage: usage.stage,
+                                source_stage: last_usage.stage,
                                 dest_stage: new_usage.stage,
-                                source_access: usage.access,
+                                source_access: last_usage.access,
                                 dest_access: new_usage.access,
-                                old_layout: old_layout,
+                                old_layout: last_usage.layout.expect("Using a non-image for an image transition"),
                                 new_layout: new_usage.layout.unwrap()
                             };
-                            node.add_image_barrier(image_barrier);
+                            node_barrier.image_barriers.push(image_barrier);
                         }
 
-                        image_binding.layout = update_usage(input.handle, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+                        usage_cache.insert(input.handle, new_usage);
+                        //image_binding.layout = update_usage(input.handle, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+                    } else {
+                        panic!("Buffer barriers not implemented");
                     }
                 }
+
+                self.node_barriers.insert(*node_index, node_barrier);
             }
         }
 
-        usage_cache
+        //usage_cache
     }
 }
 
@@ -273,7 +365,7 @@ impl FrameGraph for VulkanFrameGraph {
     type RC = VulkanRenderContext;
     type Index = NodeIndex;
 
-    fn start(&mut self, resource_manager: &VulkanResourceManager) -> Frame {
+    fn start<'a>(&'a mut self, resource_manager: &'a VulkanResourceManager) -> Frame {
         Frame::new(resource_manager)
     }
 
@@ -286,21 +378,36 @@ impl FrameGraph for VulkanFrameGraph {
 
         frame.end();
 
-        let nodes = frame.get_nodes();
-        let resource_info = frame.get_create_info();
         let root_index = frame.get_root_index();
+        //let nodes = &frame.nodes;
+        let transient_create_info = &frame.create_info;
 
         // compile and link frame
-        {
-            let sorted_nodes = self.compile(nodes, root_index);
-            self.link(nodes, &sorted_nodes);
-            frame.set_sorted_nodes(sorted_nodes);
+         sorted_nodes = self.compile(&mut frame.nodes, root_index);
+            self.link(&mut frame.nodes, &sorted_nodes);
+            //frame.set_sorted_nodes(sorted_nodes);
+            frame.sorted_nodes = sorted_nodes;
+        }
+
+        // Create transient resources for the frame
+        // TODO: Calculate transient resource lifetimes during linking so we can create them on-demand
+        //      and keep them for only as long as needed
+        for (handle, create_info) in transient_create_info {
+            match &create_info {
+                ResourceCreateInfo::Image(image_create) => {
+                    resource_manager.create_reserved_image(*handle, image_create);
+                },
+                ResourceCreateInfo::Buffer(buffer_create) => {
+                    resource_manager.create_reserved_buffer(*handle, buffer_create);
+                }
+            }
         }
 
         // excute nodes
         for index in frame.get_sorted_nodes() {
-            let node = nodes.node_weight(*index).unwrap();
+            let node = frame.nodes.node_weight(*index).unwrap();
 
+            // get input and output handles for this pass
             let inputs = node.get_inputs();
             let outputs = node.get_outputs();
             let render_targets = node.get_rendertargets();
@@ -318,16 +425,34 @@ impl FrameGraph for VulkanFrameGraph {
                 let resolved_render_targets = resolve_render_targets(resource_manager, render_targets);
 
                 // Ensure all rendertargets are the same dimensions
+                let framebuffer_extent = {
+                    let mut extent: Option<vk::Extent3D> = None;
+                    for rt in &resolved_render_targets {
+                        match extent {
+                            Some(extent) => {
+                                assert_eq!(extent, rt.extent, "All framebuffer attachments must be the same dimensions");
+                            },
+                            None => {
+                                extent = Some(rt.extent.clone());
+                            }
+                        }
+                    }
+                    extent.expect("Framebuffer required for renderpass")
+                };
 
                 let renderpass = self.renderpass_manager.create_or_fetch_renderpass(
                     node,
                     node.get_rendertargets(),
                     render_context);
 
-                let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass, pipeline_description);
+                let mut pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass, pipeline_description);
 
                 // create framebuffer
                 // TODO: should cache framebuffer objects to avoid creating the same ones each frame
+                let framebuffer = render_context.create_framebuffer(
+                    renderpass,
+                    &framebuffer_extent,
+                    &resolved_render_targets);
 
                 // TODO: parameterize this per framebuffer attachment
                 let clear_value = vk::ClearValue {
@@ -337,288 +462,93 @@ impl FrameGraph for VulkanFrameGraph {
                 };
 
                 // prepare and perform descriptor writes
-                {
+                let (resolved_inputs, resolved_outputs) = {
+                    let mut descriptor_writes: Vec<vk::WriteDescriptorSet> = Vec::new();
+                    let mut image_bindings: Vec<vk::DescriptorImageInfo> = Vec::new();
+                    let mut buffer_bindings: Vec<vk::DescriptorBufferInfo> = Vec::new();
 
-                }
+                    let resolved_inputs = resolve_resources_and_descriptors(
+                        inputs,
+                        resource_manager,
+                        &mut pipeline,
+                        &mut image_bindings,
+                        &mut buffer_bindings,
+                        &mut descriptor_writes);
+                    let resolved_outputs = resolve_resources_and_descriptors(
+                        outputs,
+                        resource_manager,
+                        &mut pipeline,
+                        &mut image_bindings,
+                        &mut buffer_bindings,
+                        &mut descriptor_writes);
+
+                    unsafe {
+                        // TODO: support descriptor copies?
+                        render_context.get_device().get().update_descriptor_sets(
+                            &descriptor_writes,
+                            &[]);
+                        // bind descriptorsets
+                        // TODO: COMPUTE SUPPORT
+                        render_context.get_device().get().cmd_bind_descriptor_sets(
+                            *command_buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            pipeline.pipeline_layout,
+                            0,
+                            &pipeline.descriptor_sets,
+                            &[]);
+                    }
+
+                    (resolved_inputs, resolved_outputs)
+                };
 
                 // begin render pass and bind pipeline
+                {
+                    let render_pass_begin = vk::RenderPassBeginInfo::builder()
+                        .render_pass(renderpass)
+                        .framebuffer(framebuffer)
+                        .render_area(vk::Rect2D::builder()
+                            .offset(vk::Offset2D{x: 0, y: 0})
+                            .extent(vk::Extent2D{
+                                width: framebuffer_extent.width,
+                                height: framebuffer_extent.height})
+                            .build())
+                        .clear_values(std::slice::from_ref(&clear_value));
 
-                // execute this node
-            }
-        }
-
-    }
-
-    fn end_old(
-        &mut self,
-        resource_manager: &mut Self::RM,
-        render_context: &mut Self::RC,
-        command_buffer: &Self::CB) {
-
-        match &self.sorted_nodes {
-            Some(indices) => {
-                for index in indices {
-                    let node = nodes.node_weight(*index).unwrap();
-
-                    let inputs = node.get_inputs();
-                    let outputs = node.get_outputs();
-                    let render_targets = node.get_rendertargets();
-                    let copy_sources = node.get_copy_sources();
-                    let copy_dests = node.get_copy_dests();
-
-                    let mut resolved_inputs: ResolvedBindingMap = HashMap::new();
-                    let mut resolved_outputs: ResolvedBindingMap = HashMap::new();
-
-                    let (resolved_copy_sources, resolved_copy_dests) = {
-                        let mut resolve_resource_type = | resources: &[ResourceHandle] | -> ResolvedResourceMap {
-                            let mut resolved_map = ResolvedResourceMap::new();
-                            for resource in resources {
-                                let resolved = resource_manager.resolve_resource(resource);
-                                resolved_map.insert(*resource, resolved.clone());
-                            }
-                            resolved_map
-                        };
-
-                        (resolve_resource_type(copy_sources), resolve_resource_type(copy_dests))
-                    };
-
-                    let resolved_render_targets = {
-                        let mut rts: Vec<ImageWrapper> = Vec::new();
-                        for rt_ref in render_targets {
-                            let resolved = resource_manager.resolve_resource(&rt_ref.handle);
-                            if let ResourceType::Image(rt_image) = resolved.resource {
-                                rts.push(rt_image);
-                            }
-                        }
-                        rts
-                    };
-
-                    let mut image_memory_barriers: Vec<vk::ImageMemoryBarrier> = Vec::new();
-                    for (handle, resource) in &resolved_copy_sources {
-                        if let ResourceType::Image(image) = &resource.resource {
-                            let graphics_index = render_context.get_device().get_queue_family_indices().graphics
-                                .expect("Expected a valid graphics queue index");
-                            let range = vk::ImageSubresourceRange::builder()
-                                .level_count(1)
-                                .base_mip_level(0)
-                                .layer_count(1)
-                                .base_array_layer(0)
-                                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                                .build();
-                            let barrier = vk::ImageMemoryBarrier::builder()
-                                .image(image.image)
-                                // .old_layout(image.layout)
-                                .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                                .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-                                .src_access_mask(vk::AccessFlags::NONE)
-                                .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                                .src_queue_family_index(graphics_index)
-                                .dst_queue_family_index(graphics_index)
-                                .subresource_range(range)
-                                .build();
-                            image_memory_barriers.push(barrier);
-                        }
-                    }
-                    for (handle, resource) in &resolved_copy_dests {
-                        if let ResourceType::Image(image) = &resource.resource {
-                            let graphics_index = render_context.get_device().get_queue_family_indices().graphics
-                                .expect("Expected a valid graphics queue index");
-                            let range = vk::ImageSubresourceRange::builder()
-                                .level_count(1)
-                                .base_mip_level(0)
-                                .layer_count(1)
-                                .base_array_layer(0)
-                                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                                .build();
-                            let barrier = vk::ImageMemoryBarrier::builder()
-                                .image(image.image)
-                                .old_layout(image.layout)
-                                .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                                .src_access_mask(vk::AccessFlags::NONE)
-                                .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                                .src_queue_family_index(graphics_index)
-                                .dst_queue_family_index(graphics_index)
-                                .subresource_range(range)
-                                .build();
-                            image_memory_barriers.push(barrier);
-                        }
-                    }
                     unsafe {
-                        render_context.get_device().get().cmd_pipeline_barrier(
+                        render_context.get_device().get().cmd_begin_render_pass(
                             *command_buffer,
-                            vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-                            vk::PipelineStageFlags::FRAGMENT_SHADER,
-                            vk::DependencyFlags::empty(),
-                            &[],
-                            &[],
-                            &image_memory_barriers);
-                    }
+                            &render_pass_begin,
+                            vk::SubpassContents::INLINE);
 
-                    let active_pipeline = node.get_pipeline_description();
-                    if let Some(pipeline_description) = active_pipeline {
-                        // Ensure all rendertargets are the same dimensions
-                        let framebuffer_extent = {
-                            let mut extent: Option<vk::Extent3D> = None;
-                            for rt in &resolved_render_targets {
-                                match extent {
-                                    Some(extent) => {
-                                        assert_eq!(extent, rt.extent, "All framebuffer attachments must be the same dimensions");
-                                    },
-                                    None => {
-                                        extent = Some(rt.extent.clone());
-                                    }
-                                }
-                            }
-                            extent.expect("Framebuffer required for renderpass")
-                        };
-
-                        let renderpass = self.renderpass_manager.create_or_fetch_renderpass(
-                            node,
-                            node.get_rendertargets(),
-                            render_context);
-
-                        let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass, pipeline_description);
-
-                        let framebuffer = render_context.create_framebuffer(
-                            renderpass,
-                            &framebuffer_extent,
-                            &resolved_render_targets);
-
-                        let clear_value = vk::ClearValue {
-                            color: vk::ClearColorValue {
-                                float32: [0.1, 0.1, 0.1, 1.0]
-                            }
-                        };
-
-                        // TODO: potential optimization in doing multiple descriptors in a single WriteDescriptorSet?
-                        let mut descriptor_writes: Vec<vk::WriteDescriptorSet> = Vec::new();
-                        // WriteDescriptorSet requires a reference to image or buffer bindings,
-                        // so we have to keep these alive by placing them in vectors until after
-                        // we call vkCommandUpdateDescriptorSets
-                        let mut image_bindings: Vec<vk::DescriptorImageInfo> = Vec::new();
-                        let mut buffer_bindings: Vec<vk::DescriptorBufferInfo> = Vec::new();
-                        let (resolved_inputs, resolved_outputs) = {
-                            let mut resolve_binding_type = | bindings: &[ResourceBinding] | -> ResolvedBindingMap {
-                                let mut resolved_map = ResolvedBindingMap::new();
-                                for binding in bindings {
-                                    let descriptor_set = pipeline.descriptor_sets[binding.binding_info.set as usize];
-                                    let mut descriptor_write_builder = vk::WriteDescriptorSet::builder()
-                                        .dst_set(descriptor_set)
-                                        .dst_binding(binding.binding_info.slot)
-                                        .dst_array_element(0);
-                                    let resolved = resource_manager.resolve_resource(&binding.handle);
-                                    let mut image_info: vk::DescriptorImageInfo;
-                                    let mut buffer_info: vk::DescriptorBufferInfo;
-                                    match (&resolved.resource, &binding.binding_info.binding_type) {
-                                        (ResourceType::Image(image), BindingType::Image(image_binding)) => {
-                                            image_info = vk::DescriptorImageInfo::builder()
-                                                .image_view(image.view)
-                                                .image_layout(image.layout)
-                                                .sampler(vk::Sampler::null()) // TODO: implement samplers
-                                                .build();
-                                            image_bindings.push(image_info);
-                                            descriptor_write_builder = descriptor_write_builder
-                                                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                                                .image_info(std::slice::from_ref(image_bindings.last().unwrap()));
-                                        },
-                                        (ResourceType::Buffer(buffer), BindingType::Buffer(buffer_binding)) => {
-                                            buffer_info = vk::DescriptorBufferInfo::builder()
-                                                .buffer(buffer.buffer)
-                                                .offset(buffer_binding.offset) // TODO: support offsets for shared allocation buffers
-                                                .range(buffer_binding.range)
-                                                .build();
-                                            buffer_bindings.push(buffer_info);
-                                            descriptor_write_builder = descriptor_write_builder
-                                                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                                                .buffer_info(std::slice::from_ref(buffer_bindings.last().unwrap()));
-                                        },
-                                        (_,_) => {
-                                            panic!("Illegal combination of resource type and binding type provided");
-                                        }
-                                    };
-
-                                    descriptor_writes.push(descriptor_write_builder.build());
-
-                                    resolved_map.insert(
-                                        binding.handle,
-                                        ResolvedResourceBinding {
-                                            resolved_resource: resolved});
-                                }
-                                resolved_map
-                            };
-
-                            (resolve_binding_type(inputs), resolve_binding_type(outputs))
-                        };
-
-                        // update and bind descriptors
-                        unsafe {
-                            // update descriptorsets
-                            // TODO: support descriptor copies?
-                            render_context.get_device().get().update_descriptor_sets(
-                                &descriptor_writes,
-                                &[]);
-                            // bind descriptorsets
-                            // TODO: COMPUTE SUPPORT
-                            render_context.get_device().get().cmd_bind_descriptor_sets(
-                                *command_buffer,
-                                vk::PipelineBindPoint::GRAPHICS,
-                                pipeline.pipeline_layout,
-                                0,
-                                &pipeline.descriptor_sets,
-                                &[]);
-                        }
-
-                        let render_pass_begin = vk::RenderPassBeginInfo::builder()
-                            .render_pass(renderpass)
-                            .framebuffer(framebuffer)
-                            .render_area(vk::Rect2D::builder()
-                                             .offset(vk::Offset2D{x: 0, y: 0})
-                                             .extent(vk::Extent2D{
-                                                 width: framebuffer_extent.width,
-                                                 height: framebuffer_extent.height})
-                                             .build())
-                            .clear_values(std::slice::from_ref(&clear_value));
-
-                        unsafe {
-                            render_context.get_device().get().cmd_begin_render_pass(
-                                *command_buffer,
-                                &render_pass_begin,
-                                vk::SubpassContents::INLINE);
-
-                            render_context.get_device().get().cmd_bind_pipeline(
-                                *command_buffer,
-                                vk::PipelineBindPoint::GRAPHICS,
-                                pipeline.graphics_pipeline);
-                        }
-                    }
-
-                    node.execute(
-                        render_context,
-                        command_buffer,
-                        &resolved_inputs,
-                        &resolved_outputs,
-                        &resolved_copy_sources,
-                        &resolved_copy_dests);
-
-                    // if we began a render pass and bound a pipeline for this node, end it
-                    if active_pipeline.is_some() {
-                        unsafe {
-                            render_context.get_device().get().cmd_end_render_pass(*command_buffer);
-                        }
+                        // TODO: add compute support
+                        render_context.get_device().get().cmd_bind_pipeline(
+                            *command_buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            pipeline.graphics_pipeline);
                     }
                 }
-            },
-            _ => {
-                println!("No nodes in framegraph to traverse");
+
+                panic!("Need to execute barriers");
+
+                // execute this node
+                node.execute(
+                    render_context,
+                    command_buffer,
+                    &resolved_inputs,
+                    &resolved_outputs,
+                    &resolved_copy_sources,
+                    &resolved_copy_dests);
+
+                // if we began a render pass and bound a pipeline for this node, end it
+                if active_pipeline.is_some() {
+                    unsafe {
+                        render_context.get_device().get().cmd_end_render_pass(*command_buffer);
+                    }
+                }
             }
         }
 
-        if let Some(sorted_indices) = &mut self.sorted_nodes {
-            sorted_indices.clear();
-        }
-        self.nodes.clear();
-        self.frame.reset();
-        self.compiled = false;
-        self.frame_started = false;
+        // Free transient resources
+        // TODO: Does this need to wait until GPU execution is finished?
     }
 }

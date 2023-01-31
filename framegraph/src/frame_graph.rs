@@ -11,13 +11,12 @@ pub trait FrameGraph
     type RC;
     type Index;
 
-    fn start(&mut self, resource_manager: &VulkanResourceManager) -> Frame;
+    fn start<'a>(&'a mut self, resource_manager: &'a VulkanResourceManager) -> Frame;
 
-    fn end(&mut self, mut frame: Frame, command_buffer: &Self::CB);
-
-    // fn end(
-    //     &mut self,
-    //     resource_manager: &mut Self::RM,
-    //     render_context: &mut Self::RC,
-    //     command_buffer: &Self::CB);
+    fn end(
+        &mut self,
+        frame: Frame,
+        resource_manager: &Self::RM,
+        render_context: &mut Self::RC,
+        command_buffer: &Self::CB);
 }

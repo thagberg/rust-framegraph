@@ -27,9 +27,10 @@ pub enum ResourceType {
     Image(ImageWrapper)
 }
 
-pub(crate) struct ResolvedResource {
-    handle: ResourceHandle,
-    resource: ResourceType
+#[derive(Clone)]
+pub struct ResolvedResource {
+    pub handle: ResourceHandle,
+    pub resource: ResourceType
 }
 
 struct ResolvedResourceInternal {
@@ -48,32 +49,6 @@ pub struct VulkanResourceManager {
     /// a resource handle and to be resolveable (such as swapchain images)
     registered_resource_map: ResolvedResourceMap,
     device: Rc<DeviceWrapper>
-}
-
-fn create_image(
-    allocator: &mut Allocator,
-    device: &DeviceWrapper,
-    create_info: &ImageCreateInfo) -> ResolvedResourceInternal
-{
-    let mut image_alloc: Allocation = Default::default();
-    let image = device.create_image(
-        create_info,
-        &mut |memory_requirements: vk::MemoryRequirements| -> (vk::DeviceMemory, vk::DeviceSize) {
-            unsafe {
-                image_alloc = allocator.allocate(&AllocationCreateDesc {
-                    name: "Image allocation",
-                    requirements: memory_requirements,
-                    location: MemoryLocation::GpuOnly, // TODO: Parameterized eventually?
-                    linear: true // TODO: I think this is required for render targets?
-                }).expect("Failed to allocate memory for image");
-                (image_alloc.memory(), image_alloc.offset())
-            }
-        });
-
-    ResolvedResourceInternal {
-        resource: ResourceType::Image(image),
-        allocation: image_alloc
-    }
 }
 
 fn create_buffer(
@@ -108,27 +83,23 @@ impl ResourceManager for VulkanResourceManager {
         &self,
         handle: &ResourceHandle) -> ResolvedResource
     {
-        let resolved = {
-            // first check the resource_map, if not found there look in the registered_resource_map
-            // most resources will not be registered resources, so it should be checked last
-            let found = self.resource_map.borrow().get(handle);
-            if None = found {
-                self.registered_resource_map.get(handle)
-                    .expect("Attempted to resolve a resource which doesn't exist")
-            } else {
-                found.unwrap()
+        let map_ref = self.resource_map.borrow();
+        let found = map_ref.get(handle);
+        if let Some(found_resource) = found {
+            ResolvedResource {
+                handle: *handle,
+                resource: found_resource.resource.clone()
             }
-        };
-
-        ResolvedResource {
-            handle: *handle,
-            resource: *resolved.resource
+        } else {
+            self.registered_resource_map.get(handle)
+                .expect("Attempted to resolve a resource which doesn't exist")
+                .clone()
         }
     }
 
     fn reset(&mut self, device: &DeviceWrapper) {
         for (handle, resolved) in self.resource_map.borrow_mut().drain() {
-            match &resolved.resource.resource {
+            match &resolved.resource {
                 ResourceType::Image(resolved_image) => {
                     unsafe {
                         device.get().destroy_image_view(resolved_image.view, None);
@@ -172,31 +143,94 @@ impl VulkanResourceManager {
         }
     }
 
+    fn increment_handle(&self) -> ResourceHandle {
+        let mut handle = self.next_handle.borrow_mut();
+        let ret_handle = *handle;
+        *handle += 1;
+        ret_handle
+    }
+
     pub fn reserve_handle(&self) -> ResourceHandle {
-        let handle = self.next_handle.borrow_mut();
-        handle.replace(*handle+1)
+        self.increment_handle()
     }
 
     pub fn create_buffer(
         &mut self,
         create_info: BufferCreateInfo
     ) -> ResourceHandle {
-        let handle = self.next_handle.borrow_mut();
-        let ret_handle = handle.replace(*handle+1);
+        let ret_handle = self.increment_handle();
 
         let resolved_buffer = create_buffer(&mut self.allocator, &self.device, &create_info);
-        self.resource_map.insert(ret_handle, resolved_buffer);
+        self.resource_map.borrow_mut().insert(ret_handle, resolved_buffer);
 
         ret_handle
     }
 
-    pub fn update_buffer<F>(
+    /// This is used to create a buffer for which a handle has already been reserved
+    pub(crate) fn create_reserved_buffer(
         &mut self,
+        handle: ResourceHandle,
+        create_info: &BufferCreateInfo) {
+
+        let resolved_buffer = create_buffer(&mut self.allocator, &self.device, &create_info);
+        self.resource_map.borrow_mut().insert(handle, resolved_buffer);
+    }
+
+    pub fn create_image(
+        &mut self,
+        create_info: ImageCreateInfo
+    ) -> ResourceHandle {
+        let ret_handle = self.increment_handle();
+
+        let resolved_image = create_image(&mut self.allocator, &self.device, &create_info);
+        self.resource_map.borrow_mut().insert(ret_handle, resolved_image);
+
+        ret_handle
+    }
+
+    /// This is used to create an image for which a handle has already been reserved
+    pub(crate) fn create_reserved_image(
+        &mut self,
+        handle: ResourceHandle,
+        create_info: &ImageCreateInfo) {
+
+        let resolved_image = create_image(&mut self.allocator, &self.device, &create_info);
+        self.resource_map.borrow_mut().insert(handle, resolved_image);
+    }
+
+    pub fn free_resource(&mut self, handle: ResourceHandle) {
+        let removed = self.resource_map.borrow_mut().remove(&handle);
+        if let Some(removed_resource) = removed {
+            match removed_resource.resource {
+                ResourceType::Image(removed_image) => {
+                    unsafe {
+                        self.device.get().destroy_image_view(removed_image.view, None);
+                        self.device.get().destroy_image(removed_image.image, None);
+                        self.allocator.free(removed_resource.allocation)
+                            .expect("Failed to free image allocation");
+                    }
+                },
+                ResourceType::Buffer(removed_buffer) => {
+                    unsafe {
+                        self.device.get().destroy_buffer(removed_buffer.buffer, None);
+                        self.allocator.free(removed_resource.allocation)
+                            .expect("Failed to free buffer allocation");
+                    }
+                }
+            }
+        } else {
+            panic!("Attempted to remove resource that doesn't exist");
+        }
+    }
+
+    pub fn update_buffer<F>(
+        &self,
         buffer: &ResourceHandle,
         mut fill_callback: F)
         where F: FnMut(*mut c_void)
     {
-        let resolved_resource = self.resource_map.get(buffer)
+        let map_ref = self.resource_map.borrow_mut();
+        let resolved_resource = map_ref.get(buffer)
             .expect("Failed to resolve buffer for update");
         if let ResourceType::Buffer(buffer) = &resolved_resource.resource {
             let alloc = &resolved_resource.allocation;
@@ -225,8 +259,7 @@ impl VulkanResourceManager {
         name: &str
     ) -> ResourceHandle
     {
-        let handle = self.next_handle.borrow_mut();
-        let ret_handle = handle.replace(*handle+1);
+        let ret_handle = self.increment_handle();
 
         self.registered_resource_map.insert(
             ret_handle,

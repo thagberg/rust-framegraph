@@ -1,7 +1,12 @@
+use std::cell::RefCell;
 use std::ffi::{CStr, CString};
+use std::rc::Rc;
 use ash::vk;
 use ash::extensions::ext::DebugUtils;
 use ash::vk::{DebugUtilsObjectNameInfoEXT, Handle};
+use gpu_allocator::vulkan::*;
+use gpu_allocator::MemoryLocation;
+
 use crate::api_types::image::{ImageWrapper, ImageCreateInfo};
 use crate::api_types::buffer::{BufferWrapper, BufferCreateInfo};
 
@@ -36,29 +41,62 @@ impl PhysicalDeviceWrapper {
 pub struct DeviceWrapper {
     device: ash::Device,
     debug_utils: DebugUtils,
-    queue_family_indices: QueueFamilies
+    queue_family_indices: QueueFamilies,
+    allocator: Allocator
+}
+
+pub struct DeviceImage {
+    pub image: ImageWrapper,
+    pub allocation: Allocation,
+
+    device: Rc<RefCell<DeviceWrapper>>
 }
 
 impl Drop for DeviceWrapper {
     fn drop(&mut self) {
         unsafe {
+            self.allocator.report_memory_leaks(log::Level::Warn);
             self.device.destroy_device(None);
         }
     }
 }
 
 impl DeviceWrapper {
-    pub fn new(device: ash::Device, debug_utils: DebugUtils, queue_family_indices: QueueFamilies) -> DeviceWrapper {
+    pub fn new(
+        device: ash::Device,
+        instance: &ash::Instance,
+        physical_device: &PhysicalDeviceWrapper,
+        debug_utils: DebugUtils,
+        queue_family_indices: QueueFamilies) -> DeviceWrapper {
+
+        let allocator = Allocator::new(&AllocatorCreateDesc {
+            instance: instance.clone(),
+            device: device.clone(),
+            physical_device: physical_device.get(),
+            debug_settings: Default::default(),
+            buffer_device_address: false // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceBufferDeviceAddressFeaturesEXT.html
+        }).expect("Failed to create GPU memory allocator");
+
         DeviceWrapper {
             device,
             debug_utils,
-            queue_family_indices
+            queue_family_indices,
+            allocator
         }
     }
     pub fn get(&self) -> &ash::Device {
         &self.device
     }
     pub fn get_queue_family_indices(&self) -> &QueueFamilies { &self.queue_family_indices }
+
+    pub fn destroy_image(&mut self, image: &ImageWrapper, allocation: Allocation) {
+        unsafe {
+            self.device.destroy_image_view(image.view, None);
+            self.device.destroy_image(image.image, None);
+            self.allocator.free(allocation)
+                .expect("Failed to free image allocation");
+        }
+    }
 
     pub fn create_image_view(
         &self,
@@ -116,41 +154,69 @@ impl DeviceWrapper {
         self.set_debug_name(vk::ObjectType::IMAGE, image.get().as_raw(), name);
     }
 
-    pub fn create_image(
-        &self,
-        create_info: &ImageCreateInfo,
-        allocate_callback: &mut dyn FnMut(vk::MemoryRequirements) -> (vk::DeviceMemory, vk::DeviceSize)) -> ImageWrapper
-    {
+    pub fn allocate_memory(
+        &mut self,
+        name: &str,
+        requirements: vk::MemoryRequirements,
+        location: MemoryLocation,
+        linear: bool) -> Allocation {
 
-        let image_wrapper = {
+        unsafe {
+            self.allocator.allocate(&AllocationCreateDesc {
+                name: name + "_allocation",
+                requirements,
+                location,
+                linear
+            }).expect("Failed to allocate memory for Device resource")
+        }
+    }
+
+    pub fn create_image(
+        device: Rc<RefCell<DeviceWrapper>>,
+        create_info: &ImageCreateInfo,
+        memory_location: MemoryLocation) -> DeviceImage {
+
+        let device_image = {
             let create_info = create_info.get_create_info();
             let image = unsafe {
-                self.device.create_image(create_info, None)
+                device.borrow().get().create_image(create_info, None)
                     .expect("Failed to create image")
             };
 
-            let memory_requirements = unsafe {
-                self.device.get_image_memory_requirements(image)
-            };
+            let allocation = device.borrow_mut().allocate_memory(
+                create_info.get_name(),
+                memory_requirements,
+                memory_location,
+                false);
 
-            let (memory, offset) = allocate_callback(memory_requirements);
             unsafe {
-                self.device.bind_image_memory(image, memory, offset)
+                device.borrow().get().bind_image_memory(
+                    image,
+                    allocation.memory(),
+                    allocation.offset())
                     .expect("Failed to bind image to memory");
             }
 
-            let image_view = self.create_image_view(
+            let image_view = device.borrow().create_image_view(
                 image,
                 vk::Format::R8G8B8A8_SRGB,
                 vk::ImageViewCreateFlags::empty(),
                 vk::ImageAspectFlags::COLOR,
                 1);
-            ImageWrapper::new(image, image_view, create_info.initial_layout, create_info.extent)
+            let image_wrapper = ImageWrapper::new(
+                image,
+                image_view,
+                create_info.initial_layout,
+                create_info.extent);
+            
+            DeviceImage {
+                image: image_wrapper,
+                allocation,
+                device: Rc::new(RefCell::new(*self))
+            }
         };
 
-        self.set_image_name(&image_wrapper, create_info.get_name());
-
-        image_wrapper
+        device.borow().set_image_name(&image_wrapper, create_info.get_name());
     }
 
     pub fn set_buffer_name(&self, buffer: &BufferWrapper, name: &str)
