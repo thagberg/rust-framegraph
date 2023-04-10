@@ -4,10 +4,10 @@ use glam::IVec2;
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
-use framegraph::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, ResourceType};
+use framegraph::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap};
 use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::pass_node::ResolvedBindingMap;
-
+/*
 pub fn generate_pass(
     source: ResourceHandle,
     source_layer: u32,
@@ -69,3 +69,4 @@ pub fn generate_pass(
         .build()
         .expect("Failed to create Blit passnode")
 }
+*/

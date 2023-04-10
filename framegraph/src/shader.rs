@@ -78,7 +78,7 @@ fn create_shader_module(render_context: &VulkanRenderContext, file_name: &str) -
         // let create_info = vk::ShaderModuleCreateInfo::builder()
         //     .code(&bytes32);
         let shader = unsafe {
-            render_context.get_device().get().create_shader_module(&create_info, None)
+            render_context.get_device().borrow().get().create_shader_module(&create_info, None)
                 .expect("Failed to create shader")
         };
 

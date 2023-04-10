@@ -343,3 +343,11 @@ Could we avoid building the input/output maps for building graph edges and sorti
 * Each node has ownership of its resources via Rc<RefCell<DeviceResource>>
 * When a resource is added to a node, add a node index to a stack on the resource?
 * During frame compilation, starting with the root node traverse this stack per-resource to build edges
+
+Or we could build the input/output maps on the Frame while adding nodes
+
+Rc is hashable so that seems like the easiest thing to do for now
+
+10 April 2023 - Swapchains
+RenderContext creates and manages swapchains
+When we create swapchain images we should use the new DeviceWrapper::create_image

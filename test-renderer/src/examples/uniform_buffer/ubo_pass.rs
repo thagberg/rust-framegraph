@@ -4,23 +4,20 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use ash::vk;
-
-use gpu_allocator::vulkan::*;
 use gpu_allocator::MemoryLocation;
 
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
 use context::api_types::image::ImageCreateInfo;
 use context::api_types::buffer::BufferCreateInfo;
-use context::api_types::device::{DeviceImage, DeviceWrapper};
+use context::api_types::device::{DeviceResource, DeviceWrapper};
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::attachment::AttachmentReference;
 
-use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding, ResourceScope};
+use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding};
 use framegraph::frame::Frame;
 use framegraph::pass_node::ResolvedBindingMap;
 use framegraph::graphics_pass_node::{GraphicsPassNode};
-use framegraph::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, VulkanResourceManager, ResourceType};
 use framegraph::pipeline::{PipelineDescription, RasterizationType, DepthStencilType, BlendType, Pipeline};
 
 pub struct OffsetUBO {
@@ -39,7 +36,7 @@ impl Drop for UBOPass {
 
 impl UBOPass {
     pub fn new(
-        device: &mut DeviceWrapper) -> Self {
+        device: Rc<RefCell<DeviceWrapper>>) -> Self {
         let ubo_create_info = vk::BufferCreateInfo {
             s_type: vk::StructureType::BUFFER_CREATE_INFO,
             size: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize,
@@ -72,7 +69,7 @@ impl UBOPass {
     pub fn generate_pass(
         &self,
         device: Rc<RefCell<DeviceWrapper>>,
-        rendertarget_extent: vk::Extent2D) -> (GraphicsPassNode, Rc<DeviceImage>) {
+        rendertarget_extent: vk::Extent2D) -> (GraphicsPassNode, Rc<RefCell<DeviceResource>>) {
 
         let vertex_input_state_create_info = vk::PipelineVertexInputStateCreateInfo {
             s_type: vk::StructureType::PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -98,7 +95,7 @@ impl UBOPass {
 
         // let color_attachment = create_color_attachment_transient(image_description);
 
-        let render_target = DeviceWrapper::create_image(
+        let render_target = Rc::new(RefCell::new(DeviceWrapper::create_image(
             device,
         &ImageCreateInfo::new(
             vk::ImageCreateInfo::builder()
@@ -118,10 +115,10 @@ impl UBOPass {
                 .array_layers(1)
                 .build(),
             "ubo_rendertarget".to_string()),
-            MemoryLocation::GpuOnly);
+            MemoryLocation::GpuOnly)));
 
         let rt_ref = AttachmentReference::new(
-            Rc::new(RefCell::new(render_target)),
+            render_target.clone(),
             vk::Format::R8G8B8A8_SRGB,
             vk::SampleCountFlags::TYPE_1,
             vk::AttachmentLoadOp::CLEAR,
@@ -148,11 +145,7 @@ impl UBOPass {
             .render_target(rt_ref)
             .fill_commands(Box::new(
                 move |render_ctx: &VulkanRenderContext,
-                      command_buffer: &vk::CommandBuffer,
-                      inputs: &ResolvedBindingMap,
-                      outputs: &ResolvedBindingMap,
-                      resolved_copy_sources: &ResolvedResourceMap,
-                      resolved_copy_dests: &ResolvedResourceMap|
+                      command_buffer: &vk::CommandBuffer|
                     {
                         println!("I'm doing something!");
                         let viewport = vk::Viewport::builder()
@@ -170,23 +163,23 @@ impl UBOPass {
                             .build();
 
                         unsafe {
-                            render_ctx.get_device().get().cmd_set_viewport(
+                            render_ctx.get_device().borrow().get().cmd_set_viewport(
                                 *command_buffer,
                                 0,
                                 std::slice::from_ref(&viewport));
 
-                            render_ctx.get_device().get().cmd_set_scissor(
+                            render_ctx.get_device().borrow().get().cmd_set_scissor(
                                 *command_buffer,
                                 0,
                                 std::slice::from_ref(&scissor));
 
-                            render_ctx.get_device().get().cmd_draw(*command_buffer, 3, 1, 0, 0);
+                            render_ctx.get_device().borrow().get().cmd_draw(*command_buffer, 3, 1, 0, 0);
                         }
                     }
             ))
             .build()
             .expect("Failed to create PassNode");
 
-        return (passnode, handle);
+        return (passnode, render_target.clone());
     }
 }

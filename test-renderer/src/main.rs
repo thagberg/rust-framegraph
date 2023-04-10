@@ -1,4 +1,6 @@
 mod utility;
+
+use std::cell::RefCell;
 use crate::{
     utility::constants::*,
     utility::debug::*,
@@ -11,6 +13,7 @@ use winit::event_loop::{EventLoop, ControlFlow};
 use glam::IVec2;
 
 use std::ptr;
+use std::rc::Rc;
 
 extern crate framegraph;
 extern crate context;
@@ -18,17 +21,15 @@ use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use context::api_types::surface::SurfaceWrapper;
 use context::api_types::swapchain::SwapchainWrapper;
-use context::api_types::device::DeviceWrapper;
+use context::api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
 use context::api_types::instance::InstanceWrapper;
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
-use framegraph::resource::vulkan_resource_manager::{ResourceHandle, VulkanResourceManager};
 use framegraph::shader::ShaderManager;
 use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::frame_graph::FrameGraph;
 use framegraph::vulkan_frame_graph::VulkanFrameGraph;
 use framegraph::renderpass_manager::VulkanRenderpassManager;
 use framegraph::pipeline::VulkanPipelineManager;
-use framegraph::resource::resource_manager::ResourceManager;
 use passes::blit;
 
 mod examples;
@@ -52,14 +53,13 @@ struct VulkanApp {
     debug_merssager: vk::DebugUtilsMessengerEXT,
 
     render_context: VulkanRenderContext,
-    resource_manager: VulkanResourceManager,
 
     ubo_pass: UBOPass,
     frame_graph: VulkanFrameGraph,
     // ubo_pass: UBOPass,
     // transient_pass: TransientInputPass,
 
-    swapchain_handles: Vec<ResourceHandle>,
+    swapchain_images: Vec<Rc<RefCell<DeviceResource>>>,
     swapchain_framebuffers: Vec<vk::Framebuffer>,
 
     render_pass: vk::RenderPass,
@@ -97,7 +97,7 @@ impl VulkanApp {
             &window
         );
 
-        let render_context = VulkanRenderContext::new(
+        let mut render_context = VulkanRenderContext::new(
             entry,
             instance,
             debug_utils_loader,
@@ -111,7 +111,7 @@ impl VulkanApp {
         };
 
         let render_pass = VulkanApp::create_render_pass(
-            render_context.get_device().get(),
+            render_context.get_device().borrow().get(),
             swapchain_format);
         // let (graphics_pipeline, pipeline_layout) = share::v1::create_graphics_pipeline(
         //     render_context.get_device(),
@@ -121,9 +121,23 @@ impl VulkanApp {
             assert!(render_context.get_swapchain().is_some(), "Can't continue without swapchain");
             let swapchain = render_context.get_swapchain().as_ref().unwrap();
             let image_views: Vec<vk::ImageView> = swapchain.get_images().iter()
-                .map(|s| s.view).collect();
+                .map(|s| {
+                    let image = s.borrow();
+                    if let Some(resource) = &image.resource_type {
+                        match &resource {
+                            ResourceType::Image(swapchain_image) => {
+                                swapchain_image.view
+                            },
+                            _ => {
+                                panic!("Non-image resource type in swapchain")
+                            }
+                        }
+                    } else {
+                        panic!("All swapchain resources should be valid")
+                    }
+                }).collect();
             share::v1::create_framebuffers(
-                render_context.get_device().get(),
+                render_context.get_device().borrow().get(),
                 render_pass,
                 &image_views,
                 swapchain_extent)
@@ -134,33 +148,32 @@ impl VulkanApp {
         //     &mut render_context,
         //     ubo_pass.render_target);
 
-        let mut resource_manager = VulkanResourceManager::new(
-            render_context.get_instance(),
-            render_context.get_device_wrapper(),
-            render_context.get_physical_device());
+        // let mut resource_manager = VulkanResourceManager::new(
+        //     render_context.get_instance(),
+        //     render_context.get_device_wrapper(),
+        //     render_context.get_physical_device());
 
         let pipeline_manager = VulkanPipelineManager::new();
 
-        let ubo_pass = UBOPass::new(&mut resource_manager);
+        let ubo_pass = UBOPass::new(render_context.get_device());
 
         let frame_graph = VulkanFrameGraph::new(VulkanRenderpassManager::new(), pipeline_manager);
 
         let shader_manager = ShaderManager::new();
 
         let command_buffers = share::v1::create_command_buffers(
-            render_context.get_device().get(),
+            render_context.get_device().borrow().get(),
             render_context.get_graphics_command_pool(),
             2);
         let sync_ojbects = VulkanApp::create_sync_objects(
-            render_context.get_device().get());
+            render_context.get_device().borrow().get());
 
         // cleanup(); the 'drop' function will take care of it.
 
-        let mut swapchain_handles: Vec<ResourceHandle> = Vec::new();
+        let mut swapchain_images: Vec<Rc<RefCell<DeviceResource>>> = Vec::new();
         if let Some(swapchain) = render_context.get_swapchain().as_ref() {
             for (index, image) in swapchain.get_images().into_iter().enumerate() {
-               let handle = resource_manager.register_image(image, &format!("Swapchain{}", index));
-                swapchain_handles.push(handle);
+                swapchain_images.push(image.clone());
             }
         }
 
@@ -179,13 +192,12 @@ impl VulkanApp {
             debug_merssager,
 
             render_context,
-            resource_manager,
             ubo_pass,
             frame_graph,
             // ubo_pass,
             // transient_pass,
 
-            swapchain_handles,
+            swapchain_images,
             swapchain_framebuffers,
 
             // pipeline_layout,
@@ -208,10 +220,10 @@ impl VulkanApp {
 
         unsafe
         {
-            self.render_context.get_device().get()
+            self.render_context.get_device().borrow().get()
                 .device_wait_idle()
                 .expect("Error while waiting for device to idle");
-            self.render_context.get_device().get()
+            self.render_context.get_device().borrow().get()
                 .wait_for_fences(&wait_fences, true, u64::MAX)
                 .expect("Failed to wait for Fence!");
         }
@@ -221,11 +233,9 @@ impl VulkanApp {
         Some(self.image_available_semaphores[self.current_frame]),
         None);
 
-        self.resource_manager.reset(self.render_context.get_device());
-
         let command_buffer = self.command_buffers[image_index as usize];
         unsafe {
-            self.render_context.get_device().get().reset_command_buffer(
+            self.render_context.get_device().borrow().get().reset_command_buffer(
                 command_buffer,
                 vk::CommandBufferResetFlags::empty())
                 .expect("Failed to reset command buffer");
@@ -236,48 +246,57 @@ impl VulkanApp {
                 p_inheritance_info: ptr::null(),
                 flags: vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,
             };
-            self.render_context.get_device().get().begin_command_buffer(command_buffer, &command_buffer_begin_info)
+            self.render_context.get_device().borrow().get().begin_command_buffer(command_buffer, &command_buffer_begin_info)
                 .expect("Failed to begin recording command buffer");
         }
 
         // let surface_extent = self.render_context.get_swapchain().as_ref().unwrap().get_extent();
         {
-            let swapchain_handle = self.swapchain_handles[image_index as usize];
+            let swapchain_resource = self.swapchain_images[image_index as usize].clone();
             let extent = self.render_context.get_swapchain().as_ref().unwrap().get_extent();
             let blit_offsets = [glam::IVec2::new(0, 0), glam::IVec2::new(extent.width as i32, extent.height as i32)];
-            let mut new_frame = self.frame_graph.start(&self.resource_manager);
-            let (ubo_pass_node, ubo_render_target) = self.ubo_pass.generate_pass(&mut new_frame, self.render_context.get_swapchain().as_ref().unwrap().get_extent());
+            let mut new_frame = self.frame_graph.start();
+            let (ubo_pass_node, ubo_render_target) = self.ubo_pass.generate_pass(self.render_context.get_device(), self.render_context.get_swapchain().as_ref().unwrap().get_extent());
             //self.frame_graph.start(blit::generate_pass(ubo_render_target, 0, swapchain_handle, 0, blit_offsets));
-            new_frame.add_node(ubo_pass_node);
+            new_frame.start(ubo_pass_node);
+            //new_frame.add_node(ubo_pass_node);
             self.frame_graph.end(
                 new_frame,
-                &mut self.resource_manager,
                 &mut self.render_context,
                 &command_buffer);
 
             let present_transition = {
-                let swapchain_image = self.render_context.get_swapchain().as_ref().unwrap().get_images()[image_index as usize].image;
-                let subresource_range = vk::ImageSubresourceRange::builder()
-                    .aspect_mask(vk::ImageAspectFlags::COLOR)
-                    .layer_count(1)
-                    .base_array_layer(0)
-                    .level_count(1)
-                    .base_mip_level(0)
-                    .build();
-                vk::ImageMemoryBarrier::builder()
-                    .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                    .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
-                    .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
-                    .dst_access_mask(vk::AccessFlags::NONE)
-                    .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-                    .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-                    .image(swapchain_image)
-                    .subresource_range(subresource_range)
-                    .build()
+                let swapchain_resource = self.swapchain_images[image_index as usize].clone();
+                let swapchain_image = swapchain_resource.borrow();
+                if let Some(resolved_swapchain) = &swapchain_image.resource_type {
+                    if let ResourceType::Image(resolved_image) = resolved_swapchain {
+                        let subresource_range = vk::ImageSubresourceRange::builder()
+                            .aspect_mask(vk::ImageAspectFlags::COLOR)
+                            .layer_count(1)
+                            .base_array_layer(0)
+                            .level_count(1)
+                            .base_mip_level(0)
+                            .build();
+                        vk::ImageMemoryBarrier::builder()
+                            .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                            .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+                            .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                            .dst_access_mask(vk::AccessFlags::NONE)
+                            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                            .image(resolved_image.image)
+                            .subresource_range(subresource_range)
+                            .build()
+                    } else {
+                        panic!("Swapchain must be an image");
+                    }
+                } else {
+                    panic!("Swapchain image should e valid for present");
+                }
             };
 
             unsafe {
-                self.render_context.get_device().get().cmd_pipeline_barrier(
+                self.render_context.get_device().borrow().get().cmd_pipeline_barrier(
                     command_buffer,
                     vk::PipelineStageFlags::TRANSFER,
                     vk::PipelineStageFlags::BOTTOM_OF_PIPE,
@@ -291,7 +310,7 @@ impl VulkanApp {
         unsafe {
             let device = self.render_context.get_device();
             // device.cmd_end_render_pass(command_buffer);
-            device.get().end_command_buffer(command_buffer)
+            device.borrow().get().end_command_buffer(command_buffer)
                 .expect("Failed to record command buffer");
         }
 
@@ -315,12 +334,12 @@ impl VulkanApp {
 
         unsafe {
             // self.device
-            self.render_context.get_device().get()
+            self.render_context.get_device().borrow().get()
                 .reset_fences(&wait_fences)
                 .expect("Failed to reset Fence!");
 
             // self.device
-            self.render_context.get_device().get()
+            self.render_context.get_device().borrow().get()
                 .queue_submit(
                     // self.graphics_queue,
                     self.render_context.get_graphics_queue(),
@@ -458,22 +477,22 @@ impl VulkanApp {
 impl Drop for VulkanApp {
     fn drop(&mut self) {
         unsafe {
-            let device = self.render_context.get_device().get();
+            let device = self.render_context.get_device();
             for i in 0..MAX_FRAMES_IN_FLIGHT {
-                device.destroy_semaphore(self.image_available_semaphores[i], None);
-                device.destroy_semaphore(self.render_finished_semaphores[i], None);
-                device.destroy_fence(self.in_flight_fences[i], None);
+                device.borrow().get().destroy_semaphore(self.image_available_semaphores[i], None);
+                device.borrow().get().destroy_semaphore(self.render_finished_semaphores[i], None);
+                device.borrow().get().destroy_fence(self.in_flight_fences[i], None);
             }
 
             // device.destroy_command_pool(self.command_pool, None);
 
             for &framebuffer in self.swapchain_framebuffers.iter() {
-                device.destroy_framebuffer(framebuffer, None);
+                device.borrow().get().destroy_framebuffer(framebuffer, None);
             }
 
             // device.destroy_pipeline(self.graphics_pipeline, None);
            // device .destroy_pipeline_layout(self.pipeline_layout, None);
-            device.destroy_render_pass(self.render_pass, None);
+            device.borrow().get().destroy_render_pass(self.render_pass, None);
 
             // for &imageview in self.swapchain_imageviews.iter() {
             //     device.destroy_image_view(imageview, None);
@@ -531,7 +550,7 @@ impl VulkanApp {
                 },
                 | Event::LoopDestroyed => {
                     unsafe {
-                        self.render_context.get_device().get().device_wait_idle()
+                        self.render_context.get_device().borrow().get().device_wait_idle()
                             .expect("Failed to wait device idle!")
                     };
                 },

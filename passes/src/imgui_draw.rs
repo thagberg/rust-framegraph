@@ -8,6 +8,7 @@ use framegraph::resource::vulkan_resource_manager::{ResolvedResourceMap, VulkanR
 
 use imgui::{DrawData, DrawVert, DrawIdx};
 
+/*
 pub fn generate_pass(draw_data: &DrawData, resource_manager: &mut VulkanResourceManager) -> GraphicsPassNode {
 
     let vtx_create = vk::BufferCreateInfo::builder()
@@ -58,3 +59,4 @@ pub fn generate_pass(draw_data: &DrawData, resource_manager: &mut VulkanResource
         .build()
         .expect("Failed to create imgui passnode")
 }
+ */
