@@ -1,4 +1,6 @@
 extern crate petgraph;
+
+use std::cell::RefCell;
 use petgraph::{graph, stable_graph, Direction, Directed};
 use petgraph::stable_graph::{Edges, NodeIndex, StableDiGraph};
 extern crate multimap;
@@ -21,11 +23,12 @@ use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager, Atta
 
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use std::rc::Rc;
 use petgraph::adj::DefaultIx;
 use petgraph::data::DataMap;
 use petgraph::visit::{Dfs, EdgeRef, NodeCount};
 use context::api_types::buffer::BufferWrapper;
-use context::api_types::device::ResourceType;
+use context::api_types::device::{DeviceResource, ResourceType};
 use context::api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::attachment::AttachmentReference;
@@ -296,6 +299,76 @@ impl VulkanFrameGraph {
                     }
 
                     usage_cache.insert(handle, new_usage);
+                }
+
+                for resource in node.get_copy_sources() {
+                    let handle = resource.borrow().get_handle();
+                    let last_usage = {
+                        let usage = usage_cache.get(&handle);
+                        match usage {
+                            Some(found_usage) => {found_usage.clone()},
+                            _ => {
+                                ResourceUsage {
+                                    access: vk::AccessFlags::NONE,
+                                    stage: vk::PipelineStageFlags::NONE,
+                                    layout: Some(vk::ImageLayout::UNDEFINED)
+                                }
+                            }
+                        }
+                    };
+
+                    let new_usage = ResourceUsage{
+                        access: vk::AccessFlags::SHADER_READ,
+                        stage: vk::PipelineStageFlags::ALL_GRAPHICS,
+                        layout: Some(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                    };
+
+                    // for copy sources and destinations, a barrier is always required
+                    let image_barrier = ImageBarrier {
+                        resource: resource.clone(),
+                        source_stage: last_usage.stage,
+                        dest_stage: new_usage.stage,
+                        source_access: last_usage.access,
+                        dest_access: new_usage.access,
+                        old_layout: last_usage.layout.expect("Using a non-image for an image transition"),
+                        new_layout: new_usage.layout.unwrap()
+                    };
+                    node_barrier.image_barriers.push(image_barrier);
+                }
+
+                for resource in node.get_copy_dests() {
+                    let handle = resource.borrow().get_handle();
+                    let last_usage = {
+                        let usage = usage_cache.get(&handle);
+                        match usage {
+                            Some(found_usage) => {found_usage.clone()},
+                            _ => {
+                                ResourceUsage {
+                                    access: vk::AccessFlags::NONE,
+                                    stage: vk::PipelineStageFlags::NONE,
+                                    layout: Some(vk::ImageLayout::UNDEFINED)
+                                }
+                            }
+                        }
+                    };
+
+                    let new_usage = ResourceUsage{
+                        access: vk::AccessFlags::SHADER_READ,
+                        stage: vk::PipelineStageFlags::ALL_GRAPHICS,
+                        layout: Some(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                    };
+
+                    // for copy sources and destinations, a barrier is always required
+                    let image_barrier = ImageBarrier {
+                        resource: resource.clone(),
+                        source_stage: last_usage.stage,
+                        dest_stage: new_usage.stage,
+                        source_access: last_usage.access,
+                        dest_access: new_usage.access,
+                        old_layout: last_usage.layout.expect("Using a non-image for an image transition"),
+                        new_layout: new_usage.layout.unwrap()
+                    };
+                    node_barrier.image_barriers.push(image_barrier);
                 }
 
                 for input in node.get_inputs() {
