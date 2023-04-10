@@ -71,7 +71,6 @@ impl UBOPass {
 
     pub fn generate_pass(
         &self,
-        frame: &mut Frame,
         device: Rc<RefCell<DeviceWrapper>>,
         rendertarget_extent: vk::Extent2D) -> (GraphicsPassNode, Rc<DeviceImage>) {
 

@@ -328,3 +328,18 @@ Nodes executed
 		1 is dropped
 
 Update AttachmentReference to take a Rc<Resource> instead of a handle
+
+09 April 2023 - ResourceHandle
+Framegraph is still reliant on ResourceHandle. Framegraph::compile uses it to create input/output maps 
+which are then used to detect the graph edges. They're also used in Framegraph::link for the usage_cache 
+which is used to generate memory barriers.
+
+How should we handle this with the new DeviceResource type?
+* Could still generate a resource handle even though it's not required for "resolving" a resource
+* Implement a hashing mehcanism for DeviceResource and use that for input/output maps and usage_cache
+
+10 April 2023 - ResourceHandle, continued
+Could we avoid building the input/output maps for building graph edges and sorting the nodes?
+* Each node has ownership of its resources via Rc<RefCell<DeviceResource>>
+* When a resource is added to a node, add a node index to a stack on the resource?
+* During frame compilation, starting with the root node traverse this stack per-resource to build edges
