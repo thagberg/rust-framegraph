@@ -351,7 +351,7 @@ impl VulkanFrameGraph {
                         usage_cache.insert(handle, new_usage);
                         //image_binding.layout = update_usage(input.handle, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
                     } else {
-                        panic!("Buffer barriers not implemented");
+                        //panic!("Buffer barriers not implemented");
                     }
                 }
 

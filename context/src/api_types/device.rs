@@ -64,8 +64,6 @@ pub struct DeviceResource {
 
 impl Drop for DeviceResource {
     fn drop(&mut self) {
-        let allocation = {
-        };
         if let Some(resource_type) = &mut self.resource_type {
             match resource_type {
                 ResourceType::Buffer(buffer) => {

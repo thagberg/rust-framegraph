@@ -128,24 +128,23 @@ impl UBOPass {
             vk::AttachmentLoadOp::CLEAR,
             vk::AttachmentStoreOp::STORE);
 
-        // let ubo_binding = ResourceBinding {
-        //     handle: self.uniform_buffer,
-        //     scope: ResourceScope::Persistent,
-        //     binding_info: BindingInfo {
-        //         binding_type: BindingType::Buffer(BufferBindingInfo {
-        //             offset: 0,
-        //             range: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize
-        //         }),
-        //         set: 0,
-        //         slot: 0,
-        //         stage: vk::PipelineStageFlags::ALL_GRAPHICS,
-        //         access: vk::AccessFlags::SHADER_READ
-        //     }
-        // };
+        let ubo_binding = ResourceBinding {
+            resource: self.uniform_buffer.clone(),
+            binding_info: BindingInfo {
+                binding_type: BindingType::Buffer(BufferBindingInfo {
+                    offset: 0,
+                    range: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize
+                }),
+                set: 0,
+                slot: 0,
+                stage: vk::PipelineStageFlags::ALL_GRAPHICS,
+                access: vk::AccessFlags::SHADER_READ
+            }
+        };
 
         let passnode = GraphicsPassNode::builder("ubo_pass".to_string())
             .pipeline_description(pipeline_description)
-            // .read(ubo_binding)
+            .read(ubo_binding)
             .render_target(rt_ref)
             .fill_commands(Box::new(
                 move |render_ctx: &VulkanRenderContext,
