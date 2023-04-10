@@ -1,4 +1,7 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use ash::vk;
+use context::api_types::device::DeviceResource;
 use crate::resource::vulkan_resource_manager::{ResolvedResource, ResourceHandle, ResourceType};
 
 #[derive(Clone)]
@@ -28,16 +31,9 @@ pub struct BindingInfo {
     pub access: vk::AccessFlags
 }
 
-#[derive(Copy, Clone)]
-pub enum ResourceScope {
-    Transient,
-    Persistent
-}
-
 #[derive(Clone)]
 pub struct ResourceBinding {
-    pub handle: ResourceHandle,
-    pub scope: ResourceScope,
+    pub resource: Rc<RefCell<DeviceResource>>,
     pub binding_info: BindingInfo
 }
 

@@ -6,6 +6,7 @@ use ash::extensions::ext::DebugUtils;
 use ash::vk::{DebugUtilsObjectNameInfoEXT, Handle};
 use gpu_allocator::vulkan::*;
 use gpu_allocator::MemoryLocation;
+use crate::api_types;
 
 use crate::api_types::image::{ImageWrapper, ImageCreateInfo};
 use crate::api_types::buffer::{BufferWrapper, BufferCreateInfo};
@@ -45,11 +46,37 @@ pub struct DeviceWrapper {
     allocator: Allocator
 }
 
-pub struct DeviceImage {
-    pub image: ImageWrapper,
+#[derive(Clone)]
+pub enum ResourceType {
+    Buffer(BufferWrapper),
+    Image(ImageWrapper)
+}
+
+pub struct AllocatedResource {
     pub allocation: Allocation,
+    pub resource_type: ResourceType
+}
+
+pub struct DeviceResource {
+    pub resource: Option<AllocatedResource>,
 
     device: Rc<RefCell<DeviceWrapper>>
+}
+
+impl Drop for DeviceResource {
+    fn drop(&mut self) {
+        if let Some(resource) = &mut self.resource {
+            let allocation = std::mem::replace(&mut resource.allocation, Allocation::default());
+            match &resource.resource_type {
+                ResourceType::Buffer(buffer) => {
+                    panic!("Not implemented for buffers yet");
+                },
+                ResourceType::Image(image) => {
+                    self.device.borrow_mut().destroy_image(image, allocation);
+                }
+            }
+        }
+    }
 }
 
 impl Drop for DeviceWrapper {
@@ -162,8 +189,9 @@ impl DeviceWrapper {
         linear: bool) -> Allocation {
 
         unsafe {
+            let alloc_name = name.to_owned() + "_allocation";
             self.allocator.allocate(&AllocationCreateDesc {
-                name: name + "_allocation",
+                name: &alloc_name,
                 requirements,
                 location,
                 linear
@@ -173,18 +201,22 @@ impl DeviceWrapper {
 
     pub fn create_image(
         device: Rc<RefCell<DeviceWrapper>>,
-        create_info: &ImageCreateInfo,
-        memory_location: MemoryLocation) -> DeviceImage {
+        image_desc: &ImageCreateInfo,
+        memory_location: MemoryLocation) -> DeviceResource {
 
         let device_image = {
-            let create_info = create_info.get_create_info();
+            let create_info = image_desc.get_create_info();
             let image = unsafe {
                 device.borrow().get().create_image(create_info, None)
                     .expect("Failed to create image")
             };
 
+            let memory_requirements = unsafe {
+                device.borrow().get().get_image_memory_requirements(image)
+            };
+
             let allocation = device.borrow_mut().allocate_memory(
-                create_info.get_name(),
+                image_desc.get_name(),
                 memory_requirements,
                 memory_location,
                 false);
@@ -208,15 +240,18 @@ impl DeviceWrapper {
                 image_view,
                 create_info.initial_layout,
                 create_info.extent);
-            
-            DeviceImage {
-                image: image_wrapper,
-                allocation,
-                device: Rc::new(RefCell::new(*self))
+
+            device.borrow().set_image_name(&image_wrapper, image_desc.get_name());
+            DeviceResource {
+                resource: Some(AllocatedResource {
+                    allocation,
+                    resource_type: ResourceType::Image(image_wrapper)
+                }),
+                device
             }
         };
 
-        device.borow().set_image_name(&image_wrapper, create_info.get_name());
+        device_image
     }
 
     pub fn set_buffer_name(&self, buffer: &BufferWrapper, name: &str)

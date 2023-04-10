@@ -383,7 +383,8 @@ impl FrameGraph for VulkanFrameGraph {
         let transient_create_info = &frame.create_info;
 
         // compile and link frame
-         sorted_nodes = self.compile(&mut frame.nodes, root_index);
+        {
+            let sorted_nodes = self.compile(&mut frame.nodes, root_index);
             self.link(&mut frame.nodes, &sorted_nodes);
             //frame.set_sorted_nodes(sorted_nodes);
             frame.sorted_nodes = sorted_nodes;

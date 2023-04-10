@@ -13,8 +13,7 @@ enum FrameState {
     Ended
 }
 
-pub struct Frame<'a> {
-    resource_manager: &'a VulkanResourceManager,
+pub struct Frame {
     pub nodes: StableDiGraph<GraphicsPassNode, u32>,
     root_index: Option<NodeIndex>,
     pub create_info: HashMap<ResourceHandle, ResourceCreateInfo>,
@@ -22,10 +21,9 @@ pub struct Frame<'a> {
     pub sorted_nodes: Vec<NodeIndex>
 }
 
-impl<'a> Frame<'a> {
-    pub fn new(resource_manager: &'a VulkanResourceManager) -> Self {
+impl Frame {
+    pub fn new() -> Self {
         Frame {
-            resource_manager,
             nodes: StableDiGraph::new(),
             root_index: None,
             create_info: HashMap::new(),
@@ -42,25 +40,6 @@ impl<'a> Frame<'a> {
     pub fn start(&mut self, root_node: GraphicsPassNode) {
         assert!(self.state == FrameState::New, "Frame has already been started");
         self.root_index = Some(self.add_node(root_node));
-    }
-
-    pub fn create_image(&mut self, create_info: ImageCreateInfo) -> ResourceHandle {
-        assert!(self.state == FrameState::Started, "Frame must be in Started state to add image");
-        // reserve handle from resource manager
-        let new_handle = self.resource_manager.reserve_handle();
-
-        // store mapping of handle -> createinfo locally
-        self.create_info.insert(new_handle, ResourceCreateInfo::Image(create_info));
-
-        // return handle
-        new_handle
-    }
-
-    pub fn create_buffer(&mut self, create_info: BufferCreateInfo) -> ResourceHandle {
-        assert!(self.state == FrameState::Started, "Frame must be in Started state to add buffer");
-        let new_handle = self.resource_manager.reserve_handle();
-        self.create_info.insert(new_handle, ResourceCreateInfo::Buffer(create_info));
-        new_handle
     }
 
     pub (crate) fn set_sorted_nodes(&mut self, sorted_nodes: Vec<NodeIndex>) {

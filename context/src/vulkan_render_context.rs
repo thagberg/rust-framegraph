@@ -248,7 +248,7 @@ fn create_logical_device(
             .expect("Failed to create logical device.")
     };
 
-    DeviceWrapper::new(device, debug_utils, queue_family_indices)
+    DeviceWrapper::new(device, instance.get(), &physical_device, debug_utils, queue_family_indices)
 }
 
 fn create_command_pool(
