@@ -145,36 +145,6 @@ impl VulkanResourceManager {
         }
     }
 
-    pub fn update_buffer<F>(
-        &self,
-        buffer: &ResourceHandle,
-        mut fill_callback: F)
-        where F: FnMut(*mut c_void)
-    {
-        let map_ref = self.resource_map.borrow_mut();
-        let resolved_resource = map_ref.get(buffer)
-            .expect("Failed to resolve buffer for update");
-        if let ResourceType::Buffer(buffer) = &resolved_resource.resource {
-            let alloc = &resolved_resource.allocation;
-            if alloc.mapped_ptr().is_some() {
-                fill_callback(alloc.mapped_ptr().unwrap().as_ptr());
-            } else {
-                unsafe {
-                    let mapped_memory = self.device.get().map_memory(
-                        alloc.memory(),
-                        alloc.offset(),
-                        alloc.size(),
-                        vk::MemoryMapFlags::empty() )
-                        .expect("Failed to map buffer");
-                    fill_callback(mapped_memory);
-                    self.device.get().unmap_memory(alloc.memory());
-                }
-            }
-        } else {
-            panic!("Attempting to update a non-buffer resource as a buffer");
-        }
-    }
-
     pub fn register_image(
         &mut self,
         image: &ImageWrapper,
