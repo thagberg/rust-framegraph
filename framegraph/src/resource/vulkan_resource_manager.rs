@@ -7,7 +7,7 @@ use gpu_allocator::vulkan::*;
 use gpu_allocator::MemoryLocation;
 
 extern crate context;
-use context::api_types::device::{PhysicalDeviceWrapper, DeviceWrapper};
+use context::api_types::device::{PhysicalDeviceWrapper, DeviceWrapper, ResourceType};
 use context::api_types::image::{ImageCreateInfo, ImageWrapper};
 use context::api_types::buffer::{BufferCreateInfo, BufferWrapper};
 
@@ -18,13 +18,6 @@ pub type ResourceHandle = u32;
 pub enum ResourceCreateInfo {
     Buffer(BufferCreateInfo),
     Image(ImageCreateInfo)
-}
-
-// #[derive(Clone, Copy)]
-#[derive(Clone)]
-pub enum ResourceType {
-    Buffer(BufferWrapper),
-    Image(ImageWrapper)
 }
 
 #[derive(Clone)]
@@ -174,28 +167,6 @@ impl VulkanResourceManager {
 
         let resolved_buffer = create_buffer(&mut self.allocator, &self.device, &create_info);
         self.resource_map.borrow_mut().insert(handle, resolved_buffer);
-    }
-
-    pub fn create_image(
-        &mut self,
-        create_info: ImageCreateInfo
-    ) -> ResourceHandle {
-        let ret_handle = self.increment_handle();
-
-        let resolved_image = create_image(&mut self.allocator, &self.device, &create_info);
-        self.resource_map.borrow_mut().insert(ret_handle, resolved_image);
-
-        ret_handle
-    }
-
-    /// This is used to create an image for which a handle has already been reserved
-    pub(crate) fn create_reserved_image(
-        &mut self,
-        handle: ResourceHandle,
-        create_info: &ImageCreateInfo) {
-
-        let resolved_image = create_image(&mut self.allocator, &self.device, &create_info);
-        self.resource_map.borrow_mut().insert(handle, resolved_image);
     }
 
     pub fn free_resource(&mut self, handle: ResourceHandle) {

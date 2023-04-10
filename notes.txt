@@ -293,3 +293,38 @@ DeviceImage
 ResourceManager still exists to generate and distribute resource handles
 Each frame ResourceManager will clear out its cache?
 	Cache holds Rc resources, so if this is the last ref they'll be cleaned up
+
+08 April 2023 - New DeviceImage
+	Handle
+	Option<ImageWrapper>
+	Option<Rc<RefCell<Device>>
+	Option<Allocation>
+
+Node contains Rc to all required resources
+	When the last node using a transient resource is dropped, the resource will
+	automatically get cleaned up as well
+
+	A global / owned resource will persist because another owner exists outside the framegraph
+
+
+Node A creates transient writeable resource 1
+	A gets Rc<Resource<1>>
+	Not resolved yet
+A is added to Frame
+Node B uses resource 1 as input
+	B gets Rc<Resource<1>>
+B is added to Frame
+FrameGraph::end(Frame)
+Nodes are sorted
+Nodes executed
+	A is executed
+		Writes to 1
+	A dropped
+		Decrement 1 refcount
+	B is executed
+		Reads from 1
+	B is dropped
+		Decrement 1 refcount
+		1 is dropped
+
+Update AttachmentReference to take a Rc<Resource> instead of a handle
