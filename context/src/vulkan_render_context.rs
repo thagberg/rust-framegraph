@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::ffi::CStr;
 use std::ffi::CString;
 use std::os::raw::c_char;
@@ -22,7 +23,7 @@ pub struct VulkanRenderContext {
     surface: Option<SurfaceWrapper>,
     graphics_command_pool: vk::CommandPool,
     descriptor_pool: vk::DescriptorPool,
-    device: Rc<DeviceWrapper>,
+    device: Rc<RefCell<DeviceWrapper>>,
     physical_device: PhysicalDeviceWrapper,
     instance: InstanceWrapper,
     entry: ash::Entry
@@ -270,7 +271,7 @@ fn create_command_pool(
 
 fn create_swapchain(
     instance: &InstanceWrapper,
-    device: &DeviceWrapper,
+    device: Rc<RefCell<DeviceWrapper>>,
     physical_device: &PhysicalDeviceWrapper,
     surface: &SurfaceWrapper,
     window: &winit::window::Window
@@ -360,7 +361,7 @@ fn create_swapchain(
 
     let swapchain_loader = ash::extensions::khr::Swapchain::new(
         instance.get(),
-        device.get());
+        device.borrow().get());
     let swapchain = unsafe {
         swapchain_loader
             .create_swapchain(&create_info, None)
@@ -373,21 +374,17 @@ fn create_swapchain(
             .expect("Failed to get swapchain images.")
             .iter()
             .map(|image| {
-                // image is just a handle type
-                ImageWrapper::new(
+                Rc::new(RefCell::new(DeviceWrapper::wrap_image(
+                    device.clone(),
                     image.clone(),
-                    device.create_image_view(
-                        *image,
-                        swapchain_format.format,
-                        vk::ImageViewCreateFlags::empty(),
-                        vk::ImageAspectFlags::COLOR,
-                        1),
-                        vk::ImageLayout::UNDEFINED,
+                    swapchain_format.format,
+                    vk::ImageAspectFlags::COLOR,
+                    1,
                     vk::Extent3D {
-                            width: swapchain_extent.width,
-                            height: swapchain_extent.height,
-                            depth: 1
-                        })
+                        width: swapchain_extent.width,
+                        height: swapchain_extent.height,
+                        depth: 1
+                    })))
             })
             .collect()
     };
@@ -406,12 +403,12 @@ impl RenderContext for VulkanRenderContext {
 
     fn create_renderpass(&self, create_info: &Self::Create) -> Self::RP {
         unsafe {
-            self.device.get().create_render_pass(create_info, None)
+            self.device.borrow().get().create_render_pass(create_info, None)
                 .expect("Failed to create renderpass")
         }
     }
 
-    fn get_device(&self) -> &DeviceWrapper { &self.device }
+    fn get_device(&self) -> Rc<RefCell<DeviceWrapper>> { self.device.clone() }
 
 }
 
@@ -434,40 +431,40 @@ impl VulkanRenderContext {
             // &extensions).expect("Failed to select a suitable physical device.");
         &[]).expect("Failed to select a suitable physical device.");
 
-        let logical_device = create_logical_device(
+        let logical_device = Rc::new(RefCell::new(create_logical_device(
             &instance_wrapper,
             debug_utils,
             &physical_device,
             &surface,
             layers,
             extensions
-        );
+        )));
 
         let graphics_queue = unsafe {
-            logical_device.get().get_device_queue(
-                logical_device.get_queue_family_indices().graphics.unwrap(),
+            logical_device.borrow().get().get_device_queue(
+                logical_device.borrow().get_queue_family_indices().graphics.unwrap(),
                 0)
         };
         let present_queue = unsafe {
-            logical_device.get().get_device_queue(
-                logical_device.get_queue_family_indices().present.unwrap(),
+            logical_device.borrow().get().get_device_queue(
+                logical_device.borrow().get_queue_family_indices().present.unwrap(),
                 0)
         };
         let compute_queue = unsafe {
-            logical_device.get().get_device_queue(
-                logical_device.get_queue_family_indices().compute.unwrap(),
+            logical_device.borrow().get().get_device_queue(
+                logical_device.borrow().get_queue_family_indices().compute.unwrap(),
                 0)
         };
 
         let graphics_command_pool = create_command_pool(
-            &logical_device,
-            logical_device.get_queue_family_indices().graphics.unwrap());
+            &logical_device.borrow(),
+            logical_device.borrow().get_queue_family_indices().graphics.unwrap());
 
         let swapchain = {
             if surface.is_some() {
                 Some(create_swapchain(
                     &instance_wrapper,
-                    &logical_device,
+                    logical_device.clone(),
                     &physical_device,
                     &surface.as_ref().unwrap(),
                     window))
@@ -509,7 +506,7 @@ impl VulkanRenderContext {
             p_pool_sizes: descriptor_pool_sizes.as_ptr()
         };
         let descriptor_pool = unsafe {
-            logical_device.get().create_descriptor_pool(
+            logical_device.borrow().get().create_descriptor_pool(
                 &descriptor_pool_create,
                 None)
                 .expect("Failed to create descriptor pool")
@@ -518,7 +515,7 @@ impl VulkanRenderContext {
         VulkanRenderContext {
             entry,
             instance: instance_wrapper,
-            device: Rc::new(logical_device),
+            device: logical_device,
             physical_device,
             surface,
             graphics_queue,
@@ -534,14 +531,11 @@ impl VulkanRenderContext {
         &self.instance.get()
     }
 
-    // pub fn get_device_wrapper(&self) -> &DeviceWrapper { &self.device }
-    pub fn get_device_wrapper(&self) -> Rc<DeviceWrapper> { Rc::clone(&self.device) }
-
     pub fn get_physical_device(&self) -> &PhysicalDeviceWrapper { &self.physical_device }
 
     pub fn get_graphics_queue_index(&self) -> u32
     {
-        self.device.get_queue_family_indices().graphics.unwrap()
+        self.device.borrow().get_queue_family_indices().graphics.unwrap()
     }
 
     pub fn get_graphics_queue(&self) -> vk::Queue {
@@ -570,7 +564,7 @@ impl VulkanRenderContext {
             };
 
             let descriptor_sets = unsafe {
-                self.device.get().allocate_descriptor_sets(&alloc_info )
+                self.device.borrow().get().allocate_descriptor_sets(&alloc_info )
                     .expect("Failed to allocate descriptor sets")
             };
 
@@ -596,7 +590,7 @@ impl VulkanRenderContext {
             .layers(extent.depth);
 
         unsafe {
-            self.device.get().create_framebuffer(&create_info, None)
+            self.device.borrow().get().create_framebuffer(&create_info, None)
                 .expect("Failed to create framebuffer")
         }
     }
@@ -621,7 +615,7 @@ impl VulkanRenderContext {
                 .layers(1);
 
             let framebuffer = unsafe {
-                self.device.get().create_framebuffer(&create_info, None)
+                self.device.borrow().get().create_framebuffer(&create_info, None)
                     .expect("Failed to create framebuffer")
             };
 
@@ -636,7 +630,7 @@ impl VulkanRenderContext {
 impl Drop for VulkanRenderContext {
     fn drop(&mut self) {
         unsafe {
-            self.device.get().destroy_command_pool(self.graphics_command_pool, None);
+            self.device.borrow().get().destroy_command_pool(self.graphics_command_pool, None);
 
             // if self.swapchain_image_views.is_some() {
             //     for &imageview in self.swapchain_image_views.as_ref().unwrap().iter() {

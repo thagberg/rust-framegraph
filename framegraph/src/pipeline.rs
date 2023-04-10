@@ -319,7 +319,7 @@ impl PipelineManager for VulkanPipelineManager {
                         .build();
 
                     let layout = unsafe {
-                        render_context.get_device().get().create_descriptor_set_layout(
+                        render_context.get_device().borrow().get().create_descriptor_set_layout(
                             &layout_create_info,
                             None)
                             .expect("Failed to create descriptor set layout")
@@ -333,7 +333,7 @@ impl PipelineManager for VulkanPipelineManager {
                         let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
                             .set_layouts(&descriptor_set_layouts);
                         unsafe {
-                            render_context.get_device().get().create_pipeline_layout(&pipeline_layout_create, None)
+                            render_context.get_device().borrow().get().create_pipeline_layout(&pipeline_layout_create, None)
                                 .expect("Failed to create pipeline layout")
                         }
                 };
@@ -419,7 +419,7 @@ impl PipelineManager for VulkanPipelineManager {
                 // .build();
 
                 let graphics_pipeline = unsafe {
-                    render_context.get_device().get().create_graphics_pipelines(
+                    render_context.get_device().borrow().get().create_graphics_pipelines(
                         vk::PipelineCache::null(),
                         std::slice::from_ref(&graphics_pipeline_info),
                         None

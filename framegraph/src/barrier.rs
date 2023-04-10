@@ -1,8 +1,11 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use ash::vk;
+use context::api_types::device::DeviceResource;
 use crate::resource::vulkan_resource_manager::ResourceHandle;
 
 pub struct ImageBarrier {
-    pub handle: ResourceHandle,
+    pub resource: Rc<RefCell<DeviceResource>>,
     pub source_stage: vk::PipelineStageFlags,
     pub dest_stage: vk::PipelineStageFlags,
     pub source_access: vk::AccessFlags,
@@ -12,7 +15,7 @@ pub struct ImageBarrier {
 }
 
 pub struct BufferBarrier {
-    pub handle: ResourceHandle,
+    pub resource: Rc<RefCell<DeviceResource>>,
     pub source_stage: vk::PipelineStageFlags,
     pub dest_stage: vk::PipelineStageFlags,
     pub source_access: vk::AccessFlags,

@@ -1,5 +1,8 @@
+use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
+use std::rc::Rc;
 use ash::vk;
+use context::api_types::device::DeviceResource;
 use context::api_types::renderpass::VulkanRenderPass;
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
 use crate::pass_node::{PassNode, ResolvedBindingMap};
@@ -13,12 +16,7 @@ use crate::pipeline::{PipelineDescription};
 type FillCallback = dyn (
     Fn(
         &VulkanRenderContext,
-        // &VulkanCommandBuffer,
-        &vk::CommandBuffer,
-        &ResolvedBindingMap,
-        &ResolvedBindingMap,
-        &ResolvedResourceMap,
-        &ResolvedResourceMap
+        &vk::CommandBuffer
     )
 );
 
@@ -27,8 +25,8 @@ pub struct GraphicsPassNode {
     render_targets: Vec<AttachmentReference>,
     inputs: Vec<ResourceBinding>,
     outputs: Vec<ResourceBinding>,
-    copy_sources: Vec<ResourceHandle>,
-    copy_dests: Vec<ResourceHandle>,
+    copy_sources: Vec<Rc<RefCell<DeviceResource>>>,
+    copy_dests: Vec<Rc<RefCell<DeviceResource>>>,
     fill_callback: Box<FillCallback>,
     name: String
 }
@@ -39,8 +37,8 @@ pub struct PassNodeBuilder {
     render_targets: Vec<AttachmentReference>,
     inputs: Vec<ResourceBinding>,
     outputs: Vec<ResourceBinding>,
-    copy_sources: Vec<ResourceHandle>,
-    copy_dests: Vec<ResourceHandle>,
+    copy_sources: Vec<Rc<RefCell<DeviceResource>>>,
+    copy_dests: Vec<Rc<RefCell<DeviceResource>>>,
     fill_callback: Option<Box<FillCallback>>,
     name: String
 }
@@ -75,47 +73,22 @@ impl PassNode for GraphicsPassNode  {
 
     fn get_rendertargets_mut(&mut self) -> &mut [AttachmentReference] { &mut self.render_targets }
 
-    fn get_copy_sources(&self) -> &[ResourceHandle] { &self.copy_sources }
+    fn get_copy_sources(&self) -> &[Rc<RefCell<DeviceResource>>] { &self.copy_sources }
 
-    fn get_copy_dests(&self) -> &[ResourceHandle] { &self.copy_dests }
+    fn get_copy_dests(&self) -> &[Rc<RefCell<DeviceResource>>] { &self.copy_dests }
 
     fn get_pipeline_description(&self) -> &Option<Self::PD> {
         &self.pipeline_description
     }
 
-    fn get_dependencies(&self) -> Vec<ResourceHandle> {
-        let input_handles : Vec<ResourceHandle> = self.get_inputs().into_iter().map(|binding| {
-            binding.handle
-        }).collect();
-        [&input_handles, self.get_copy_sources()].concat()
-    }
-
-    fn get_writes(&self) -> Vec<ResourceHandle> {
-        let output_handles: Vec<ResourceHandle> = self.get_outputs().into_iter().map(|binding| {
-            binding.handle
-        }).collect();
-        let rt_handles: Vec<ResourceHandle> = self.get_rendertargets().into_iter().map(|attachment_ref| {
-            attachment_ref.handle
-        }).collect();
-        [&output_handles, &rt_handles, self.get_copy_dests()].concat()
-    }
-
    fn execute(
         &self,
         render_context: &mut Self::RC,
-        command_buffer: &Self::CB,
-        resolved_inputs: &ResolvedBindingMap,
-        resolved_outputs: &ResolvedBindingMap,
-        resolved_copy_sources: &ResolvedResourceMap,
-        resolved_copy_dests: &ResolvedResourceMap)
+        command_buffer: &Self::CB)
     {
         (self.fill_callback)(
             render_context,
-            command_buffer,
-            resolved_inputs,
-            resolved_outputs,
-            resolved_copy_sources,
-            resolved_copy_dests);
+            command_buffer);
     }
 
 }
@@ -160,12 +133,12 @@ impl PassNodeBuilder {
         self
     }
 
-    pub fn copy_src(mut self, copy_src: ResourceHandle) -> Self {
+    pub fn copy_src(mut self, copy_src: Rc<RefCell<DeviceResource>>) -> Self {
         self.copy_sources.push(copy_src);
         self
     }
 
-    pub fn copy_dst(mut self, copy_dst: ResourceHandle) -> Self {
+    pub fn copy_dst(mut self, copy_dst: Rc<RefCell<DeviceResource>>) -> Self {
         self.copy_dests.push(copy_dst);
         self
     }

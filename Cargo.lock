@@ -1290,6 +1290,7 @@ dependencies = [
  "framegraph",
  "glam",
  "glob",
+ "gpu-allocator",
  "image",
  "memoffset",
  "num",

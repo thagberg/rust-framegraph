@@ -2,8 +2,10 @@ use std::collections::HashMap;
 use ash::vk;
 use petgraph::stable_graph::{StableDiGraph, Edges, NodeIndex};
 use context::api_types::buffer::BufferCreateInfo;
+use context::api_types::device::DeviceResource;
 use context::api_types::image::ImageCreateInfo;
 use crate::graphics_pass_node::GraphicsPassNode;
+use crate::pass_node::PassNode;
 use crate::resource::vulkan_resource_manager::{ResourceCreateInfo, ResourceHandle, VulkanResourceManager};
 
 #[derive(Eq, PartialEq)]
@@ -39,6 +41,7 @@ impl Frame {
 
     pub fn start(&mut self, root_node: GraphicsPassNode) {
         assert!(self.state == FrameState::New, "Frame has already been started");
+        self.state = FrameState::Started;
         self.root_index = Some(self.add_node(root_node));
     }
 

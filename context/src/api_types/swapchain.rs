@@ -1,10 +1,13 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use ash::vk;
+use crate::api_types::device::DeviceResource;
 use crate::api_types::image::ImageWrapper;
 
 pub struct SwapchainWrapper {
     loader: ash::extensions::khr::Swapchain,
     swapchain: vk::SwapchainKHR,
-    images: Vec<ImageWrapper>,
+    images: Vec<Rc<RefCell<DeviceResource>>>,
     format: vk::Format,
     extent: vk::Extent2D
 }
@@ -13,7 +16,7 @@ impl SwapchainWrapper {
     pub fn new(
         loader: ash::extensions::khr::Swapchain,
         swapchain: vk::SwapchainKHR,
-        images: Vec<ImageWrapper>,
+        images: Vec<Rc<RefCell<DeviceResource>>>,
         format: vk::Format,
         extent: vk::Extent2D
     ) -> SwapchainWrapper {
@@ -28,7 +31,7 @@ impl SwapchainWrapper {
 
     pub fn get(&self) -> vk::SwapchainKHR { self.swapchain }
 
-    pub fn get_images(&self) -> &Vec<ImageWrapper> { &self.images }
+    pub fn get_images(&self) -> &Vec<Rc<RefCell<DeviceResource>>> { &self.images }
 
     pub fn get_format(&self) -> vk::Format { self.format }
 
@@ -41,7 +44,7 @@ impl SwapchainWrapper {
         timeout: u64,
         semaphore: vk::Semaphore,
         fence: vk::Fence
-    ) -> (&ImageWrapper, u32)
+    ) -> (Rc<RefCell<DeviceResource>>, u32)
     {
         let (image_index, _is_sub_optimal) = unsafe
         {
@@ -52,14 +55,14 @@ impl SwapchainWrapper {
                 fence)
             .expect("Failed to acquire next swpachain image")
         };
-        (&self.images[image_index as usize], image_index)
+        (self.images[image_index as usize].clone(), image_index)
     }
 
     pub fn acquire_next_image(
         &self,
         timeout: Option<u64>,
         semaphore: Option<vk::Semaphore>,
-        fence: Option<vk::Fence>) -> (&ImageWrapper, u32)
+        fence: Option<vk::Fence>) -> (Rc<RefCell<DeviceResource>>, u32)
     {
         let t = match timeout
         {

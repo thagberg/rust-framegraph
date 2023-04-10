@@ -15,19 +15,21 @@ pub struct AttachmentReference {
 
 impl AttachmentReference {
     pub fn new(
-        resource_image: Rc<RefCell<DeviceResouce>>,
+        resource_image: Rc<RefCell<DeviceResource>>,
         format: vk::Format,
         samples: vk::SampleCountFlags,
         load_op: vk::AttachmentLoadOp,
         store_op: vk::AttachmentStoreOp) -> AttachmentReference {
 
-        assert!(resource_image.borrow().resource.is_some(), "AttachmentResource: resource_image must be valid DeviceResource");
-        if let ResourceType::Buffer(buffer) = resource_image.borrow().resource.unwrap().resource_type {
+        assert!(resource_image.borrow().resource_type.is_some(), "AttachmentResource: resource_image must be valid DeviceResource");
+        let resource_ref = resource_image.borrow();
+        let resolved_resource = resource_ref.resource_type.as_ref().expect(("AttachmentResource: resource_image must be valid resource"));
+        if let ResourceType::Buffer(buffer) = &resolved_resource {
             assert!(false, "AttachmentResource: resource_image must be an Image type");
         }
 
         AttachmentReference {
-            resource_image,
+            resource_image: resource_image.clone(),
             format,
             samples,
             load_op,

@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use crate::api_types::device::{DeviceWrapper};
 use crate::api_types::renderpass::{RenderPass, RenderPassCreate};
 
@@ -7,7 +9,7 @@ pub trait RenderContext  {
 
     fn create_renderpass(&self, create_info: &Self::Create) -> Self::RP;
 
-    fn get_device(&self) -> &DeviceWrapper;
+    fn get_device(&self) -> Rc<RefCell<DeviceWrapper>>;
 }
 
 pub trait CommandBuffer {

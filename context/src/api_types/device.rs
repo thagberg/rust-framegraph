@@ -43,7 +43,8 @@ pub struct DeviceWrapper {
     device: ash::Device,
     debug_utils: DebugUtils,
     queue_family_indices: QueueFamilies,
-    allocator: Allocator
+    allocator: Allocator,
+    handle_generator: u64
 }
 
 #[derive(Clone)]
@@ -52,30 +53,46 @@ pub enum ResourceType {
     Image(ImageWrapper)
 }
 
-pub struct AllocatedResource {
-    pub allocation: Allocation,
-    pub resource_type: ResourceType
-}
-
 pub struct DeviceResource {
-    pub resource: Option<AllocatedResource>,
+    pub allocation: Option<Allocation>,
+    pub resource_type: Option<ResourceType>,
 
+    handle: u64,
     device: Rc<RefCell<DeviceWrapper>>
 }
 
 impl Drop for DeviceResource {
     fn drop(&mut self) {
-        if let Some(resource) = &mut self.resource {
-            let allocation = std::mem::replace(&mut resource.allocation, Allocation::default());
-            match &resource.resource_type {
+        if let Some(resource_type) = &mut self.resource_type {
+            match resource_type {
                 ResourceType::Buffer(buffer) => {
                     panic!("Not implemented for buffers yet");
                 },
                 ResourceType::Image(image) => {
+                    let allocation = {
+                        if let Some(alloc) = &mut self.allocation {
+                            Some(std::mem::replace(alloc, Allocation::default()))
+                        } else {
+                            None
+                        }
+                    };
                     self.device.borrow_mut().destroy_image(image, allocation);
                 }
             }
         }
+    }
+}
+
+impl PartialEq<Self> for DeviceResource {
+    fn eq(&self, other: &Self) -> bool {
+        self.handle == other.handle
+    }
+}
+impl Eq for DeviceResource {}
+
+impl DeviceResource {
+    pub fn get_handle(&self) -> u64 {
+        self.handle
     }
 }
 
@@ -108,7 +125,8 @@ impl DeviceWrapper {
             device,
             debug_utils,
             queue_family_indices,
-            allocator
+            allocator,
+            handle_generator: 0
         }
     }
     pub fn get(&self) -> &ash::Device {
@@ -116,12 +134,14 @@ impl DeviceWrapper {
     }
     pub fn get_queue_family_indices(&self) -> &QueueFamilies { &self.queue_family_indices }
 
-    pub fn destroy_image(&mut self, image: &ImageWrapper, allocation: Allocation) {
+    pub fn destroy_image(&mut self, image: &ImageWrapper, allocation: Option<Allocation>) {
         unsafe {
             self.device.destroy_image_view(image.view, None);
             self.device.destroy_image(image.image, None);
-            self.allocator.free(allocation)
-                .expect("Failed to free image allocation");
+            if let Some(allocation) = allocation {
+                self.allocator.free(allocation)
+                    .expect("Failed to free image allocation");
+            }
         }
     }
 
@@ -199,12 +219,21 @@ impl DeviceWrapper {
         }
     }
 
+    pub fn generate_handle(
+        &mut self
+    ) -> u64 {
+        let new = self.handle_generator;
+        self.handle_generator += 1;
+        new
+    }
+
     pub fn create_image(
         device: Rc<RefCell<DeviceWrapper>>,
         image_desc: &ImageCreateInfo,
         memory_location: MemoryLocation) -> DeviceResource {
 
         let device_image = {
+            let new_handle = device.borrow_mut().generate_handle();
             let create_info = image_desc.get_create_info();
             let image = unsafe {
                 device.borrow().get().create_image(create_info, None)
@@ -243,15 +272,45 @@ impl DeviceWrapper {
 
             device.borrow().set_image_name(&image_wrapper, image_desc.get_name());
             DeviceResource {
-                resource: Some(AllocatedResource {
-                    allocation,
-                    resource_type: ResourceType::Image(image_wrapper)
-                }),
-                device
+                allocation: Some(allocation),
+                resource_type: Some(ResourceType::Image(image_wrapper)),
+                handle: new_handle,
+                device,
             }
         };
 
         device_image
+    }
+
+    pub fn wrap_image(
+        device: Rc<RefCell<DeviceWrapper>>,
+        image: vk::Image,
+        format: vk::Format,
+        image_aspect_flags: vk::ImageAspectFlags,
+        mip_levels: u32,
+        extent: vk::Extent3D
+    ) -> DeviceResource {
+        let new_handle = device.borrow_mut().generate_handle();
+
+        let image_view = device.borrow().create_image_view(
+            image,
+            format,
+            vk::ImageViewCreateFlags::empty(),
+            image_aspect_flags,
+            mip_levels);
+
+        let image_wrapper = ImageWrapper::new(
+            image,
+            image_view,
+            vk::ImageLayout::UNDEFINED,
+            extent);
+
+        DeviceResource {
+            allocation: None,
+            resource_type: Some(ResourceType::Image(image_wrapper)),
+            handle: new_handle,
+            device
+        }
     }
 
     pub fn set_buffer_name(&self, buffer: &BufferWrapper, name: &str)

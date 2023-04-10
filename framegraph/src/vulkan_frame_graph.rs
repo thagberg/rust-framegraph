@@ -16,7 +16,7 @@ use crate::pass_node::ResolvedBindingMap;
 use crate::graphics_pass_node::{GraphicsPassNode};
 use crate::pipeline::{Pipeline, PipelineManager, VulkanPipelineManager};
 use crate::resource::resource_manager::ResourceManager;
-use crate::resource::vulkan_resource_manager::{ResolvedResource, ResolvedResourceMap, ResourceCreateInfo, ResourceHandle, ResourceType, VulkanResourceManager};
+use crate::resource::vulkan_resource_manager::{ResolvedResource, ResolvedResourceMap, ResourceCreateInfo, ResourceHandle, VulkanResourceManager};
 use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager, AttachmentInfo, StencilAttachmentInfo};
 
 use std::collections::HashMap;
@@ -25,6 +25,7 @@ use petgraph::adj::DefaultIx;
 use petgraph::data::DataMap;
 use petgraph::visit::{Dfs, EdgeRef, NodeCount};
 use context::api_types::buffer::BufferWrapper;
+use context::api_types::device::ResourceType;
 use context::api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::attachment::AttachmentReference;
@@ -45,14 +46,15 @@ fn resolve_copy_resources(
 }
 
 fn resolve_render_targets(
-    resource_manager: &VulkanResourceManager,
     attachments: &[AttachmentReference]) -> Vec<ImageWrapper> {
 
     let mut rts: Vec<ImageWrapper> = Vec::new();
     for attachment in attachments {
-      let resolved = resource_manager.resolve_resource(&attachment.handle);
-        if let ResourceType::Image(rt_image) = resolved.resource {
-            rts.push(rt_image);
+        let attachment_image = attachment.resource_image.borrow();
+        let resolved = attachment_image.resource_type.as_ref().expect("Invalid rendertarget provided");
+        if let ResourceType::Image(rt_image) = &resolved {
+            // TODO: do I really want to copy the ImageWrappers here?
+            rts.push(rt_image.clone());
         } else {
             panic!("A non-image resource was returned when attempting to resolve a render target");
         }
@@ -89,7 +91,6 @@ fn get_descriptor_buffer_info(
 
 fn resolve_resources_and_descriptors(
     bindings: &[ResourceBinding],
-    resource_manager: &VulkanResourceManager,
     pipeline: &mut Pipeline,
     image_bindings: &mut Vec<vk::DescriptorImageInfo>,
     buffer_bindings: &mut Vec<vk::DescriptorBufferInfo>,
@@ -98,8 +99,8 @@ fn resolve_resources_and_descriptors(
     let mut resolved_map = ResolvedBindingMap::new();
 
     for binding in bindings {
-        //let resolved_binding = resolve_resource(resource_manager, binding.handle);
-        let resolved_binding = resource_manager.resolve_resource(&binding.handle);
+        let binding_ref = binding.resource.borrow();
+        let resolved_binding = binding_ref.resource_type.as_ref().expect("Invalid resource in binding");
         let descriptor_set = pipeline.descriptor_sets[binding.binding_info.set as usize];
 
         let mut descriptor_write_builder = vk::WriteDescriptorSet::builder()
@@ -107,7 +108,7 @@ fn resolve_resources_and_descriptors(
             .dst_binding(binding.binding_info.slot)
             .dst_array_element(0); // TODO: parameterize
 
-        match (&resolved_binding.resource, &binding.binding_info.binding_type) {
+        match (&resolved_binding, &binding.binding_info.binding_type) {
             (ResourceType::Image(resolved_image), BindingType::Image(image_binding)) => {
                 let (image_info, descriptor_type) = get_descriptor_image_info(resolved_image);
                 image_bindings.push(image_info);
@@ -162,32 +163,36 @@ impl VulkanFrameGraph {
         let mut output_map = MultiMap::new();
         for node_index in nodes.node_indices() {
             let node = &nodes[node_index];
-            for input in node.get_dependencies() {
-                input_map.insert(input, node_index);
+            for input in node.get_inputs() {
+                input_map.insert(input.resource.borrow().get_handle(), node_index);
             }
-            for rt in node.get_writes() {
-                output_map.insert(rt, node_index);
+            for copy_source in node.get_copy_sources() {
+                input_map.insert(copy_source.borrow().get_handle(), node_index);
+            }
+
+            for output in node.get_outputs() {
+                output_map.insert(output.resource.borrow().get_handle(), node_index);
+            }
+            for rt in node.get_rendertargets() {
+                output_map.insert(rt.resource_image.borrow().get_handle(), node_index);
+            }
+            for copy_dest in node.get_copy_dests() {
+                output_map.insert(copy_dest.borrow().get_handle(), node_index);
             }
         }
 
         // iterate over input map. For each input, find matching outputs and then
         // generate a graph edge for each pairing
-        let mut unresolved_passes = Vec::new();
         for (input, node_index) in input_map.iter() {
             let find_outputs = output_map.get_vec(input);
-            match find_outputs {
-                Some(matched_outputs) => {
-                    // input/output match defines a graph edge
-                    for matched_output in matched_outputs {
-                        // use update_edge instead of add_edge to avoid duplicates
-                        nodes.update_edge(
-                            *node_index,
-                            *matched_output,
-                            0);
-                    }
-                },
-                _ => {
-                    unresolved_passes.push(node_index);
+            if let Some(matched_outputs) = find_outputs {
+                // input/output match defines a graph edge
+                for matched_output in matched_outputs {
+                    // use update_edge instead of add_edge to avoid duplicates
+                    nodes.update_edge(
+                        *node_index,
+                        *matched_output,
+                        0);
                 }
             }
         }
@@ -245,7 +250,7 @@ impl VulkanFrameGraph {
             stage: vk::PipelineStageFlags,
             layout: Option<vk::ImageLayout>
         }
-        let mut usage_cache: HashMap<ResourceHandle, ResourceUsage> = HashMap::new();
+        let mut usage_cache: HashMap<u64, ResourceUsage> = HashMap::new();
         for node_index in sorted_nodes {
             if let Some(node) = nodes.node_weight_mut(*node_index) {
                 let is_write = |access: vk::AccessFlags, stage: vk::PipelineStageFlags|-> bool {
@@ -269,7 +274,8 @@ impl VulkanFrameGraph {
                 for rt in node.get_rendertargets() {
                     // rendertargets always write, so if this isn't the first usage of this resource
                     // then we know we need a barrier
-                    let last_usage = usage_cache.get(&rt.handle);
+                    let handle = rt.resource_image.borrow().get_handle();
+                    let last_usage = usage_cache.get(&handle);
                     let new_usage = ResourceUsage {
                         access: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
                         stage: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
@@ -278,7 +284,7 @@ impl VulkanFrameGraph {
                     if let Some(usage) = last_usage {
 
                         let image_barrier = ImageBarrier {
-                            handle: rt.handle,
+                            resource: rt.resource_image.clone(),
                             source_stage: usage.stage,
                             dest_stage: new_usage.stage,
                             source_access: usage.access,
@@ -289,13 +295,14 @@ impl VulkanFrameGraph {
                         node_barrier.image_barriers.push(image_barrier);
                     }
 
-                    usage_cache.insert(rt.handle, new_usage);
+                    usage_cache.insert(handle, new_usage);
                 }
 
                 for input in node.get_inputs() {
                     //let last_usage = usage_cache.get(&input.handle);
+                    let handle = input.resource.borrow().get_handle();
                     let last_usage = {
-                        let usage = usage_cache.get(&input.handle);
+                        let usage = usage_cache.get(&handle);
                         match usage {
                             Some(found_usage) => {found_usage.clone()},
                             _ => {
@@ -330,7 +337,7 @@ impl VulkanFrameGraph {
                         // need a barrier
                         if layout_changed || prev_write {
                             let image_barrier = ImageBarrier {
-                                handle: input.handle,
+                                resource: input.resource.clone(),
                                 source_stage: last_usage.stage,
                                 dest_stage: new_usage.stage,
                                 source_access: last_usage.access,
@@ -341,7 +348,7 @@ impl VulkanFrameGraph {
                             node_barrier.image_barriers.push(image_barrier);
                         }
 
-                        usage_cache.insert(input.handle, new_usage);
+                        usage_cache.insert(handle, new_usage);
                         //image_binding.layout = update_usage(input.handle, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
                     } else {
                         panic!("Buffer barriers not implemented");
@@ -361,18 +368,16 @@ impl FrameGraph for VulkanFrameGraph {
     type RPM = VulkanRenderpassManager;
     type PM = VulkanPipelineManager;
     type CB = vk::CommandBuffer;
-    type RM = VulkanResourceManager;
     type RC = VulkanRenderContext;
     type Index = NodeIndex;
 
-    fn start<'a>(&'a mut self, resource_manager: &'a VulkanResourceManager) -> Frame {
-        Frame::new(resource_manager)
+    fn start(&mut self) -> Frame {
+        Frame::new()
     }
 
     fn end(
         &mut self,
         mut frame: Frame,
-        resource_manager: &Self::RM,
         render_context: &mut Self::RC,
         command_buffer: &Self::CB) {
 
@@ -390,20 +395,6 @@ impl FrameGraph for VulkanFrameGraph {
             frame.sorted_nodes = sorted_nodes;
         }
 
-        // Create transient resources for the frame
-        // TODO: Calculate transient resource lifetimes during linking so we can create them on-demand
-        //      and keep them for only as long as needed
-        for (handle, create_info) in transient_create_info {
-            match &create_info {
-                ResourceCreateInfo::Image(image_create) => {
-                    resource_manager.create_reserved_image(*handle, image_create);
-                },
-                ResourceCreateInfo::Buffer(buffer_create) => {
-                    resource_manager.create_reserved_buffer(*handle, buffer_create);
-                }
-            }
-        }
-
         // excute nodes
         for index in frame.get_sorted_nodes() {
             let node = frame.nodes.node_weight(*index).unwrap();
@@ -416,14 +407,14 @@ impl FrameGraph for VulkanFrameGraph {
             let copy_dests = node.get_copy_dests();
 
             // resolve copy sources and dests for this node
-            let resolved_copy_sources = resolve_copy_resources(resource_manager, copy_sources);
-            let resolved_copy_dests = resolve_copy_resources(resource_manager, copy_dests);
+            // let resolved_copy_sources = resolve_copy_resources(resource_manager, copy_sources);
+            // let resolved_copy_dests = resolve_copy_resources(resource_manager, copy_dests);
 
             // prepare pipeline for execution (node's fill callback)
             let active_pipeline = node.get_pipeline_description();
             if let Some(pipeline_description) = active_pipeline {
                 // resolve render targets for this node
-                let resolved_render_targets = resolve_render_targets(resource_manager, render_targets);
+                let resolved_render_targets = resolve_render_targets(render_targets);
 
                 // Ensure all rendertargets are the same dimensions
                 let framebuffer_extent = {
@@ -462,6 +453,7 @@ impl FrameGraph for VulkanFrameGraph {
                     }
                 };
 
+                // TODO: don't need to resolve these anymore, just handle descriptor sets
                 // prepare and perform descriptor writes
                 let (resolved_inputs, resolved_outputs) = {
                     let mut descriptor_writes: Vec<vk::WriteDescriptorSet> = Vec::new();
@@ -470,14 +462,12 @@ impl FrameGraph for VulkanFrameGraph {
 
                     let resolved_inputs = resolve_resources_and_descriptors(
                         inputs,
-                        resource_manager,
                         &mut pipeline,
                         &mut image_bindings,
                         &mut buffer_bindings,
                         &mut descriptor_writes);
                     let resolved_outputs = resolve_resources_and_descriptors(
                         outputs,
-                        resource_manager,
                         &mut pipeline,
                         &mut image_bindings,
                         &mut buffer_bindings,
@@ -485,12 +475,12 @@ impl FrameGraph for VulkanFrameGraph {
 
                     unsafe {
                         // TODO: support descriptor copies?
-                        render_context.get_device().get().update_descriptor_sets(
+                        render_context.get_device().borrow().get().update_descriptor_sets(
                             &descriptor_writes,
                             &[]);
                         // bind descriptorsets
                         // TODO: COMPUTE SUPPORT
-                        render_context.get_device().get().cmd_bind_descriptor_sets(
+                        render_context.get_device().borrow().get().cmd_bind_descriptor_sets(
                             *command_buffer,
                             vk::PipelineBindPoint::GRAPHICS,
                             pipeline.pipeline_layout,
@@ -516,34 +506,30 @@ impl FrameGraph for VulkanFrameGraph {
                         .clear_values(std::slice::from_ref(&clear_value));
 
                     unsafe {
-                        render_context.get_device().get().cmd_begin_render_pass(
+                        render_context.get_device().borrow().get().cmd_begin_render_pass(
                             *command_buffer,
                             &render_pass_begin,
                             vk::SubpassContents::INLINE);
 
                         // TODO: add compute support
-                        render_context.get_device().get().cmd_bind_pipeline(
+                        render_context.get_device().borrow().get().cmd_bind_pipeline(
                             *command_buffer,
                             vk::PipelineBindPoint::GRAPHICS,
                             pipeline.graphics_pipeline);
                     }
                 }
 
-                panic!("Need to execute barriers");
+                //panic!("Need to execute barriers");
 
                 // execute this node
                 node.execute(
                     render_context,
-                    command_buffer,
-                    &resolved_inputs,
-                    &resolved_outputs,
-                    &resolved_copy_sources,
-                    &resolved_copy_dests);
+                    command_buffer);
 
                 // if we began a render pass and bound a pipeline for this node, end it
                 if active_pipeline.is_some() {
                     unsafe {
-                        render_context.get_device().get().cmd_end_render_pass(*command_buffer);
+                        render_context.get_device().borrow().get().cmd_end_render_pass(*command_buffer);
                     }
                 }
             }
