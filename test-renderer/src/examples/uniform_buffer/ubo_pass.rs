@@ -25,7 +25,7 @@ pub struct OffsetUBO {
 }
 
 pub struct UBOPass {
-    //uniform_buffer: ResourceHandle
+    uniform_buffer: Rc<RefCell<DeviceResource>>
 }
 
 impl Drop for UBOPass {
@@ -37,32 +37,36 @@ impl Drop for UBOPass {
 impl UBOPass {
     pub fn new(
         device: Rc<RefCell<DeviceWrapper>>) -> Self {
-        let ubo_create_info = vk::BufferCreateInfo {
-            s_type: vk::StructureType::BUFFER_CREATE_INFO,
-            size: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize,
-            usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
-            sharing_mode: vk::SharingMode::EXCLUSIVE,
-            ..Default::default()
+        let ubo_create_info = BufferCreateInfo::new(
+            vk::BufferCreateInfo {
+                s_type: vk::StructureType::BUFFER_CREATE_INFO,
+                size: std::mem::size_of::<OffsetUBO>() as vk::DeviceSize,
+                usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
+                sharing_mode: vk::SharingMode::EXCLUSIVE,
+                ..Default::default()
+            },
+            "ubo_buffer".to_string());
+
+        let uniform_buffer = DeviceWrapper::create_buffer(
+            device.clone(),
+            &ubo_create_info,
+            MemoryLocation::CpuToGpu);
+
+        let ubo_value = OffsetUBO {
+            offset: [0.2, 0.1, 0.0]
         };
 
-        // let uniform_buffer = resource_manager.create_buffer(
-        //     BufferCreateInfo::new(ubo_create_info,
-        //         "ubo_persistent_buffer".to_string()));
-        // let ubo_value = OffsetUBO {
-        //     offset: [0.2, 0.1, 0.0]
-        // };
-        //
-        // resource_manager.update_buffer(&uniform_buffer, |mapped_memory: *mut c_void| {
-        //     unsafe {
-        //         core::ptr::copy_nonoverlapping(
-        //             &ubo_value,
-        //             mapped_memory as *mut OffsetUBO,
-        //             std::mem::size_of::<OffsetUBO>());
-        //     };
-        // });
+        device.borrow().update_buffer(&uniform_buffer, |mapped_memory: *mut c_void, size: u64| {
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    &ubo_value,
+                    mapped_memory as *mut OffsetUBO,
+                    std::mem::size_of::<OffsetUBO>() );
+            };
+        });
 
         UBOPass {
-            // uniform_buffer
+            uniform_buffer: Rc::new(RefCell::new(uniform_buffer))
         }
     }
 

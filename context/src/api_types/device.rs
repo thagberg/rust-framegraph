@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::ffi::{CStr, CString};
+use core::ffi::c_void;
 use std::rc::Rc;
 use ash::vk;
 use ash::extensions::ext::DebugUtils;
@@ -367,5 +368,40 @@ impl DeviceWrapper {
             }
         };
         device_buffer
+    }
+
+    pub fn update_buffer<F>(&self, device_buffer: &DeviceResource, mut fill_callback: F)
+        where F: FnMut(*mut c_void, u64) {
+        let allocation = {
+            match &device_buffer.allocation {
+                Some(alloc) => { alloc },
+                _ => {
+                    panic!("Cannot update buffer with no allocation");
+                }
+            }
+        };
+        if let Some(resolved_resource) = &device_buffer.resource_type {
+            if let ResourceType::Buffer(buffer) = &resolved_resource {
+                if let Some(mapped) = allocation.mapped_ptr() {
+                    // TODO: I believe this will occur if the memory is already host-visible?
+                    fill_callback(mapped.as_ptr(), allocation.size());
+                } else {
+                    unsafe {
+                        let mapped_memory = self.device.map_memory(
+                            allocation.memory(),
+                            allocation.offset(),
+                            allocation.size(),
+                            vk::MemoryMapFlags::empty())
+                            .expect("Failed to map buffer");
+                        fill_callback(mapped_memory, allocation.size());
+                        self.device.unmap_memory(allocation.memory());
+                    }
+                }
+            } else {
+                panic!("Cannot update a non-buffer resource as a buffer");
+            }
+        } else {
+            panic!("Cannot update an invalid buffer");
+        }
     }
 }
