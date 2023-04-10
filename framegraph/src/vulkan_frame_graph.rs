@@ -24,6 +24,7 @@ use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager, Atta
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::rc::Rc;
+use ash::vk::{BufferMemoryBarrier, DeviceSize};
 use petgraph::adj::DefaultIx;
 use petgraph::data::DataMap;
 use petgraph::visit::{Dfs, EdgeRef, NodeCount};
@@ -310,7 +311,7 @@ impl VulkanFrameGraph {
                             _ => {
                                 ResourceUsage {
                                     access: vk::AccessFlags::NONE,
-                                    stage: vk::PipelineStageFlags::NONE,
+                                    stage: vk::PipelineStageFlags::ALL_COMMANDS,
                                     layout: Some(vk::ImageLayout::UNDEFINED)
                                 }
                             }
@@ -318,8 +319,8 @@ impl VulkanFrameGraph {
                     };
 
                     let new_usage = ResourceUsage{
-                        access: vk::AccessFlags::SHADER_READ,
-                        stage: vk::PipelineStageFlags::ALL_GRAPHICS,
+                        access: vk::AccessFlags::TRANSFER_READ,
+                        stage: vk::PipelineStageFlags::TRANSFER,
                         layout: Some(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
                     };
 
@@ -345,7 +346,7 @@ impl VulkanFrameGraph {
                             _ => {
                                 ResourceUsage {
                                     access: vk::AccessFlags::NONE,
-                                    stage: vk::PipelineStageFlags::NONE,
+                                    stage: vk::PipelineStageFlags::TOP_OF_PIPE,
                                     layout: Some(vk::ImageLayout::UNDEFINED)
                                 }
                             }
@@ -353,8 +354,8 @@ impl VulkanFrameGraph {
                     };
 
                     let new_usage = ResourceUsage{
-                        access: vk::AccessFlags::SHADER_READ,
-                        stage: vk::PipelineStageFlags::ALL_GRAPHICS,
+                        access: vk::AccessFlags::TRANSFER_WRITE,
+                        stage: vk::PipelineStageFlags::TRANSFER,
                         layout: Some(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
                     };
 
@@ -381,7 +382,7 @@ impl VulkanFrameGraph {
                             _ => {
                                 ResourceUsage {
                                     access: vk::AccessFlags::NONE,
-                                    stage: vk::PipelineStageFlags::NONE,
+                                    stage: vk::PipelineStageFlags::ALL_COMMANDS,
                                     layout: Some(vk::ImageLayout::UNDEFINED)
                                 }
                             }
@@ -589,9 +590,81 @@ impl FrameGraph for VulkanFrameGraph {
                             pipeline.graphics_pipeline);
                     }
                 }
+            }
 
-                //panic!("Need to execute barriers");
+            let barriers = self.node_barriers.get(index);
+            if let Some(barriers) = barriers {
+                // Create the source and dest stage masks
+                let mut source_stage = vk::PipelineStageFlags::NONE;
+                let mut dest_stage = vk::PipelineStageFlags::NONE;
+                for image_barrier in &barriers.image_barriers {
+                    source_stage |= image_barrier.source_stage;
+                    dest_stage |= image_barrier.dest_stage;
+                }
+                for buffer_barrier in &barriers.buffer_barriers {
+                    source_stage |= buffer_barrier.source_stage;
+                    dest_stage |= buffer_barrier.dest_stage;
+                }
 
+                // translate from our BufferBarrier to Vulkan
+                let transformed_buffer_barriers: Vec<vk::BufferMemoryBarrier> = barriers.buffer_barriers.iter().map(|bb| {
+                    let buffer = bb.resource.borrow();
+                    let resolved = buffer.resource_type.as_ref().expect("Invalid buffer in BufferBarrier");
+                    if let ResourceType::Buffer(resolved_buffer) = resolved {
+                        vk::BufferMemoryBarrier::builder()
+                            .buffer(resolved_buffer.buffer)
+                            .src_access_mask(bb.source_access)
+                            .dst_access_mask(bb.dest_access)
+                            .offset(bb.offset as DeviceSize)
+                            .size(bb.size as DeviceSize)
+                            .src_queue_family_index(render_context.get_graphics_queue_index())
+                            .dst_queue_family_index(render_context.get_graphics_queue_index())
+                            .build()
+                    } else {
+                        panic!("Non buffer resource in BufferBarrier")
+                    }
+                }).collect();
+
+                // translate from our ImageBarrier to Vulkan
+                let transformed_image_barriers: Vec<vk::ImageMemoryBarrier> = barriers.image_barriers.iter().map(|ib| {
+                    let image = ib.resource.borrow();
+                    let resolved = image.resource_type.as_ref().expect("Invalid image in ImageBarrier");
+                    // TODO: the range needs to be parameterized
+                    let range = vk::ImageSubresourceRange::builder()
+                        .level_count(1)
+                        .base_mip_level(0)
+                        .layer_count(1)
+                        .base_array_layer(0)
+                        .aspect_mask(vk::ImageAspectFlags::COLOR)
+                        .build();
+                    if let ResourceType::Image(resolved_image) = resolved {
+                        vk::ImageMemoryBarrier::builder()
+                            .image(resolved_image.image)
+                            .src_access_mask(ib.source_access)
+                            .dst_access_mask(ib.dest_access)
+                            .old_layout(ib.old_layout)
+                            .new_layout(ib.new_layout)
+                            .src_queue_family_index(render_context.get_graphics_queue_index())
+                            .dst_queue_family_index(render_context.get_graphics_queue_index())
+                            .subresource_range(range)
+                            .build()
+                    } else {
+                        panic!("Non image resource in ImageBarrier")
+                    }
+                }).collect();
+
+                if transformed_image_barriers.len() > 0 || transformed_buffer_barriers.len() > 0 {
+                    unsafe {
+                        render_context.get_device().borrow().get().cmd_pipeline_barrier(
+                            *command_buffer,
+                            source_stage,
+                            dest_stage,
+                            vk::DependencyFlags::empty(),
+                            &[],
+                            &transformed_buffer_barriers,
+                            &transformed_image_barriers);
+                    }
+                }
             }
 
             // execute this node
