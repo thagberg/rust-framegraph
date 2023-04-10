@@ -44,33 +44,6 @@ pub struct VulkanResourceManager {
     device: Rc<DeviceWrapper>
 }
 
-fn create_buffer(
-    allocator: &mut Allocator,
-    device: &DeviceWrapper,
-    create_info: &BufferCreateInfo) -> ResolvedResourceInternal {
-
-    let mut buffer_alloc: Allocation = Default::default();
-    let buffer = device.create_buffer(
-        create_info,
-        &mut |memory_requirements: vk::MemoryRequirements| -> (vk::DeviceMemory, vk::DeviceSize) {
-            unsafe {
-                buffer_alloc = allocator.allocate(&AllocationCreateDesc {
-                    name: "Uniform Buffer Allocation", // TODO: use the create_info name here?
-                    requirements: memory_requirements,
-                    location: MemoryLocation::CpuToGpu, // TODO: should definitely parameterize this
-                    linear: true
-                }).expect("Failed to allocate memory for buffer");
-                (buffer_alloc.memory(), buffer_alloc.offset())
-            }
-        }
-    );
-
-    ResolvedResourceInternal {
-        resource: ResourceType::Buffer(buffer),
-        allocation: Default::default()
-    }
-}
-
 impl ResourceManager for VulkanResourceManager {
     fn resolve_resource(
         &self,
@@ -145,28 +118,6 @@ impl VulkanResourceManager {
 
     pub fn reserve_handle(&self) -> ResourceHandle {
         self.increment_handle()
-    }
-
-    pub fn create_buffer(
-        &mut self,
-        create_info: BufferCreateInfo
-    ) -> ResourceHandle {
-        let ret_handle = self.increment_handle();
-
-        let resolved_buffer = create_buffer(&mut self.allocator, &self.device, &create_info);
-        self.resource_map.borrow_mut().insert(ret_handle, resolved_buffer);
-
-        ret_handle
-    }
-
-    /// This is used to create a buffer for which a handle has already been reserved
-    pub(crate) fn create_reserved_buffer(
-        &mut self,
-        handle: ResourceHandle,
-        create_info: &BufferCreateInfo) {
-
-        let resolved_buffer = create_buffer(&mut self.allocator, &self.device, &create_info);
-        self.resource_map.borrow_mut().insert(handle, resolved_buffer);
     }
 
     pub fn free_resource(&mut self, handle: ResourceHandle) {

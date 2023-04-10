@@ -63,22 +63,21 @@ pub struct DeviceResource {
 
 impl Drop for DeviceResource {
     fn drop(&mut self) {
+        let allocation = {
+        };
         if let Some(resource_type) = &mut self.resource_type {
             match resource_type {
                 ResourceType::Buffer(buffer) => {
-                    panic!("Not implemented for buffers yet");
+                    self.device.borrow_mut().destroy_buffer(buffer);
                 },
                 ResourceType::Image(image) => {
-                    let allocation = {
-                        if let Some(alloc) = &mut self.allocation {
-                            Some(std::mem::replace(alloc, Allocation::default()))
-                        } else {
-                            None
-                        }
-                    };
-                    self.device.borrow_mut().destroy_image(image, allocation);
+                    self.device.borrow_mut().destroy_image(image);
                 }
             }
+        }
+        if let Some(alloc) = &mut self.allocation {
+            let moved = std::mem::replace(alloc, Allocation::default());
+            self.device.borrow_mut().free_allocation(moved);
         }
     }
 }
@@ -134,14 +133,23 @@ impl DeviceWrapper {
     }
     pub fn get_queue_family_indices(&self) -> &QueueFamilies { &self.queue_family_indices }
 
-    pub fn destroy_image(&mut self, image: &ImageWrapper, allocation: Option<Allocation>) {
+    pub fn free_allocation(&mut self, allocation: Allocation) {
+        unsafe {
+            self.allocator.free(allocation)
+                .expect("Failed to free Device allocation");
+        }
+    }
+
+    pub fn destroy_buffer(&mut self, buffer: &BufferWrapper) {
+        unsafe {
+            self.device.destroy_buffer(buffer.buffer, None);
+        }
+    }
+
+    pub fn destroy_image(&mut self, image: &ImageWrapper) {
         unsafe {
             self.device.destroy_image_view(image.view, None);
             self.device.destroy_image(image.image, None);
-            if let Some(allocation) = allocation {
-                self.allocator.free(allocation)
-                    .expect("Failed to free image allocation");
-            }
         }
     }
 
@@ -319,28 +327,45 @@ impl DeviceWrapper {
     }
 
     pub fn create_buffer(
-        &self,
-        create_info: &BufferCreateInfo,
-        allocate_callback: &mut dyn FnMut(vk::MemoryRequirements) -> (vk::DeviceMemory, vk::DeviceSize)) -> BufferWrapper {
+        device: Rc<RefCell<DeviceWrapper>>,
+        buffer_desc: &BufferCreateInfo,
+        memory_location: MemoryLocation) -> DeviceResource {
 
-        let buffer = unsafe {
-            self.device.create_buffer(create_info.get_create_info(), None)
-                .expect("Failed to create uniform buffer")
+        let device_buffer = {
+            let new_handle = device.borrow_mut().generate_handle();
+            let create_info = buffer_desc.get_create_info();
+            let buffer = unsafe {
+                device.borrow().get().create_buffer(create_info, None)
+                    .expect("Failed to create buffer")
+            };
+
+            let memory_requirements = unsafe {
+                device.borrow().get().get_buffer_memory_requirements(buffer)
+            };
+
+            let allocation = device.borrow_mut().allocate_memory(
+                buffer_desc.get_name(),
+                memory_requirements,
+                memory_location,
+                true);
+
+            unsafe {
+                device.borrow().get().bind_buffer_memory(
+                    buffer,
+                    allocation.memory(),
+                    allocation.offset())
+                    .expect("Failed to bind buffer to memory");
+            }
+
+            let buffer_wrapper = BufferWrapper::new(buffer);
+            device.borrow().set_buffer_name(&buffer_wrapper, buffer_desc.get_name());
+            DeviceResource {
+                allocation: Some(allocation),
+                resource_type: Some(ResourceType::Buffer(buffer_wrapper)),
+                handle: new_handle,
+                device
+            }
         };
-        let requirements = unsafe {
-            self.device.get_buffer_memory_requirements(buffer)
-        };
-
-        let (memory, offset) = allocate_callback(requirements);
-        unsafe {
-            self.device.bind_buffer_memory( buffer, memory, offset)
-                .expect("Failed to bind buffer to memory");
-        }
-
-        let buffer_wrapper = BufferWrapper::new(buffer);
-
-        self.set_buffer_name(&buffer_wrapper, create_info.get_name());
-
-        buffer_wrapper
+        device_buffer
     }
 }
