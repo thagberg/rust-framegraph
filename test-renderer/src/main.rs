@@ -194,7 +194,6 @@ impl VulkanApp {
             render_context,
             ubo_pass,
             frame_graph,
-            // ubo_pass,
             // transient_pass,
 
             swapchain_images,
@@ -256,8 +255,8 @@ impl VulkanApp {
             let extent = self.render_context.get_swapchain().as_ref().unwrap().get_extent();
             let blit_offsets = [glam::IVec2::new(0, 0), glam::IVec2::new(extent.width as i32, extent.height as i32)];
             let mut new_frame = self.frame_graph.start();
-            let (ubo_pass_node, ubo_render_target) = self.ubo_pass.generate_pass(self.render_context.get_device(), self.render_context.get_swapchain().as_ref().unwrap().get_extent());
             //self.frame_graph.start(blit::generate_pass(ubo_render_target, 0, swapchain_handle, 0, blit_offsets));
+            let (ubo_pass_node, ubo_render_target) = self.ubo_pass.generate_pass(self.render_context.get_device(), self.render_context.get_swapchain().as_ref().unwrap().get_extent());
             new_frame.start(ubo_pass_node);
             //new_frame.add_node(ubo_pass_node);
             self.frame_graph.end(
@@ -265,6 +264,8 @@ impl VulkanApp {
                 &mut self.render_context,
                 &command_buffer);
 
+            // TODO: this should be handled analytically, rather than just expecting that the swap
+            //      image was used as a transfer dest
             let present_transition = {
                 let swapchain_resource = self.swapchain_images[image_index as usize].clone();
                 let swapchain_image = swapchain_resource.borrow();
