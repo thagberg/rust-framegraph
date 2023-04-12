@@ -257,8 +257,9 @@ impl VulkanApp {
             let mut new_frame = self.frame_graph.start();
             //self.frame_graph.start(blit::generate_pass(ubo_render_target, 0, swapchain_handle, 0, blit_offsets));
             let (ubo_pass_node, ubo_render_target) = self.ubo_pass.generate_pass(self.render_context.get_device(), self.render_context.get_swapchain().as_ref().unwrap().get_extent());
-            new_frame.start(ubo_pass_node);
-            //new_frame.add_node(ubo_pass_node);
+            let blit_node = blit::generate_pass(ubo_render_target.clone(), 0, swapchain_resource.clone(), 0, blit_offsets);
+            new_frame.start(blit_node);
+            new_frame.add_node(ubo_pass_node);
             self.frame_graph.end(
                 new_frame,
                 &mut self.render_context,

@@ -384,8 +384,6 @@ impl FrameGraph for VulkanFrameGraph {
         frame.end();
 
         let root_index = frame.get_root_index();
-        //let nodes = &frame.nodes;
-        let transient_create_info = &frame.create_info;
 
         // compile and link frame
         {
@@ -521,16 +519,17 @@ impl FrameGraph for VulkanFrameGraph {
 
                 //panic!("Need to execute barriers");
 
-                // execute this node
-                node.execute(
-                    render_context,
-                    command_buffer);
+            }
 
-                // if we began a render pass and bound a pipeline for this node, end it
-                if active_pipeline.is_some() {
-                    unsafe {
-                        render_context.get_device().borrow().get().cmd_end_render_pass(*command_buffer);
-                    }
+            // execute this node
+            node.execute(
+                render_context,
+                command_buffer);
+
+            // if we began a render pass and bound a pipeline for this node, end it
+            if active_pipeline.is_some() {
+                unsafe {
+                    render_context.get_device().borrow().get().cmd_end_render_pass(*command_buffer);
                 }
             }
         }
