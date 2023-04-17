@@ -291,16 +291,55 @@ impl ImguiRender {
                 }
             };
 
+            let vertex_binding = vk::VertexInputBindingDescription::builder()
+                .binding(0)
+                .input_rate(vk::VertexInputRate::VERTEX)
+                .stride(std::mem::size_of::<DrawVert>() as u32)
+                .build();
+
+            let mut attribute_offset = 0;
+
+            let pos_attribute = vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(0)
+                .format(vk::Format::R32G32_SFLOAT)
+                .offset(attribute_offset)
+                .build();
+            attribute_offset += 4 * 2;
+
+            let uv_attribute = vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(1)
+                .format(vk::Format::R32G32_SFLOAT)
+                .offset(attribute_offset)
+                .build();
+            attribute_offset += 4 * 2;
+
+            let color_attribute = vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(2)
+                .format(vk::Format::R8G8B8A8_SNORM)
+                .build();
+            attribute_offset += 1 * 4;
+
+            let vertex_input = vk::PipelineVertexInputStateCreateInfo::builder()
+                .vertex_binding_descriptions(std::slice::from_ref(&vertex_binding))
+                .vertex_attribute_descriptions(&[pos_attribute, uv_attribute, color_attribute])
+                .build();
+
+            let dynamic_states = vec!(vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR);
+
             let pipeline_description = PipelineDescription::new(
-                Default::default(),
-                vec![],
+                vertex_input,
+                dynamic_states,
                 RasterizationType::Standard,
                 DepthStencilType::Disable,
                 BlendType::None,
                 concat!(env!("OUT_DIR"), "/shaders/imgui-vert.spv"),
-                concat!(env!("OUT_DIR"), "/shaders/imgui-frag.spv"),
+                concat!(env!("OUT_DIR"), "/shaders/imgui-frag.spv"));
 
             let pass_node = GraphicsPassNode::builder("imgui".to_string())
+                .pipeline_description(pipeline_description)
                 .render_target(rt_ref)
                 .read(font_binding)
                 .fill_commands(Box::new(
