@@ -22,6 +22,8 @@ pub struct VulkanRenderContext {
     swapchain: Option<SwapchainWrapper>,
     surface: Option<SurfaceWrapper>,
     graphics_command_pool: vk::CommandPool,
+    graphics_command_buffers: Vec<vk::CommandBuffer>,
+    immediate_command_buffer: vk::CommandBuffer,
     descriptor_pool: vk::DescriptorPool,
     device: Rc<RefCell<DeviceWrapper>>,
     physical_device: PhysicalDeviceWrapper,
@@ -269,6 +271,22 @@ fn create_command_pool(
     }
 }
 
+fn create_command_buffers(
+    device: &DeviceWrapper,
+    command_pool: vk::CommandPool,
+    num_command_buffers: u32) -> Vec<vk::CommandBuffer> {
+    let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
+        .command_buffer_count(num_command_buffers)
+        .command_pool(command_pool)
+        .level(vk::CommandBufferLevel::PRIMARY)
+        .build();
+
+    unsafe {
+        device.get().allocate_command_buffers(&command_buffer_allocate_info)
+            .expect("Failed to allocate Command Buffers")
+    }
+}
+
 fn create_swapchain(
     instance: &InstanceWrapper,
     device: Rc<RefCell<DeviceWrapper>>,
@@ -460,6 +478,16 @@ impl VulkanRenderContext {
             &logical_device.borrow(),
             logical_device.borrow().get_queue_family_indices().graphics.unwrap());
 
+        let graphics_command_buffers = create_command_buffers(
+            &logical_device.borrow(),
+            graphics_command_pool,
+            2);
+
+        let immediate_command_buffer = create_command_buffers(
+            &logical_device.borrow(),
+            graphics_command_pool,
+            1);
+
         let swapchain = {
             if surface.is_some() {
                 Some(create_swapchain(
@@ -472,17 +500,6 @@ impl VulkanRenderContext {
                 None
             }
         };
-
-        // register the swapchain images with the resource manager
-        // let mut swapchain_handles = vec![];
-        // TODO: need to design a different way to register the swapchain
-        // if let Some(swaps) = &swapchain {
-        //     for image in swaps.get_images()
-        //     {
-        //         let handle = resource_manager.register_image(image);
-        //         swapchain_handles.push(handle);
-        //     }
-        // }
 
         let ubo_pool_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::UNIFORM_BUFFER,
@@ -523,7 +540,9 @@ impl VulkanRenderContext {
             compute_queue,
             graphics_command_pool,
             swapchain,
-            descriptor_pool
+            descriptor_pool,
+            graphics_command_buffers,
+            immediate_command_buffer: immediate_command_buffer[0]
         }
     }
 
@@ -547,6 +566,10 @@ impl VulkanRenderContext {
     }
 
     pub fn get_graphics_command_pool(&self) -> vk::CommandPool { self.graphics_command_pool }
+
+    pub fn get_graphics_command_buffer(&self, index: usize) -> vk::CommandBuffer { self.graphics_command_buffers[index] }
+
+    pub fn get_immediate_command_buffer(&self) -> vk::CommandBuffer { self.immediate_command_buffer }
 
     pub fn get_swapchain(&self) -> &Option<SwapchainWrapper> { &self.swapchain }
 
