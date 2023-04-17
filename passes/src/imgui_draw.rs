@@ -1,8 +1,9 @@
 use std::cell::RefCell;
 use std::ffi::c_void;
 use std::rc::Rc;
-use ash::vk;
 
+use ash::vk;
+use gpu_allocator::MemoryLocation;
 use imgui::{DrawData, DrawVert, DrawIdx};
 
 use context::api_types::buffer::BufferCreateInfo;
@@ -55,7 +56,7 @@ pub fn generate_passes(
         let idx_buffer = DeviceWrapper::create_buffer(
             device.clone(),
             &idx_create,
-            MemoryLocation::CpuTGpu);
+            MemoryLocation::CpuToGpu);
 
         let idx_data = draw_list.idx_buffer();
         device.borrow().update_buffer(&idx_buffer, |mapped_memory: *mut c_void, size: u64| {
