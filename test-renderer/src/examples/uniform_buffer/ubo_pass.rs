@@ -56,6 +56,7 @@ impl UBOPass {
             offset: [0.2, 0.1, 0.0]
         };
 
+        // TODO: pretty sure count should actually just be 1 here
         device.borrow().update_buffer(&uniform_buffer, |mapped_memory: *mut c_void, size: u64| {
             unsafe {
                 core::ptr::copy_nonoverlapping(

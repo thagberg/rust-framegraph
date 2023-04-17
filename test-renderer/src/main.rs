@@ -30,11 +30,10 @@ use framegraph::frame_graph::FrameGraph;
 use framegraph::vulkan_frame_graph::VulkanFrameGraph;
 use framegraph::renderpass_manager::VulkanRenderpassManager;
 use framegraph::pipeline::VulkanPipelineManager;
-use passes::blit;
+use passes::{blit, imgui_draw};
 
 mod examples;
 use crate::examples::uniform_buffer::ubo_pass::UBOPass;
-// use crate::examples::uniform_buffer::transient_input_pass::TransientInputPass;
 
 
 // Constants
@@ -143,16 +142,6 @@ impl VulkanApp {
                 swapchain_extent)
         };
 
-        // let ubo_pass = UBOPass::new(&mut render_context);
-        // let transient_pass = TransientInputPass::new(
-        //     &mut render_context,
-        //     ubo_pass.render_target);
-
-        // let mut resource_manager = VulkanResourceManager::new(
-        //     render_context.get_instance(),
-        //     render_context.get_device_wrapper(),
-        //     render_context.get_physical_device());
-
         let pipeline_manager = VulkanPipelineManager::new();
 
         let ubo_pass = UBOPass::new(render_context.get_device());
@@ -177,15 +166,6 @@ impl VulkanApp {
             }
         }
 
-        // let mut swapchain_handles = vec![];
-        // if let Some(swaps) = &swapchain {
-        //     for image in swaps.get_images()
-        //     {
-        //         let handle = resource_manager.register_image(image);
-        //         swapchain_handles.push(handle);
-        //     }
-        // }
-
         VulkanApp {
             window,
             // debug_utils_loader,
@@ -194,14 +174,11 @@ impl VulkanApp {
             render_context,
             ubo_pass,
             frame_graph,
-            // transient_pass,
 
             swapchain_images,
             swapchain_framebuffers,
 
-            // pipeline_layout,
             render_pass,
-            // graphics_pipeline,
 
             command_buffers,
 
