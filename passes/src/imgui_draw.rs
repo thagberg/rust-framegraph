@@ -15,6 +15,7 @@ use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::attachment::AttachmentReference;
 use framegraph::binding::{BindingInfo, BindingType, ImageBindingInfo, ResourceBinding};
 use framegraph::graphics_pass_node::GraphicsPassNode;
+use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
 
 pub struct ImguiRender {
     font_texture: Rc<RefCell<DeviceResource>>
@@ -289,6 +290,15 @@ impl ImguiRender {
                     access: vk::AccessFlags::SHADER_READ
                 }
             };
+
+            let pipeline_description = PipelineDescription::new(
+                Default::default(),
+                vec![],
+                RasterizationType::Standard,
+                DepthStencilType::Disable,
+                BlendType::None,
+                concat!(env!("OUT_DIR"), "/shaders/imgui-vert.spv"),
+                concat!(env!("OUT_DIR"), "/shaders/imgui-frag.spv"),
 
             let pass_node = GraphicsPassNode::builder("imgui".to_string())
                 .render_target(rt_ref)
