@@ -32,6 +32,7 @@ use framegraph::vulkan_frame_graph::VulkanFrameGraph;
 use framegraph::renderpass_manager::VulkanRenderpassManager;
 use framegraph::pipeline::VulkanPipelineManager;
 use passes::{blit, imgui_draw};
+use passes::imgui_draw::ImguiRender;
 
 mod examples;
 use crate::examples::uniform_buffer::ubo_pass::UBOPass;
@@ -66,8 +67,6 @@ struct VulkanApp {
     // pipeline_layout: vk::PipelineLayout,
     // graphics_pipeline: vk::Pipeline,
 
-    command_buffers: Vec<vk::CommandBuffer>,
-
     shader_manager: ShaderManager,
 
     image_available_semaphores: Vec<vk::Semaphore>,
@@ -76,6 +75,7 @@ struct VulkanApp {
     current_frame: usize,
 
     imgui: Context,
+    imgui_renderer: ImguiRender
 }
 
 impl VulkanApp {
@@ -153,10 +153,6 @@ impl VulkanApp {
 
         let shader_manager = ShaderManager::new();
 
-        let command_buffers = share::v1::create_command_buffers(
-            render_context.get_device().borrow().get(),
-            render_context.get_graphics_command_pool(),
-            2);
         let sync_ojbects = VulkanApp::create_sync_objects(
             render_context.get_device().borrow().get());
 
@@ -171,12 +167,17 @@ impl VulkanApp {
 
         let mut imgui = Context::create();
         imgui.set_ini_filename(None);
-        {
+        let font_texture = {
             let mut imgui_io = imgui.io_mut();
             imgui_io.display_size = [swapchain_extent.width as f32, swapchain_extent.height as f32];
             let fonts = imgui.fonts();
-            let font_texture = fonts.build_rgba32_texture();
-        }
+            fonts.build_rgba32_texture()
+        };
+
+        let imgui_renderer = imgui_draw::ImguiRender::new(
+            render_context.get_device().clone(),
+            &render_context,
+            font_texture);
 
         VulkanApp {
             window,
@@ -192,8 +193,6 @@ impl VulkanApp {
 
             render_pass,
 
-            command_buffers,
-
             shader_manager,
 
             image_available_semaphores: sync_ojbects.image_available_semaphores,
@@ -201,7 +200,8 @@ impl VulkanApp {
             in_flight_fences: sync_ojbects.inflight_fences,
             current_frame: 0,
 
-            imgui
+            imgui,
+            imgui_renderer
         }
     }
 
@@ -223,7 +223,7 @@ impl VulkanApp {
         Some(self.image_available_semaphores[self.current_frame]),
         None);
 
-        let command_buffer = self.command_buffers[image_index as usize];
+        let command_buffer = self.render_context.get_graphics_command_buffer(image_index as usize);
         unsafe {
             self.render_context.get_device().borrow().get().reset_command_buffer(
                 command_buffer,
