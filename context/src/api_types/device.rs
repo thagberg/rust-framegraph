@@ -234,6 +234,10 @@ impl DeviceWrapper {
         new
     }
 
+    // pub fn upload_image_contents(&self, image: Rc<RefCell<DeviceResource>>, data: &[u8]) {
+    //
+    // }
+
     pub fn create_image(
         device: Rc<RefCell<DeviceWrapper>>,
         image_desc: &ImageCreateInfo,
