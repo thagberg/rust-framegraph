@@ -89,6 +89,60 @@ impl PartialEq<Self> for DeviceResource {
 impl Eq for DeviceResource {}
 
 impl DeviceResource {
+    pub fn get_image(&self) -> &ImageWrapper {
+        match &self.resource_type {
+            Some(resolved_resource) => {
+                match &resolved_resource {
+                    ResourceType::Image(image) => {
+                        image
+                    },
+                    _ => {
+                        panic!("Non-image resource type")
+                    }
+                }
+            },
+            None => {
+                panic!("Unresolved resource")
+            }
+        }
+    }
+
+    pub fn get_image_mut(&mut self) -> &mut ImageWrapper {
+        match self.resource_type.as_mut() {
+            Some(resolved_resource) => {
+                match resolved_resource {
+                    ResourceType::Image(image) => {
+                        image
+                    },
+                    _ => {
+                        panic!("Non-image resource type")
+                    }
+                }
+            },
+            None => {
+                panic!("Unresolved resource")
+            }
+        }
+    }
+
+    pub fn get_buffer(&self) -> &BufferWrapper {
+        match &self.resource_type {
+            Some(resolved_resource) => {
+                match &resolved_resource {
+                    ResourceType::Buffer(buffer) => {
+                       buffer
+                    },
+                    _ => {
+                        panic!("Non-buffer resource type")
+                    }
+                }
+            },
+            None => {
+                panic!("Unresolved resource")
+            }
+        }
+    }
+
     pub fn get_handle(&self) -> u64 {
         self.handle
     }
@@ -147,6 +201,9 @@ impl DeviceWrapper {
 
     pub fn destroy_image(&mut self, image: &ImageWrapper) {
         unsafe {
+            if let Some(sampler) = image.sampler {
+                self.device.destroy_sampler(sampler, None);
+            }
             self.device.destroy_image_view(image.view, None);
             self.device.destroy_image(image.image, None);
         }
@@ -279,7 +336,8 @@ impl DeviceWrapper {
                 image,
                 image_view,
                 create_info.initial_layout,
-                create_info.extent);
+                create_info.extent,
+                None);
 
             device.borrow().set_image_name(&image_wrapper, image_desc.get_name());
             DeviceResource {
@@ -314,7 +372,8 @@ impl DeviceWrapper {
             image,
             image_view,
             vk::ImageLayout::UNDEFINED,
-            extent);
+            extent,
+            None);
 
         DeviceResource {
             allocation: None,

@@ -66,10 +66,27 @@ impl ImguiRender {
                 .build(),
             "font_atlast_texture".to_string());
 
-        let font_texture = DeviceWrapper::create_image(
+        let mut font_texture = DeviceWrapper::create_image(
             device.clone(),
             &font_texture_create,
             MemoryLocation::GpuOnly);
+
+        let font_sampler = unsafe {
+            let sampler_create = vk::SamplerCreateInfo::builder()
+                .mag_filter(vk::Filter::LINEAR)
+                .min_filter(vk::Filter::LINEAR)
+                .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+                .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+                .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+                .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+                .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+                .build();
+
+            device.borrow().get().create_sampler(&sampler_create, None)
+                .expect("Failed to create font texture sampler")
+        };
+
+        font_texture.get_image_mut().sampler = Some(font_sampler);
 
         {
             let resolved_buffer = {
@@ -262,8 +279,7 @@ impl ImguiRender {
                 resource: self.font_texture.clone(),
                 binding_info: BindingInfo {
                     binding_type: BindingType::Image(ImageBindingInfo{
-                        sampler: Default::default(),
-                        layout: Default::default()
+                        layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL
                     }),
                     set: 0,
                     slot: 0,

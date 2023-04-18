@@ -24,7 +24,7 @@ use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager, Atta
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::rc::Rc;
-use ash::vk::{BufferMemoryBarrier, DeviceSize};
+use ash::vk::{BufferMemoryBarrier, DeviceSize, Sampler};
 use petgraph::adj::DefaultIx;
 use petgraph::data::DataMap;
 use petgraph::visit::{Dfs, EdgeRef, NodeCount};
@@ -68,13 +68,15 @@ fn resolve_render_targets(
 }
 
 fn get_descriptor_image_info(image: &ImageWrapper) -> (vk::DescriptorImageInfo, vk::DescriptorType) {
+    let (sampler, descriptor_type) = match image.sampler {
+        Some(s) => {(s, vk::DescriptorType::COMBINED_IMAGE_SAMPLER)}
+        None => {(vk::Sampler::null(), vk::DescriptorType::SAMPLED_IMAGE)}
+    };
     let image_info = vk::DescriptorImageInfo::builder()
         .image_view(image.view)
         .image_layout(image.layout)
-        .sampler(vk::Sampler::null()) // TODO: add this as optional to ImageWrapper
+        .sampler(sampler)
         .build();
-    // TODO: after the above, this could also be COMBINED_IMAGE_SAMPLER
-    let descriptor_type = vk::DescriptorType::SAMPLED_IMAGE;
 
     (image_info, descriptor_type)
 }
