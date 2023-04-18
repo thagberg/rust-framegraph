@@ -561,9 +561,9 @@ dependencies = [
 
 [[package]]
 name = "imgui"
-version = "0.9.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fed69cf982eee638cb1a2f1cf1d4b20626ea1813b7d37df6f7d3a2d5086c8cc"
+checksum = "122d677d0efcd64ca15f12907beaf46b26bbd2cdc855ee5b227f29cf50f75bb5"
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
@@ -574,9 +574,9 @@ dependencies = [
 
 [[package]]
 name = "imgui-sys"
-version = "0.9.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2efc4bf8f1638a573e262ce131f870226d172e986fe966a141c2c60602589b71"
+checksum = "d785272a57cb8058a53a1e6f376f48e2ec4f40fbc6a9bb197dabf7b6b59c03bf"
 dependencies = [
  "cc",
  "cfg-if 1.0.0",
@@ -1293,6 +1293,7 @@ dependencies = [
  "glob",
  "gpu-allocator",
  "image",
+ "imgui",
  "memoffset",
  "num",
  "passes",

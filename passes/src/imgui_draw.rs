@@ -3,6 +3,7 @@ use std::ffi::c_void;
 use std::rc::Rc;
 
 use ash::vk;
+use ash::vk::{DeviceSize, wl_display};
 use gpu_allocator::MemoryLocation;
 use imgui::{DrawData, DrawVert, DrawIdx};
 
@@ -13,6 +14,47 @@ use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::attachment::AttachmentReference;
 use framegraph::binding::{BindingInfo, ResourceBinding};
 use framegraph::graphics_pass_node::GraphicsPassNode;
+
+pub struct ImguiRender {
+    font_texture: Rc<RefCell<DeviceResource>>
+}
+
+impl ImguiRender {
+    pub fn new(
+        device: Rc<RefCell<DeviceWrapper>>,
+        font_texture: imgui::FontAtlasTexture) -> ImguiRender {
+
+        // let font_texture = DeviceWrapper::create_image(
+        //     device,
+        // )
+
+        let font_buffer_create = BufferCreateInfo::new(
+            vk::BufferCreateInfo::builder()
+                .size(font_texture.data.len() as DeviceSize)
+                .usage(vk::BufferUsageFlags::TRANSFER_SRC)
+                .sharing_mode(vk::SharingMode::Exclusive)
+                .build(),
+            "font_copy_buffer".to_string());
+
+        let font_buffer = DeviceWrapper::create_buffer(
+            device.clone(),
+            &font_buffer_create,
+            MemoryLocation::CpuToGpu);
+
+        device.borrow().update_buffer(&font_buffer, |mapped_memory: *mut c_void, size: u64| {
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    font_texture.data.as_ptr(),
+                    mapped_memory as *mut u8,
+                    font_texture.data.len());
+            }
+        });
+
+        ImguiRender {
+            font_texture: Rc::new(RefCell::new(())),
+        }
+    }
+}
 
 pub fn generate_passes(
     draw_data: &DrawData,
@@ -69,27 +111,6 @@ pub fn generate_passes(
             }
         });
 
-        // let vtx_binding = ResourceBinding {
-        //     resource: Rc::new(RefCell::new(())),
-        //     binding_info: BindingInfo {
-        //         binding_type: (),
-        //         set: 0,
-        //         slot: 0,
-        //         stage: Default::default(),
-        //         access: Default::default()
-        //     }
-        // };
-        // let idx_binding = ResourceBinding {
-        //     resource: Rc::new(RefCell::new(())),
-        //     binding_info: BindingInfo {
-        //         binding_type: (),
-        //         set: 0,
-        //         slot: 0,
-        //         stage: Default::default(),
-        //         access: Default::default()
-        //     }
-        // };
-
         let vtx_length = vtx_data.len() as u32;
 
         let rt_ref = AttachmentReference::new(
@@ -100,8 +121,6 @@ pub fn generate_passes(
             vk::AttachmentStoreOp::STORE);
 
         let pass_node = GraphicsPassNode::builder("imgui".to_string())
-            // .read(vtx_binding)
-            // .read(idx_binding)
             .render_target(rt_ref)
             .fill_commands(Box::new(
                 move |render_ctx: &VulkanRenderContext,

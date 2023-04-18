@@ -1,6 +1,9 @@
 mod utility;
 
+use std::ptr;
+use std::rc::Rc;
 use std::cell::RefCell;
+
 use crate::{
     utility::constants::*,
     utility::debug::*,
@@ -11,9 +14,7 @@ use ash::vk;
 use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
 use winit::event_loop::{EventLoop, ControlFlow};
 use glam::IVec2;
-
-use std::ptr;
-use std::rc::Rc;
+use imgui::Context;
 
 extern crate framegraph;
 extern crate context;
@@ -73,6 +74,8 @@ struct VulkanApp {
     render_finished_semaphores: Vec<vk::Semaphore>,
     in_flight_fences: Vec<vk::Fence>,
     current_frame: usize,
+
+    imgui: Context,
 }
 
 impl VulkanApp {
@@ -166,6 +169,15 @@ impl VulkanApp {
             }
         }
 
+        let mut imgui = Context::create();
+        imgui.set_ini_filename(None);
+        {
+            let mut imgui_io = imgui.io_mut();
+            imgui_io.display_size = [swapchain_extent.width as f32, swapchain_extent.height as f32];
+            let fonts = imgui.fonts();
+            let font_texture = fonts.build_rgba32_texture();
+        }
+
         VulkanApp {
             window,
             // debug_utils_loader,
@@ -188,6 +200,8 @@ impl VulkanApp {
             render_finished_semaphores: sync_ojbects.render_finished_semaphores,
             in_flight_fences: sync_ojbects.inflight_fences,
             current_frame: 0,
+
+            imgui
         }
     }
 
@@ -228,6 +242,11 @@ impl VulkanApp {
 
         // let surface_extent = self.render_context.get_swapchain().as_ref().unwrap().get_extent();
         {
+            let ui = self.imgui.new_frame();
+            ui.text("Testing UI");
+            let ui_draw_data = self.imgui.render();
+
+
             let swapchain_resource = self.swapchain_images[image_index as usize].clone();
             let extent = self.render_context.get_swapchain().as_ref().unwrap().get_extent();
             let blit_offsets = [glam::IVec2::new(0, 0), glam::IVec2::new(extent.width as i32, extent.height as i32)];
@@ -235,8 +254,12 @@ impl VulkanApp {
             //self.frame_graph.start(blit::generate_pass(ubo_render_target, 0, swapchain_handle, 0, blit_offsets));
             let (ubo_pass_node, ubo_render_target) = self.ubo_pass.generate_pass(self.render_context.get_device(), self.render_context.get_swapchain().as_ref().unwrap().get_extent());
             let blit_node = blit::generate_pass(ubo_render_target.clone(), 0, swapchain_resource.clone(), 0, blit_offsets);
+            let imgui_nodes = imgui_draw::generate_passes(ui_draw_data, ubo_render_target.clone(), self.render_context.get_device());
             new_frame.start(blit_node);
             new_frame.add_node(ubo_pass_node);
+            for imgui_node in imgui_nodes {
+                new_frame.add_node(imgui_node);
+            }
             self.frame_graph.end(
                 new_frame,
                 &mut self.render_context,
