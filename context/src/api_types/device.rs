@@ -245,7 +245,7 @@ impl DeviceWrapper {
         }
     }
 
-    fn set_debug_name(&self, object_type: vk::ObjectType, handle: u64, name: &str)
+    pub fn set_debug_name(&self, object_type: vk::ObjectType, handle: u64, name: &str)
     {
         let c_name = CString::new(name)
             .expect("Failed to create C-name for debug object");
