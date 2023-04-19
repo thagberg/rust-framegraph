@@ -3,7 +3,7 @@ use std::ffi::c_void;
 use std::rc::Rc;
 
 use ash::vk;
-use ash::vk::{DeviceSize, wl_display};
+use ash::vk::{DeviceSize, Handle, wl_display};
 use gpu_allocator::MemoryLocation;
 use imgui::{DrawData, DrawVert, DrawIdx};
 
@@ -82,8 +82,10 @@ impl ImguiRender {
                 .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
                 .build();
 
-            device.borrow().get().create_sampler(&sampler_create, None)
-                .expect("Failed to create font texture sampler")
+            let sampler = device.borrow().get().create_sampler(&sampler_create, None)
+                .expect("Failed to create font texture sampler");
+            device.borrow().set_debug_name(vk::ObjectType::SAMPLER, sampler.as_raw(), "font_sampler");
+            sampler
         };
 
         font_texture.get_image_mut().sampler = Some(font_sampler);
