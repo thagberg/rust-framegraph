@@ -335,8 +335,8 @@ impl ImguiRender {
                 RasterizationType::Standard,
                 DepthStencilType::Disable,
                 BlendType::None,
-                concat!(env!("OUT_DIR"), "/shaders/imgui-vert.spv"),
-                concat!(env!("OUT_DIR"), "/shaders/imgui-frag.spv"));
+                "imgui-vert.spv",
+                "imgui-frag.spv");
 
             let pass_node = GraphicsPassNode::builder("imgui".to_string())
                 .pipeline_description(pipeline_description)

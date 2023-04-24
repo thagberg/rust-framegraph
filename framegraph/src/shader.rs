@@ -1,5 +1,6 @@
 use std::fs;
 use std::collections::HashMap;
+
 use ash::vk;
 use spirv_reflect::types::descriptor::{ReflectDescriptorType};
 
@@ -137,12 +138,17 @@ impl ShaderManager
     pub fn load_shader(&mut self, render_context: &VulkanRenderContext, file_name: &str) -> ShaderModule
     {
         // TODO: can this return a &ShaderModule without a double mutable borrow error in PipelineManager::create_pipeline?
-        let val = self.shader_cache.get(file_name);
+        // let full_path = concat!(concat!(env!("OUT_DIR"), "/shaders/"), file_name);
+        let mut full_path = std::env::current_dir().expect("Couldn't get current directory");
+        full_path.push(file_name);
+        let full_name = full_path.display().to_string();
+        // let full_path = concat!(concat!(&cd, "/shaders/"), file_name);
+        let val = self.shader_cache.get(&full_name);
         match val {
             Some(sm) => {sm.clone()},
             None => {
-                let sm = create_shader_module(render_context, file_name);
-                self.shader_cache.insert(file_name.to_string(), sm.clone());
+                let sm = create_shader_module(render_context, &full_name);
+                self.shader_cache.insert(full_name, sm.clone());
                 sm
             }
         }
