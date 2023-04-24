@@ -34,11 +34,12 @@ fn compile_shaders(paths: Paths, out_dir: &str) {
 fn main() {
     // println!("cargo:rerun-if-changed=shaders");
     println!("Compiling shaders");
-    let out_dir = env::var("OUT_DIR").unwrap();
+    //let out_dir = env::var("OUT_DIR").unwrap();
+    let out_dir = std::env::current_dir().expect("Couldn't get current directory");
 
-    std::fs::create_dir_all(&format!("{}/shaders", out_dir))
+    std::fs::create_dir_all(&format!("{}/shaders", out_dir.display()))
         .expect("Failed to create shader output directory");
-    println!("Placing shaders at {}", out_dir);
+    println!("Placing shaders at {}", out_dir.display());
 
     let vert_shaders = glob("shaders/*.vert").expect("No vert shaders found");
     let frag_shaders = glob("shaders/*.frag").expect("No frag shaders found");
@@ -48,8 +49,9 @@ fn main() {
     let pass_frag_shaders = glob("../passes/shaders/*frag")
         .expect("No pass frag shaders");
 
-    compile_shaders(vert_shaders, &out_dir);
-    compile_shaders(frag_shaders, &out_dir);
-    compile_shaders(pass_vert_shaders, &out_dir);
-    compile_shaders(pass_frag_shaders, &out_dir);
+    let out_dir_str = out_dir.display().to_string();
+    compile_shaders(vert_shaders, &out_dir_str);
+    compile_shaders(frag_shaders, &out_dir_str);
+    compile_shaders(pass_vert_shaders, &out_dir_str);
+    compile_shaders(pass_frag_shaders, &out_dir_str);
 }

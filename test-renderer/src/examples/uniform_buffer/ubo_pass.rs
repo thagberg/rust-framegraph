@@ -94,8 +94,8 @@ impl UBOPass {
             RasterizationType::Standard,
             DepthStencilType::Disable,
             BlendType::None,
-            concat!(env!("OUT_DIR"), "/shaders/hello-vert.spv"),
-            concat!(env!("OUT_DIR"), "/shaders/hello-frag.spv")
+            "hello-vert.spv",
+            "hello-frag.spv"
         );
 
         // let color_attachment = create_color_attachment_transient(image_description);
