@@ -21,7 +21,7 @@ mod tests
     use context::render_context::{RenderContext, CommandBuffer};
     use context::api_types::renderpass::{RenderPassCreate, RenderPass};
     use crate::resource::resource_manager::ResourceManager;
-    use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, ResolvedResource, ResourceType, ResourceCreateInfo};
+    use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, ResolvedResource, ResourceCreateInfo};
     use crate::pass_node::PassNode;
     use crate::vulkan_frame_graph::VulkanFrameGraph;
     use crate::pipeline::PipelineManager;
