@@ -277,7 +277,7 @@ impl VulkanFrameGraph {
                     buffer_barriers: vec![]
                 };
 
-                for rt in node.get_rendertargets() {
+                for rt in node.get_rendertargets_mut() {
                     // rendertargets always write, so if this isn't the first usage of this resource
                     // then we know we need a barrier
                     let handle = rt.resource_image.borrow().get_handle();
@@ -285,9 +285,11 @@ impl VulkanFrameGraph {
                     let new_usage = ResourceUsage {
                         access: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
                         stage: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-                        layout: Some(rt.layout)
+                        // layout: Some(rt.layout)
+                        layout: Some(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
                     };
                     if let Some(usage) = last_usage {
+                        rt.layout = usage.layout.expect("Tried to get image layout from non-image");
 
                         let image_barrier = ImageBarrier {
                             resource: rt.resource_image.clone(),
@@ -295,8 +297,8 @@ impl VulkanFrameGraph {
                             dest_stage: new_usage.stage,
                             source_access: usage.access,
                             dest_access: new_usage.access,
-                            old_layout: usage.layout.expect("Tried to get image layout from non-image"),
-                            new_layout: new_usage.layout.expect("Should never hit this")
+                            old_layout: rt.layout,
+                            new_layout: new_usage.layout.unwrap()
                         };
                         node_barrier.image_barriers.push(image_barrier);
                     }
