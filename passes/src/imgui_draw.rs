@@ -17,6 +17,38 @@ use framegraph::binding::{BindingInfo, BindingType, ImageBindingInfo, ResourceBi
 use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
 
+const IMGUI_VERTEX_BINDING: vk::VertexInputBindingDescription = vk::VertexInputBindingDescription{
+    binding: 0,
+    stride: std::mem::size_of::<DrawVert>() as u32,
+    input_rate: vk::VertexInputRate::VERTEX,
+};
+
+const IMGUI_VERTEX_ATTRIBUTES: [vk::VertexInputAttributeDescription; 3] = [
+    // pos
+    vk::VertexInputAttributeDescription {
+        location: 0,
+        binding: 0,
+        format: vk::Format::R32G32_SFLOAT,
+        offset: 0,
+    },
+
+    // uv
+    vk::VertexInputAttributeDescription {
+        location: 1,
+        binding: 0,
+        format: vk::Format::R32G32_SFLOAT,
+        offset: 4 * 2,
+    },
+
+    // color
+    vk::VertexInputAttributeDescription {
+        location: 2,
+        binding: 0,
+        format: vk::Format::R8G8B8A8_SNORM,
+        offset: 4 * 4,
+    }
+];
+
 pub struct ImguiRender {
     font_texture: Rc<RefCell<DeviceResource>>
 }
@@ -291,40 +323,9 @@ impl ImguiRender {
                 }
             };
 
-            let vertex_binding = vk::VertexInputBindingDescription::builder()
-                .binding(0)
-                .input_rate(vk::VertexInputRate::VERTEX)
-                .stride(std::mem::size_of::<DrawVert>() as u32)
-                .build();
-
-            let mut attribute_offset = 0;
-
-            let pos_attribute = vk::VertexInputAttributeDescription::builder()
-                .binding(0)
-                .location(0)
-                .format(vk::Format::R32G32_SFLOAT)
-                .offset(attribute_offset)
-                .build();
-            attribute_offset += 4 * 2;
-
-            let uv_attribute = vk::VertexInputAttributeDescription::builder()
-                .binding(0)
-                .location(1)
-                .format(vk::Format::R32G32_SFLOAT)
-                .offset(attribute_offset)
-                .build();
-            attribute_offset += 4 * 2;
-
-            let color_attribute = vk::VertexInputAttributeDescription::builder()
-                .binding(0)
-                .location(2)
-                .format(vk::Format::R8G8B8A8_SNORM)
-                .build();
-            attribute_offset += 1 * 4;
-
             let vertex_input = vk::PipelineVertexInputStateCreateInfo::builder()
-                .vertex_binding_descriptions(std::slice::from_ref(&vertex_binding))
-                .vertex_attribute_descriptions(&[pos_attribute, uv_attribute, color_attribute])
+                .vertex_binding_descriptions(std::slice::from_ref(&IMGUI_VERTEX_BINDING))
+                .vertex_attribute_descriptions(&IMGUI_VERTEX_ATTRIBUTES)
                 .build();
 
             let dynamic_states = vec!(vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR);
