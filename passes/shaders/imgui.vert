@@ -7,6 +7,11 @@ out gl_PerVertex {
     vec4 gl_Position;
 };
 
+layout(set = 0, binding = 0) uniform Display {
+    vec2 scale;
+    vec2 pos;
+} display;
+
 layout(location = 0) out struct {
     vec4 Color;
     vec2 UV;
@@ -16,5 +21,5 @@ void main()
 {
     Out.Color = aColor;
     Out.UV = aUV;
-    gl_Position = vec4(aPos, 0, 1);
+    gl_Position = vec4(aPos * display.scale * display.pos, 0, 1);
 }
