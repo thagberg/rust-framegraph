@@ -25,6 +25,7 @@ use context::api_types::swapchain::SwapchainWrapper;
 use context::api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
 use context::api_types::instance::InstanceWrapper;
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
+use framegraph::frame::Frame;
 use framegraph::shader::ShaderManager;
 use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::frame_graph::FrameGraph;
@@ -57,6 +58,7 @@ struct VulkanApp {
 
     ubo_pass: UBOPass,
     frame_graph: VulkanFrameGraph,
+    frames: [Option<Box<Frame>>; MAX_FRAMES_IN_FLIGHT],
     // ubo_pass: UBOPass,
     // transient_pass: TransientInputPass,
 
@@ -187,6 +189,7 @@ impl VulkanApp {
             render_context,
             ubo_pass,
             frame_graph,
+            frames: Default::default(),
 
             swapchain_images,
             swapchain_framebuffers,
@@ -250,18 +253,19 @@ impl VulkanApp {
             let swapchain_resource = self.swapchain_images[image_index as usize].clone();
             let extent = self.render_context.get_swapchain().as_ref().unwrap().get_extent();
             let blit_offsets = [glam::IVec2::new(0, 0), glam::IVec2::new(extent.width as i32, extent.height as i32)];
-            let mut new_frame = self.frame_graph.start();
+            self.frames[self.current_frame] = Some(self.frame_graph.start());
+            let current_frame = self.frames[self.current_frame].as_mut().unwrap();
             //self.frame_graph.start(blit::generate_pass(ubo_render_target, 0, swapchain_handle, 0, blit_offsets));
             let (ubo_pass_node, ubo_render_target) = self.ubo_pass.generate_pass(self.render_context.get_device(), self.render_context.get_swapchain().as_ref().unwrap().get_extent());
             let blit_node = blit::generate_pass(ubo_render_target.clone(), 0, swapchain_resource.clone(), 0, blit_offsets);
             let imgui_nodes = self.imgui_renderer.generate_passes(ui_draw_data, ubo_render_target.clone(), self.render_context.get_device());
-            new_frame.start(blit_node);
-            new_frame.add_node(ubo_pass_node);
+            current_frame.start(blit_node);
+            current_frame.add_node(ubo_pass_node);
             for imgui_node in imgui_nodes {
-                new_frame.add_node(imgui_node);
+                current_frame.add_node(imgui_node);
             }
             self.frame_graph.end(
-                new_frame,
+                current_frame,
                 &mut self.render_context,
                 &command_buffer);
 

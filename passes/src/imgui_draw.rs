@@ -13,7 +13,7 @@ use context::api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::attachment::AttachmentReference;
-use framegraph::binding::{BindingInfo, BindingType, ImageBindingInfo, ResourceBinding};
+use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding};
 use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
 
@@ -48,6 +48,11 @@ const IMGUI_VERTEX_ATTRIBUTES: [vk::VertexInputAttributeDescription; 3] = [
         offset: 4 * 4,
     }
 ];
+
+pub struct DisplayBuffer {
+    scale: [f32; 2],
+    pos: [f32; 2]
+}
 
 pub struct ImguiRender {
     font_texture: Rc<RefCell<DeviceResource>>
@@ -240,6 +245,18 @@ impl ImguiRender {
             }
         }
 
+        // ugly way to update the font_texture layout bookkeeping after the copy completes
+        if let Some(resolved_font_texture) = font_texture.resource_type.as_mut() {
+            if let ResourceType::Image(font_texture_image) = resolved_font_texture {
+                font_texture_image.layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
+            } else {
+                panic!("Font texture somehow not an image");
+            }
+        } else {
+            panic!("Font texture somehow not valid");
+        }
+
+
         ImguiRender {
             font_texture: Rc::new(RefCell::new(font_texture)),
         }
@@ -255,6 +272,45 @@ impl ImguiRender {
         // one passnode per drawlist
         pass_nodes.reserve(draw_data.draw_lists_count());
 
+        // display data (scale and pos) is shared for all draw lists
+        let display_buffer = {
+            let display_create_info = BufferCreateInfo::new(
+                vk::BufferCreateInfo::builder()
+                    .size(std::mem::size_of::<DisplayBuffer>() as vk::DeviceSize)
+                    .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
+                    .build(),
+                "Imgui_display_buffer".to_string());
+            let display_buffer = DeviceWrapper::create_buffer(
+                device.clone(),
+                &display_create_info,
+                MemoryLocation::CpuToGpu);
+
+            device.borrow().update_buffer(&display_buffer, |mapped_memory: *mut c_void, size: u64| {
+                let mut display_scale: [f32; 2] = [0.0, 0.0];
+                display_scale[0] = 2.0 / draw_data.display_size[0];
+                display_scale[1] = 2.0 / draw_data.display_size[1];
+
+                let mut display_pos: [f32; 2] = [0.0, 0.0];
+                display_pos[0] = -1.0 - draw_data.display_pos[0] * display_scale[0];
+                display_pos[1] = -1.0 - draw_data.display_pos[1] * display_scale[1];
+
+                let display_value = DisplayBuffer {
+                    scale: display_scale,
+                    pos: display_pos
+                };
+
+                unsafe {
+                    core::ptr::copy_nonoverlapping(
+                        &display_value,
+                        mapped_memory as *mut DisplayBuffer,
+                        std::mem::size_of::<DisplayBuffer>());
+                }
+            });
+
+            Rc::new(RefCell::new(display_buffer))
+        };
+
+
         for draw_list in draw_data.draw_lists() {
             let vtx_create = BufferCreateInfo::new(vk::BufferCreateInfo::builder()
                                                        .size((draw_data.total_vtx_count as usize * std::mem::size_of::<DrawVert>()) as vk::DeviceSize)
@@ -263,12 +319,12 @@ impl ImguiRender {
                                                        .build(),
                                                    "imgui_vtx_buffer".to_string());
 
-            let vtx_buffer = DeviceWrapper::create_buffer(
+            let vtx_buffer = Rc::new(RefCell::new(DeviceWrapper::create_buffer(
                 device.clone(),
                 &vtx_create,
-                MemoryLocation::CpuToGpu);
+                MemoryLocation::CpuToGpu)));
             let vtx_data = draw_list.vtx_buffer();
-            device.borrow().update_buffer(&vtx_buffer, |mapped_memory: *mut c_void, size: u64| {
+            device.borrow().update_buffer(&vtx_buffer.borrow(), |mapped_memory: *mut c_void, size: u64| {
                 unsafe {
                     core::ptr::copy_nonoverlapping(
                         vtx_data.as_ptr(),
@@ -285,13 +341,13 @@ impl ImguiRender {
                                                        .build(),
                                                    "imgui_idx_buffer".to_string());
 
-            let idx_buffer = DeviceWrapper::create_buffer(
+            let idx_buffer = Rc::new(RefCell::new(DeviceWrapper::create_buffer(
                 device.clone(),
                 &idx_create,
-                MemoryLocation::CpuToGpu);
+                MemoryLocation::CpuToGpu)));
 
             let idx_data = draw_list.idx_buffer();
-            device.borrow().update_buffer(&idx_buffer, |mapped_memory: *mut c_void, size: u64| {
+            device.borrow().update_buffer(&idx_buffer.borrow(), |mapped_memory: *mut c_void, size: u64| {
                 unsafe {
                     core::ptr::copy_nonoverlapping(
                         idx_data.as_ptr(),
@@ -302,6 +358,7 @@ impl ImguiRender {
             });
 
             let vtx_length = vtx_data.len() as u32;
+            let idx_length = idx_data.len() as u32;
 
             let rt_ref = AttachmentReference::new(
                 render_target.clone(),
@@ -317,7 +374,7 @@ impl ImguiRender {
                         layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL
                     }),
                     set: 0,
-                    slot: 0,
+                    slot: 1,
                     stage: vk::PipelineStageFlags::FRAGMENT_SHADER,
                     access: vk::AccessFlags::SHADER_READ
                 }
@@ -339,10 +396,26 @@ impl ImguiRender {
                 "imgui-vert.spv",
                 "imgui-frag.spv");
 
+            let display_binding = ResourceBinding {
+                resource: display_buffer.clone(),
+                binding_info: BindingInfo {
+                    binding_type: BindingType::Buffer(BufferBindingInfo{
+                        offset: 0,
+                        range: std::mem::size_of::<DisplayBuffer>() as vk::DeviceSize }),
+                    set: 0,
+                    slot: 0,
+                    stage: vk::PipelineStageFlags::VERTEX_SHADER,
+                    access: vk::AccessFlags::SHADER_READ,
+                },
+            };
+
             let pass_node = GraphicsPassNode::builder("imgui".to_string())
                 .pipeline_description(pipeline_description)
                 .render_target(rt_ref)
                 .read(font_binding)
+                .read(display_binding)
+                .tag(idx_buffer.clone())
+                .tag(vtx_buffer.clone())
                 .fill_commands(Box::new(
                     move |render_ctx: &VulkanRenderContext,
                           command_buffer: &vk::CommandBuffer | {
@@ -350,13 +423,38 @@ impl ImguiRender {
 
                         unsafe {
                             // set vertex buffer
+                            {
+                                if let ResourceType::Buffer(vb) = &vtx_buffer.borrow().resource_type.as_ref().unwrap() {
+                                    render_ctx.get_device().borrow().get().cmd_bind_vertex_buffers(
+                                        *command_buffer,
+                                        0,
+                                         &[vb.buffer],
+                                        &[0 as vk::DeviceSize]
+                                    );
+                                } else {
+                                    panic!("Invalid vertex buffer for Imgui draw");
+                                }
+                            }
 
                             // set index buffer
+                            {
+                                if let ResourceType::Buffer(ib) = &idx_buffer.borrow().resource_type.as_ref().unwrap() {
+                                    render_ctx.get_device().borrow().get().cmd_bind_index_buffer(
+                                        *command_buffer,
+                                        ib.buffer,
+                                        0 as vk::DeviceSize,
+                                        vk::IndexType::UINT16
+                                    );
+                                } else {
+                                    panic!("Invalid index buffer for Imgui draw");
+                                }
+                            }
 
-                            render_ctx.get_device().borrow().get().cmd_draw(
+                            render_ctx.get_device().borrow().get().cmd_draw_indexed(
                                 *command_buffer,
-                                vtx_length,
+                                idx_length,
                                 1,
+                                0,
                                 0,
                                 0);
                         }
