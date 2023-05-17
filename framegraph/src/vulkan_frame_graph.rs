@@ -1,6 +1,6 @@
 extern crate petgraph;
 
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
 use petgraph::{graph, stable_graph, Direction, Directed};
 use petgraph::stable_graph::{Edges, NodeIndex, StableDiGraph};
 extern crate multimap;
@@ -393,60 +393,83 @@ impl VulkanFrameGraph {
                 }
 
                 for input in node.get_inputs() {
-                    //let last_usage = usage_cache.get(&input.handle);
                     let handle = input.resource.borrow().get_handle();
-                    let last_usage = {
-                        let usage = usage_cache.get(&handle);
-                        match usage {
-                            Some(found_usage) => {found_usage.clone()},
-                            _ => {
-                                ResourceUsage {
-                                    access: vk::AccessFlags::NONE,
-                                    stage: vk::PipelineStageFlags::ALL_COMMANDS,
-                                    layout: Some(vk::ImageLayout::UNDEFINED)
-                                }
+
+                    let mut resource = input.resource.borrow_mut();
+                    let resolved_resource = {
+                        match &mut resource.resource_type {
+                            None => {
+                                panic!("Invalid input binding")
+                            }
+                            Some(resource) => {
+                                resource
                             }
                         }
                     };
-                    // barrier required if:
-                    //  * last usage was a write
-                    //  * image layout has changed
-                    let prev_write = is_write(last_usage.access, last_usage.stage);
 
-                    if let BindingType::Image(image_binding) = &input.binding_info.binding_type {
-                        let new_usage = ResourceUsage{
-                            access: input.binding_info.access,
-                            stage: input.binding_info.stage,
-                            layout: Some(image_binding.layout)
-                        };
-
-                        let layout_changed = {
-                            if let Some(layout) = last_usage.layout {
-                                layout != image_binding.layout
-                            } else {
-                                true
-                            }
-                        };
-
-                        // need a barrier
-                        if layout_changed || prev_write {
-                            let image_barrier = ImageBarrier {
-                                resource: input.resource.clone(),
-                                source_stage: last_usage.stage,
-                                dest_stage: new_usage.stage,
-                                source_access: last_usage.access,
-                                dest_access: new_usage.access,
-                                old_layout: last_usage.layout.expect("Using a non-image for an image transition"),
-                                new_layout: new_usage.layout.unwrap()
-                            };
-                            node_barrier.image_barriers.push(image_barrier);
+                    match resolved_resource {
+                        ResourceType::Buffer(_) => {
+                            // Not implemented yet
                         }
+                        ResourceType::Image(resolved_image) => {
+                            let last_usage = {
+                                let usage = usage_cache.get(&handle);
+                                match usage {
+                                    Some(found_usage) => {found_usage.clone()},
+                                    _ => {
+                                        ResourceUsage {
+                                            access: vk::AccessFlags::NONE,
+                                            stage: vk::PipelineStageFlags::ALL_COMMANDS,
+                                            // layout: Some(vk::ImageLayout::UNDEFINED)
+                                            layout: Some(resolved_image.layout)
+                                        }
+                                    }
+                                }
+                            };
 
-                        usage_cache.insert(handle, new_usage);
-                        //image_binding.layout = update_usage(input.handle, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
-                    } else {
-                        //panic!("Buffer barriers not implemented");
+                            // barrier required if:
+                            //  * last usage was a write
+                            //  * image layout has changed
+                            let prev_write = is_write(last_usage.access, last_usage.stage);
+
+                            if let BindingType::Image(image_binding) = &input.binding_info.binding_type {
+                                let new_usage = ResourceUsage{
+                                    access: input.binding_info.access,
+                                    stage: input.binding_info.stage,
+                                    layout: Some(image_binding.layout)
+                                };
+
+                                let layout_changed = {
+                                    if let Some(layout) = last_usage.layout {
+                                        layout != image_binding.layout
+                                    } else {
+                                        true
+                                    }
+                                };
+
+                                // need a barrier
+                                if layout_changed || prev_write {
+                                    let image_barrier = ImageBarrier {
+                                        resource: input.resource.clone(),
+                                        source_stage: last_usage.stage,
+                                        dest_stage: new_usage.stage,
+                                        source_access: last_usage.access,
+                                        dest_access: new_usage.access,
+                                        old_layout: last_usage.layout.expect("Using a non-image for an image transition"),
+                                        new_layout: new_usage.layout.unwrap()
+                                    };
+                                    node_barrier.image_barriers.push(image_barrier);
+                                    resolved_image.layout = new_usage.layout.unwrap();
+                                }
+
+                                usage_cache.insert(handle, new_usage);
+                                //image_binding.layout = update_usage(input.handle, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+                            } else {
+                                panic!("Buffer binding used on an image reosurce?");
+                            }
+                        }
                     }
+
                 }
 
                 self.node_barriers.insert(*node_index, node_barrier);
@@ -465,13 +488,13 @@ impl FrameGraph for VulkanFrameGraph {
     type RC = VulkanRenderContext;
     type Index = NodeIndex;
 
-    fn start(&mut self) -> Frame {
-        Frame::new()
+    fn start(&mut self) -> Box<Frame> {
+        Box::new(Frame::new())
     }
 
     fn end(
         &mut self,
-        mut frame: Frame,
+        frame: &mut Frame,
         render_context: &mut Self::RC,
         command_buffer: &Self::CB) {
 
