@@ -49,5 +49,6 @@ impl ImageWrapper {
 
     pub fn get(&self) -> vk::Image { self.image }
     pub fn get_view(&self) -> vk::ImageView { self.view }
+    pub fn get_layout(&self) -> vk::ImageLayout { self.layout }
     pub fn get_sampler(&self) -> Option<vk::Sampler> { self.sampler }
 }

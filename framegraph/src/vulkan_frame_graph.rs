@@ -67,14 +67,17 @@ fn resolve_render_targets(
     rts
 }
 
-fn get_descriptor_image_info(image: &ImageWrapper) -> (vk::DescriptorImageInfo, vk::DescriptorType) {
+fn get_descriptor_image_info(
+    image: &ImageWrapper,
+    binding_info: &ImageBindingInfo) -> (vk::DescriptorImageInfo, vk::DescriptorType) {
+
     let (sampler, descriptor_type) = match image.sampler {
         Some(s) => {(s, vk::DescriptorType::COMBINED_IMAGE_SAMPLER)}
         None => {(vk::Sampler::null(), vk::DescriptorType::SAMPLED_IMAGE)}
     };
     let image_info = vk::DescriptorImageInfo::builder()
         .image_view(image.view)
-        .image_layout(image.layout)
+        .image_layout(binding_info.layout)
         .sampler(sampler)
         .build();
 
@@ -95,14 +98,29 @@ fn get_descriptor_buffer_info(
     (buffer_info, descriptor_type)
 }
 
-fn resolve_resources_and_descriptors(
-    bindings: &[ResourceBinding],
-    pipeline: &mut Pipeline,
-    image_bindings: &mut Vec<vk::DescriptorImageInfo>,
-    buffer_bindings: &mut Vec<vk::DescriptorBufferInfo>,
-    descriptor_writes: &mut Vec<vk::WriteDescriptorSet>) -> ResolvedBindingMap {
+/// Wrapper for all info required for vk::WriteDescriptorSet
+/// This ensures that the image / buffer info references held in WriteDescriptorSet
+/// will live long enough
+struct DescriptorUpdate {
+    descriptor_writes: Vec<vk::WriteDescriptorSet>,
+    image_infos: Vec<vk::DescriptorImageInfo>,
+    buffer_infos: Vec<vk::DescriptorBufferInfo>
+}
 
-    let mut resolved_map = ResolvedBindingMap::new();
+impl DescriptorUpdate {
+    pub fn new() -> Self {
+        DescriptorUpdate {
+            descriptor_writes: vec![],
+            image_infos: vec![],
+            buffer_infos: vec![]
+        }
+    }
+}
+
+fn resolve_descriptors<'a, 'b>(
+    bindings: &[ResourceBinding],
+    pipeline: &Pipeline,
+    descriptor_updates: &mut DescriptorUpdate) {
 
     for binding in bindings {
         let binding_ref = binding.resource.borrow();
@@ -116,28 +134,26 @@ fn resolve_resources_and_descriptors(
 
         match (&resolved_binding, &binding.binding_info.binding_type) {
             (ResourceType::Image(resolved_image), BindingType::Image(image_binding)) => {
-                let (image_info, descriptor_type) = get_descriptor_image_info(resolved_image);
-                image_bindings.push(image_info);
+                let (image_info, descriptor_type) = get_descriptor_image_info(resolved_image, image_binding);
+                descriptor_updates.image_infos.push(image_info);
                 descriptor_write_builder = descriptor_write_builder
                     .descriptor_type(descriptor_type)
-                    .image_info(std::slice::from_ref(image_bindings.last().unwrap()));
+                    .image_info(std::slice::from_ref(descriptor_updates.image_infos.last().unwrap()));
             },
             (ResourceType::Buffer(resolved_buffer), BindingType::Buffer(buffer_binding)) => {
                 let (buffer_info, descriptor_type) = get_descriptor_buffer_info(resolved_buffer, buffer_binding);
-                buffer_bindings.push(buffer_info);
+                descriptor_updates.buffer_infos.push(buffer_info);
                 descriptor_write_builder = descriptor_write_builder
                     .descriptor_type(descriptor_type)
-                    .buffer_info(std::slice::from_ref(buffer_bindings.last().unwrap()));
+                    .buffer_info(std::slice::from_ref(descriptor_updates.buffer_infos.last().unwrap()));
             },
             _ => {
                 panic!("Invalid type being resolved");
             }
         }
 
-        descriptor_writes.push(descriptor_write_builder.build());
+        descriptor_updates.descriptor_writes.push(descriptor_write_builder.build());
     }
-
-    resolved_map
 }
 
 pub struct NodeBarriers {
@@ -479,123 +495,8 @@ impl FrameGraph for VulkanFrameGraph {
             let inputs = node.get_inputs();
             let outputs = node.get_outputs();
             let render_targets = node.get_rendertargets();
-            let copy_sources = node.get_copy_sources();
-            let copy_dests = node.get_copy_dests();
 
-            // resolve copy sources and dests for this node
-            // let resolved_copy_sources = resolve_copy_resources(resource_manager, copy_sources);
-            // let resolved_copy_dests = resolve_copy_resources(resource_manager, copy_dests);
-
-            // prepare pipeline for execution (node's fill callback)
-            let active_pipeline = node.get_pipeline_description();
-            if let Some(pipeline_description) = active_pipeline {
-                // resolve render targets for this node
-                let resolved_render_targets = resolve_render_targets(render_targets);
-
-                // Ensure all rendertargets are the same dimensions
-                let framebuffer_extent = {
-                    let mut extent: Option<vk::Extent3D> = None;
-                    for rt in &resolved_render_targets {
-                        match extent {
-                            Some(extent) => {
-                                assert_eq!(extent, rt.extent, "All framebuffer attachments must be the same dimensions");
-                            },
-                            None => {
-                                extent = Some(rt.extent.clone());
-                            }
-                        }
-                    }
-                    extent.expect("Framebuffer required for renderpass")
-                };
-
-                let renderpass = self.renderpass_manager.create_or_fetch_renderpass(
-                    node,
-                    node.get_rendertargets(),
-                    render_context);
-
-                let mut pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass, pipeline_description);
-
-                // create framebuffer
-                // TODO: should cache framebuffer objects to avoid creating the same ones each frame
-                let framebuffer = render_context.create_framebuffer(
-                    renderpass,
-                    &framebuffer_extent,
-                    &resolved_render_targets);
-
-                // TODO: parameterize this per framebuffer attachment
-                let clear_value = vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: [0.1, 0.1, 0.1, 1.0]
-                    }
-                };
-
-                // TODO: don't need to resolve these anymore, just handle descriptor sets
-                // prepare and perform descriptor writes
-                let (resolved_inputs, resolved_outputs) = {
-                    let mut descriptor_writes: Vec<vk::WriteDescriptorSet> = Vec::new();
-                    let mut image_bindings: Vec<vk::DescriptorImageInfo> = Vec::new();
-                    let mut buffer_bindings: Vec<vk::DescriptorBufferInfo> = Vec::new();
-
-                    let resolved_inputs = resolve_resources_and_descriptors(
-                        inputs,
-                        &mut pipeline,
-                        &mut image_bindings,
-                        &mut buffer_bindings,
-                        &mut descriptor_writes);
-                    let resolved_outputs = resolve_resources_and_descriptors(
-                        outputs,
-                        &mut pipeline,
-                        &mut image_bindings,
-                        &mut buffer_bindings,
-                        &mut descriptor_writes);
-
-                    unsafe {
-                        // TODO: support descriptor copies?
-                        render_context.get_device().borrow().get().update_descriptor_sets(
-                            &descriptor_writes,
-                            &[]);
-                        // bind descriptorsets
-                        // TODO: COMPUTE SUPPORT
-                        render_context.get_device().borrow().get().cmd_bind_descriptor_sets(
-                            *command_buffer,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            pipeline.pipeline_layout,
-                            0,
-                            &pipeline.descriptor_sets,
-                            &[]);
-                    }
-
-                    (resolved_inputs, resolved_outputs)
-                };
-
-                // begin render pass and bind pipeline
-                {
-                    let render_pass_begin = vk::RenderPassBeginInfo::builder()
-                        .render_pass(renderpass)
-                        .framebuffer(framebuffer)
-                        .render_area(vk::Rect2D::builder()
-                            .offset(vk::Offset2D{x: 0, y: 0})
-                            .extent(vk::Extent2D{
-                                width: framebuffer_extent.width,
-                                height: framebuffer_extent.height})
-                            .build())
-                        .clear_values(std::slice::from_ref(&clear_value));
-
-                    unsafe {
-                        render_context.get_device().borrow().get().cmd_begin_render_pass(
-                            *command_buffer,
-                            &render_pass_begin,
-                            vk::SubpassContents::INLINE);
-
-                        // TODO: add compute support
-                        render_context.get_device().borrow().get().cmd_bind_pipeline(
-                            *command_buffer,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            pipeline.graphics_pipeline);
-                    }
-                }
-            }
-
+            // Prepare and execute resource barriers
             let barriers = self.node_barriers.get(index);
             if let Some(barriers) = barriers {
                 // Create the source and dest stage masks
@@ -667,6 +568,107 @@ impl FrameGraph for VulkanFrameGraph {
                             &[],
                             &transformed_buffer_barriers,
                             &transformed_image_barriers);
+                    }
+                }
+            }
+
+            // prepare pipeline for execution (node's fill callback)
+            let active_pipeline = node.get_pipeline_description();
+            if let Some(pipeline_description) = active_pipeline {
+                // resolve render targets for this node
+                let resolved_render_targets = resolve_render_targets(render_targets);
+
+                // Ensure all rendertargets are the same dimensions
+                let framebuffer_extent = {
+                    let mut extent: Option<vk::Extent3D> = None;
+                    for rt in &resolved_render_targets {
+                        match extent {
+                            Some(extent) => {
+                                assert_eq!(extent, rt.extent, "All framebuffer attachments must be the same dimensions");
+                            },
+                            None => {
+                                extent = Some(rt.extent.clone());
+                            }
+                        }
+                    }
+                    extent.expect("Framebuffer required for renderpass")
+                };
+
+                let renderpass = self.renderpass_manager.create_or_fetch_renderpass(
+                    node,
+                    node.get_rendertargets(),
+                    render_context);
+
+                let mut pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass, pipeline_description);
+
+                // create framebuffer
+                // TODO: should cache framebuffer objects to avoid creating the same ones each frame
+                let framebuffer = render_context.create_framebuffer(
+                    renderpass,
+                    &framebuffer_extent,
+                    &resolved_render_targets);
+
+                // TODO: parameterize this per framebuffer attachment
+                let clear_value = vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.1, 0.1, 0.1, 1.0]
+                    }
+                };
+
+                // prepare and perform descriptor writes
+                {
+                    let mut descriptor_updates = DescriptorUpdate::new();
+
+                    resolve_descriptors(
+                        inputs,
+                        &pipeline,
+                        &mut descriptor_updates);
+                    resolve_descriptors(
+                        outputs,
+                        &pipeline,
+                        &mut descriptor_updates);
+
+                    unsafe {
+                        // TODO: support descriptor copies?
+                        render_context.get_device().borrow().get().update_descriptor_sets(
+                            &descriptor_updates.descriptor_writes,
+                            &[]);
+                        // bind descriptorsets
+                        // TODO: COMPUTE SUPPORT
+                        render_context.get_device().borrow().get().cmd_bind_descriptor_sets(
+                            *command_buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            pipeline.pipeline_layout,
+                            0,
+                            &pipeline.descriptor_sets,
+                            &[]);
+                    }
+                };
+
+                // begin render pass and bind pipeline
+                {
+                    let render_pass_begin = vk::RenderPassBeginInfo::builder()
+                        .render_pass(renderpass)
+                        .framebuffer(framebuffer)
+                        .render_area(vk::Rect2D::builder()
+                            .offset(vk::Offset2D{x: 0, y: 0})
+                            .extent(vk::Extent2D{
+                                width: framebuffer_extent.width,
+                                height: framebuffer_extent.height})
+                            .build())
+                        .clear_values(std::slice::from_ref(&clear_value));
+
+                    unsafe {
+                        render_context.get_device().borrow().get().cmd_begin_render_pass(
+                            *command_buffer,
+                            &render_pass_begin,
+                            vk::SubpassContents::INLINE);
+
+                        // TODO: add compute support
+                        render_context.get_device().borrow().get().cmd_bind_pipeline(
+                            *command_buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            pipeline.graphics_pipeline);
                     }
                 }
             }
