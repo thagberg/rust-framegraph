@@ -44,7 +44,7 @@ const IMGUI_VERTEX_ATTRIBUTES: [vk::VertexInputAttributeDescription; 3] = [
     vk::VertexInputAttributeDescription {
         location: 2,
         binding: 0,
-        format: vk::Format::R8G8B8A8_SNORM,
+        format: vk::Format::R8G8B8A8_UNORM,
         offset: 4 * 4,
     }
 ];
@@ -392,7 +392,7 @@ impl ImguiRender {
                 dynamic_states,
                 RasterizationType::Standard,
                 DepthStencilType::Disable,
-                BlendType::None,
+                BlendType::Transparent,
                 "imgui-vert.spv",
                 "imgui-frag.spv");
 

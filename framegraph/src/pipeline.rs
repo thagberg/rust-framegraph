@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 use ash::vk;
+use ash::vk::BlendOp;
 use context::render_context::RenderContext;
 
 use crate::shader::ShaderManager;
@@ -179,6 +180,18 @@ fn generate_blend_attachments(blend_type: BlendType) -> [vk::PipelineColorBlendA
                 .color_write_mask(vk::ColorComponentFlags::RGBA)
                 .build()]
         },
+        BlendType::Transparent => {
+            [vk::PipelineColorBlendAttachmentState::builder()
+                .blend_enable(true)
+                .color_blend_op(vk::BlendOp::ADD)
+                .color_write_mask(vk::ColorComponentFlags::RGBA)
+                .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
+                .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+                .src_alpha_blend_factor(vk::BlendFactor::ONE)
+                .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+                .alpha_blend_op(vk::BlendOp::ADD)
+                .build()]
+        }
         _ => {
             panic!("Need to implement the rest of the blend states")
         }
@@ -207,6 +220,12 @@ fn generate_blend_state(blend_type: BlendType, attachments: &[vk::PipelineColorB
             //     blend_constants: [0.0, 0.0, 0.0, 0.0],
             // }
         },
+        BlendType::Transparent => {
+            vk::PipelineColorBlendStateCreateInfo::builder()
+                .attachments(attachments)
+                .blend_constants([1.0, 1.0, 1.0, 1.0])
+                .build()
+        }
         _ => {
             panic!("Need to implement the rest of the blend states")
         }
