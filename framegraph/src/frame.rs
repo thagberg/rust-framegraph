@@ -18,7 +18,6 @@ enum FrameState {
 pub struct Frame {
     pub nodes: StableDiGraph<GraphicsPassNode, u32>,
     root_index: Option<NodeIndex>,
-    pub create_info: HashMap<ResourceHandle, ResourceCreateInfo>,
     state: FrameState,
     pub sorted_nodes: Vec<NodeIndex>
 }
@@ -28,7 +27,6 @@ impl Frame {
         Frame {
             nodes: StableDiGraph::new(),
             root_index: None,
-            create_info: HashMap::new(),
             state: FrameState::New,
             sorted_nodes: Vec::new()
         }
@@ -67,16 +65,6 @@ impl Frame {
     pub (crate) fn take_nodes(&mut self) -> StableDiGraph<GraphicsPassNode, u32>{
         assert!(self.state == FrameState::Ended, "Frame must be ended before taking nodes");
         std::mem::replace(&mut self.nodes, StableDiGraph::new())
-    }
-
-    pub (crate) fn take_create_info(&mut self) -> HashMap<ResourceHandle, ResourceCreateInfo> {
-        assert!(self.state == FrameState::Ended, "Frame must be ended before taking create info");
-        std::mem::replace(&mut self.create_info, HashMap::new())
-    }
-
-    pub (crate) fn get_create_info(&self) -> &HashMap<ResourceHandle, ResourceCreateInfo> {
-        assert!(self.state == FrameState::Ended, "Frame must be ended before fetchinig create info");
-        &self.create_info
     }
 
     pub (crate) fn get_root_index(&self) -> NodeIndex {
