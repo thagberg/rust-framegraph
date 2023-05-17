@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use ash::vk;
+use ash::{Device, vk};
 use context::api_types::device::DeviceResource;
 use context::api_types::renderpass::VulkanRenderPass;
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
@@ -27,6 +27,7 @@ pub struct GraphicsPassNode {
     outputs: Vec<ResourceBinding>,
     copy_sources: Vec<Rc<RefCell<DeviceResource>>>,
     copy_dests: Vec<Rc<RefCell<DeviceResource>>>,
+    tagged_resources: Vec<Rc<RefCell<DeviceResource>>>,
     fill_callback: Box<FillCallback>,
     name: String
 }
@@ -39,6 +40,7 @@ pub struct PassNodeBuilder {
     outputs: Vec<ResourceBinding>,
     copy_sources: Vec<Rc<RefCell<DeviceResource>>>,
     copy_dests: Vec<Rc<RefCell<DeviceResource>>>,
+    tagged_resources: Vec<Rc<RefCell<DeviceResource>>>,
     fill_callback: Option<Box<FillCallback>>,
     name: String
 }
@@ -118,6 +120,11 @@ impl PassNodeBuilder {
         self
     }
 
+    pub fn tag(mut self, tagged_resource: Rc<RefCell<DeviceResource>>) -> Self {
+        self.tagged_resources.push(tagged_resource);
+        self
+    }
+
     pub fn read(mut self, input: ResourceBinding) -> Self {
         self.inputs.push(input);
         self
@@ -158,6 +165,7 @@ impl PassNodeBuilder {
             let outputs_len = self.outputs.len();
             let copy_sources_len = self.copy_sources.len();
             let copy_dests_len = self.copy_dests.len();
+            let tagged_resources_len = self.tagged_resources.len();
             Ok(GraphicsPassNode {
                 name: self.name,
                 pipeline_description: self.pipeline_description,
@@ -166,6 +174,7 @@ impl PassNodeBuilder {
                 outputs: self.outputs.into_iter().take(outputs_len).collect(),
                 copy_sources: self.copy_sources.into_iter().take(copy_sources_len).collect(),
                 copy_dests: self.copy_dests.into_iter().take(copy_dests_len).collect(),
+                tagged_resources: self.tagged_resources.into_iter().take(tagged_resources_len).collect(),
                 fill_callback: self.fill_callback.take().unwrap()
             })
         } else {
