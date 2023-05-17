@@ -9,11 +9,11 @@ pub trait FrameGraph
     type RC;
     type Index;
 
-    fn start(&mut self) -> Frame;
+    fn start(&mut self) -> Box<Frame>;
 
     fn end(
         &mut self,
-        frame: Frame,
+        frame: &mut Frame,
         render_context: &mut Self::RC,
         command_buffer: &Self::CB);
 }
