@@ -349,6 +349,10 @@ impl ImguiRender {
                         println!("Rendering Imgui drawlists");
 
                         unsafe {
+                            // set vertex buffer
+
+                            // set index buffer
+
                             render_ctx.get_device().borrow().get().cmd_draw(
                                 *command_buffer,
                                 vtx_length,
