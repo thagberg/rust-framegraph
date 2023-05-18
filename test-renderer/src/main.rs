@@ -11,7 +11,7 @@ use crate::{
 };
 
 use ash::vk;
-use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
+use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent, MouseButton};
 use winit::event_loop::{EventLoop, ControlFlow};
 use glam::IVec2;
 use imgui::Context;
@@ -208,7 +208,7 @@ impl VulkanApp {
         }
     }
 
-    fn draw_frame(&mut self) {
+    fn draw_frame(&mut self, mouse_pos: (f32, f32), mouse_down: bool) {
         let wait_fences = [self.in_flight_fences[self.current_frame]];
 
         unsafe
@@ -245,6 +245,11 @@ impl VulkanApp {
 
         // let surface_extent = self.render_context.get_swapchain().as_ref().unwrap().get_extent();
         {
+            {
+                let mut imgui_io = self.imgui.io_mut();
+                imgui_io.mouse_pos = [mouse_pos.0, mouse_pos.1];
+                imgui_io.mouse_down[0] = mouse_down;
+            }
             let ui = self.imgui.new_frame();
             ui.text("Testing UI");
             let ui_draw_data = self.imgui.render();
@@ -525,6 +530,9 @@ impl VulkanApp {
 
     pub fn main_loop(mut self, event_loop: EventLoop<()>) {
 
+        let mut mouse_pos: (f32, f32) = (0.0, 0.0);
+        let mut mouse_down = false;
+
         event_loop.run(move |event, _, control_flow| {
 
             match event {
@@ -545,6 +553,15 @@ impl VulkanApp {
                                 },
                             }
                         },
+                        | WindowEvent::CursorMoved { position, .. } => {
+                            mouse_pos.0 = position.x as f32;
+                            mouse_pos.1 = position.y as f32;
+                        },
+                        | WindowEvent::MouseInput {button, state, .. } => {
+                            if button == MouseButton::Left && state == ElementState::Pressed {
+                                mouse_down = true;
+                            }
+                        }
                         | _ => {},
                     }
                 },
@@ -552,7 +569,7 @@ impl VulkanApp {
                     self.window.request_redraw();
                 },
                 | Event::RedrawRequested(_window_id) => {
-                    self.draw_frame();
+                    self.draw_frame(mouse_pos, mouse_down);
                 },
                 | Event::LoopDestroyed => {
                     unsafe {
