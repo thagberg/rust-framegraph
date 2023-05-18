@@ -6,7 +6,6 @@ use std::env;
 use glob::{glob, Paths};
 
 fn compile_shaders(paths: Paths, out_dir: &str) {
-
     for entry in paths {
         println!("Found entry");
         match entry {
