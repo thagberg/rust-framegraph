@@ -21,5 +21,6 @@ void main()
 {
     Out.Color = aColor;
     Out.UV = aUV;
-    gl_Position = vec4(aPos * display.scale * display.pos, 0, 1);
+    // Should be 2.0 / displaySize - 1.0 to map to [-1,1] NDC
+    gl_Position = vec4(aPos * display.scale + display.pos, 0, 1);
 }
