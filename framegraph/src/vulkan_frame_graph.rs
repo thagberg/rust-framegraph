@@ -478,6 +478,22 @@ impl VulkanFrameGraph {
 
         //usage_cache
     }
+
+    fn finalize(
+        &mut self,
+        nodes: &StableDiGraph<GraphicsPassNode, u32>,
+        sorted_nodes: &Vec<NodeIndex>) {
+
+        for index in sorted_nodes {
+            let node = nodes.node_weight(*index).unwrap();
+
+            // generate renderpass
+
+            // generate framebuffer
+
+            // add to passnode?
+        }
+    }
 }
 
 impl FrameGraph for VulkanFrameGraph {
