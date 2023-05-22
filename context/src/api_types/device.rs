@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::ffi::{CStr, CString};
+use std::ffi::{CString};
 use core::ffi::c_void;
 use std::rc::Rc;
 use ash::vk;
@@ -7,7 +7,6 @@ use ash::extensions::ext::DebugUtils;
 use ash::vk::{DebugUtilsObjectNameInfoEXT, Handle};
 use gpu_allocator::vulkan::*;
 use gpu_allocator::MemoryLocation;
-use crate::api_types;
 
 use crate::api_types::image::{ImageWrapper, ImageCreateInfo};
 use crate::api_types::buffer::{BufferWrapper, BufferCreateInfo};
@@ -213,10 +212,8 @@ impl DeviceWrapper {
     pub fn get_queue_family_indices(&self) -> &QueueFamilies { &self.queue_family_indices }
 
     pub fn free_allocation(&mut self, allocation: Allocation) {
-        unsafe {
-            self.allocator.free(allocation)
-                .expect("Failed to free Device allocation");
-        }
+        self.allocator.free(allocation)
+            .expect("Failed to free Device allocation");
     }
 
     pub fn destroy_buffer(&mut self, buffer: &BufferWrapper) {
@@ -298,15 +295,13 @@ impl DeviceWrapper {
         location: MemoryLocation,
         linear: bool) -> Allocation {
 
-        unsafe {
-            let alloc_name = name.to_owned() + "_allocation";
-            self.allocator.allocate(&AllocationCreateDesc {
-                name: &alloc_name,
-                requirements,
-                location,
-                linear
-            }).expect("Failed to allocate memory for Device resource")
-        }
+        let alloc_name = name.to_owned() + "_allocation";
+        self.allocator.allocate(&AllocationCreateDesc {
+            name: &alloc_name,
+            requirements,
+            location,
+            linear
+        }).expect("Failed to allocate memory for Device resource")
     }
 
     pub fn generate_handle(
@@ -468,7 +463,7 @@ impl DeviceWrapper {
             }
         };
         if let Some(resolved_resource) = &device_buffer.resource_type {
-            if let ResourceType::Buffer(buffer) = &resolved_resource {
+            if let ResourceType::Buffer(_) = &resolved_resource {
                 if let Some(mapped) = allocation.mapped_ptr() {
                     // TODO: I believe this will occur if the memory is already host-visible?
                     fill_callback(mapped.as_ptr(), allocation.size());

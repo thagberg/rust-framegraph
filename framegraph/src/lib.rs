@@ -1,5 +1,3 @@
-use ash::vk;
-
 pub mod resource;
 pub mod pipeline;
 pub mod shader;

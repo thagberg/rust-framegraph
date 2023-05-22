@@ -16,7 +16,6 @@ use framegraph::attachment::AttachmentReference;
 
 use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding};
 use framegraph::frame::Frame;
-use framegraph::pass_node::ResolvedBindingMap;
 use framegraph::graphics_pass_node::{GraphicsPassNode};
 use framegraph::pipeline::{PipelineDescription, RasterizationType, DepthStencilType, BlendType, Pipeline};
 

@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use ash::vk;
 use context::api_types::device::DeviceResource;
-use crate::resource::vulkan_resource_manager::ResourceHandle;
 
 pub struct ImageBarrier {
     pub resource: Rc<RefCell<DeviceResource>>,

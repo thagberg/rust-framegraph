@@ -7,9 +7,7 @@ use context::api_types::device::{DeviceResource, ResourceType};
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
-use framegraph::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap};
 use framegraph::graphics_pass_node::GraphicsPassNode;
-use framegraph::pass_node::ResolvedBindingMap;
 
 pub fn generate_pass(
     source: Rc<RefCell<DeviceResource>>,

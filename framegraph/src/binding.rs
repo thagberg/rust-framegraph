@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use ash::vk;
 use context::api_types::device::{DeviceResource, ResourceType};
-use crate::resource::vulkan_resource_manager::{ResolvedResource, ResourceHandle};
 
 #[derive(Clone)]
 pub struct ImageBindingInfo {
@@ -34,8 +33,4 @@ pub struct BindingInfo {
 pub struct ResourceBinding {
     pub resource: Rc<RefCell<DeviceResource>>,
     pub binding_info: BindingInfo
-}
-
-pub struct ResolvedResourceBinding {
-    pub resolved_resource: ResolvedResource
 }

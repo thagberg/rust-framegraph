@@ -7,11 +7,7 @@ use context::api_types::device::DeviceResource;
 use context::render_context::{RenderContext, CommandBuffer};
 use crate::attachment::AttachmentReference;
 use crate::barrier::{BufferBarrier, ImageBarrier};
-use crate::resource::resource_manager::ResourceManager;
-use crate::resource::vulkan_resource_manager::{ResourceHandle, ResolvedResourceMap, ResolvedResource};
-use crate::binding::{ResourceBinding, ResolvedResourceBinding};
-
-pub type ResolvedBindingMap = HashMap<ResourceHandle, ResolvedResourceBinding>;
+use crate::binding::{ResourceBinding};
 
 pub trait PassNode {
     type RC;

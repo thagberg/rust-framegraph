@@ -3,7 +3,7 @@ use std::ffi::CStr;
 use std::ffi::CString;
 use std::os::raw::c_char;
 use std::rc::Rc;
-use ash::{Device, vk};
+use ash::{vk};
 use ash::vk::PresentModeKHR;
 use ash::extensions::ext::DebugUtils;
 
@@ -12,7 +12,6 @@ use crate::api_types::swapchain::SwapchainWrapper;
 use crate::api_types::image::ImageWrapper;
 use crate::api_types::surface::SurfaceWrapper;
 use crate::api_types::instance::InstanceWrapper;
-use crate::api_types::renderpass::{RenderPass, RenderPassCreate, VulkanRenderPass, VulkanRenderPassCreate};
 use crate::render_context::RenderContext;
 
 pub struct VulkanRenderContext {
@@ -20,7 +19,6 @@ pub struct VulkanRenderContext {
     present_queue: vk::Queue,
     compute_queue: vk::Queue,
     swapchain: Option<SwapchainWrapper>,
-    surface: Option<SurfaceWrapper>,
     graphics_command_pool: vk::CommandPool,
     graphics_command_buffers: Vec<vk::CommandBuffer>,
     immediate_command_buffer: vk::CommandBuffer,
@@ -534,7 +532,6 @@ impl VulkanRenderContext {
             instance: instance_wrapper,
             device: logical_device,
             physical_device,
-            surface,
             graphics_queue,
             present_queue,
             compute_queue,

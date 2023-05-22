@@ -6,7 +6,6 @@ use context::api_types::device::DeviceResource;
 use context::api_types::image::ImageCreateInfo;
 use crate::graphics_pass_node::GraphicsPassNode;
 use crate::pass_node::PassNode;
-use crate::resource::vulkan_resource_manager::{ResourceCreateInfo, ResourceHandle, VulkanResourceManager};
 
 #[derive(Eq, PartialEq)]
 enum FrameState {

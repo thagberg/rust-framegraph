@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use ash::vk;
 use crate::api_types::device::DeviceResource;
-use crate::api_types::image::ImageWrapper;
 
 pub struct SwapchainWrapper {
     loader: ash::extensions::khr::Swapchain,

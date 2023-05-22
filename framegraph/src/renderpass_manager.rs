@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use std::collections::vec_deque::VecDeque;
 use crate::pass_node::PassNode;
-use crate::resource::resource_manager::{ResourceManager};
-use crate::resource::vulkan_resource_manager::{ResourceHandle, ResourceCreateInfo, VulkanResourceManager};
 
 use context::render_context::{RenderContext, CommandBuffer};
 

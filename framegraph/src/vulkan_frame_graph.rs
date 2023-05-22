@@ -13,12 +13,9 @@ use ash::vk;
 use crate::frame::Frame;
 use crate::frame_graph::FrameGraph;
 use crate::pass_node::PassNode;
-use crate::binding::{ResourceBinding, ResolvedResourceBinding, BindingInfo, ImageBindingInfo, BufferBindingInfo, BindingType};
-use crate::pass_node::ResolvedBindingMap;
+use crate::binding::{ResourceBinding, BindingInfo, ImageBindingInfo, BufferBindingInfo, BindingType};
 use crate::graphics_pass_node::{GraphicsPassNode};
 use crate::pipeline::{Pipeline, PipelineManager, VulkanPipelineManager};
-use crate::resource::resource_manager::ResourceManager;
-use crate::resource::vulkan_resource_manager::{ResolvedResource, ResolvedResourceMap, ResourceCreateInfo, ResourceHandle, VulkanResourceManager};
 use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager, AttachmentInfo, StencilAttachmentInfo};
 
 use std::collections::HashMap;
@@ -34,20 +31,6 @@ use context::api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::attachment::AttachmentReference;
 use crate::barrier::{BufferBarrier, ImageBarrier};
-
-fn resolve_copy_resources(
-    resource_manager: &VulkanResourceManager,
-    handles: &[ResourceHandle]) -> ResolvedResourceMap {
-
-    let mut resolved_map = ResolvedResourceMap::new();
-
-    for handle in handles {
-        let resolved = resource_manager.resolve_resource(handle);
-        resolved_map.insert(*handle, resolved.clone());
-    }
-
-    resolved_map
-}
 
 fn resolve_render_targets(
     attachments: &[AttachmentReference]) -> Vec<ImageWrapper> {
