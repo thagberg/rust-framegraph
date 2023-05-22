@@ -447,7 +447,8 @@ impl PipelineManager for VulkanPipelineManager {
                 let device_pipeline = DeviceWrapper::create_pipeline(
                     render_context.get_device(),
                     &graphics_pipeline_info,
-                    pipeline_layout);
+                    pipeline_layout,
+                    descriptor_set_layouts);
                 let pipeline = Rc::new(RefCell::new(Pipeline::new(
                     device_pipeline,
                     descriptor_sets)));

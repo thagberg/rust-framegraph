@@ -534,7 +534,8 @@ impl DeviceWrapper {
     pub fn create_pipeline(
         device: Rc<RefCell<DeviceWrapper>>,
         create_info: &vk::GraphicsPipelineCreateInfo,
-        pipeline_layout: vk::PipelineLayout
+        pipeline_layout: vk::PipelineLayout,
+        descriptor_set_layouts: Vec<vk::DescriptorSetLayout>
     ) -> DevicePipeline {
         let pipeline = unsafe {
             device.borrow().get().create_graphics_pipelines(
@@ -547,11 +548,11 @@ impl DeviceWrapper {
         device.borrow().set_debug_name(vk::ObjectType::PIPELINE, pipeline.as_raw(), "Test");
         device.borrow().set_debug_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.as_raw(), "Test-Layout");
 
-        DevicePipeline {
+        DevicePipeline::new(
             pipeline,
             pipeline_layout,
-            device
-        }
+            descriptor_set_layouts,
+            device)
     }
 
     pub fn create_renderpass(
@@ -600,6 +601,7 @@ impl DeviceShader {
 pub struct DevicePipeline {
     pub pipeline: vk::Pipeline,
     pub pipeline_layout: vk::PipelineLayout,
+    pub descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
     pub device: Rc<RefCell<DeviceWrapper>>
 }
 
@@ -608,6 +610,9 @@ impl Drop for DevicePipeline {
         unsafe {
             self.device.borrow().get().destroy_pipeline_layout(self.pipeline_layout, None);
             self.device.borrow().get().destroy_pipeline(self.pipeline, None);
+            for dsl in &self.descriptor_set_layouts {
+                self.device.borrow().get().destroy_descriptor_set_layout(*dsl, None);
+            }
         }
     }
 }
@@ -616,11 +621,13 @@ impl DevicePipeline {
     pub fn new(
         pipeline: vk::Pipeline,
         pipeline_layout: vk::PipelineLayout,
+        descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
         device: Rc<RefCell<DeviceWrapper>>) -> Self {
 
         DevicePipeline {
             pipeline,
             pipeline_layout,
+            descriptor_set_layouts,
             device
         }
     }
