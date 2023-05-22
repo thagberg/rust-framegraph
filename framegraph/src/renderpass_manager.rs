@@ -1,8 +1,11 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use context::render_context::{RenderContext};
 
-use ash::vk;
+use ash::{Device, vk};
+use context::api_types::device::{DeviceRenderpass, DeviceWrapper};
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::attachment::AttachmentReference;
 
@@ -20,33 +23,25 @@ pub struct AttachmentInfo {
     pub stencil_attachment: Option<StencilAttachmentInfo>
 }
 
-pub trait RenderpassManager {
-    type RC;
-    type RP;
-
-    fn create_or_fetch_renderpass(
-        &mut self,
-        pass_name: &str,
-        color_attachments: &[AttachmentReference],
-        render_context: &Self::RC
-    ) -> Self::RP;
-}
-
 pub struct VulkanRenderpassManager {
-    renderpass_map: HashMap<String, vk::RenderPass>
+    renderpass_map: HashMap<String, Rc<RefCell<DeviceRenderpass>>>
 }
 
-impl RenderpassManager for VulkanRenderpassManager {
-    type RC = VulkanRenderContext;
-    type RP = vk::RenderPass;
+impl VulkanRenderpassManager {
 
-    fn create_or_fetch_renderpass(
+    pub fn new() -> Self {
+        VulkanRenderpassManager {
+            renderpass_map: HashMap::new()
+        }
+    }
+
+    pub fn create_or_fetch_renderpass(
         &mut self,
         pass_name: &str,
         color_attachments: &[AttachmentReference],
-        render_context: &Self::RC) -> Self::RP {
+        device: Rc<RefCell<DeviceWrapper>>) -> Rc<RefCell<DeviceRenderpass>> {
 
-        *self.renderpass_map.entry(pass_name.to_string()).or_insert_with_key(|_| {
+        let renderpass = self.renderpass_map.entry(pass_name.to_string()).or_insert_with_key(|_| {
             // no cached renderpass found, create it and cache it now
             let mut color_attachment_descs: Vec<vk::AttachmentDescription> = Vec::new();
             let mut attachment_refs: Vec<vk::AttachmentReference> = Vec::new();
@@ -88,16 +83,8 @@ impl RenderpassManager for VulkanRenderpassManager {
                 .subpasses(std::slice::from_ref(&subpass))
                 .dependencies(std::slice::from_ref(&subpass_dependency)).build();
 
-            render_context.create_renderpass(&renderpass_create_info)
-        })
+            Rc::new(RefCell::new(DeviceWrapper::create_renderpass(device, &renderpass_create_info, pass_name)))
+        }).clone();
+        renderpass
     }
-}
-
-impl VulkanRenderpassManager {
-    pub fn new() -> Self {
-        VulkanRenderpassManager {
-            renderpass_map: HashMap::new()
-        }
-    }
-
 }

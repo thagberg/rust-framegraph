@@ -14,7 +14,7 @@ use crate::pass_node::PassNode;
 use crate::binding::{ResourceBinding, ImageBindingInfo, BufferBindingInfo, BindingType};
 use crate::graphics_pass_node::{GraphicsPassNode};
 use crate::pipeline::{Pipeline, PipelineManager, VulkanPipelineManager};
-use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager};
+use crate::renderpass_manager::VulkanRenderpassManager;
 
 use std::collections::HashMap;
 use std::ops::Deref;
@@ -617,15 +617,15 @@ impl FrameGraph for VulkanFrameGraph {
                 let renderpass = self.renderpass_manager.create_or_fetch_renderpass(
                     node.get_name(),
                     &node.render_targets,
-                    render_context);
+                    render_context.get_device());
 
-                let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass, pipeline_description);
+                let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass.borrow().renderpass.clone(), pipeline_description);
 
                 // create framebuffer
                 // TODO: should cache framebuffer objects to avoid creating the same ones each frame
                 let framebuffer = {
                     let framebuffer = render_context.create_framebuffer(
-                        renderpass,
+                        renderpass.borrow().renderpass.clone(),
                         &framebuffer_extent,
                         &resolved_render_targets);
                     // Framebuffer needs to be owned by the GraphicsPassNode to ensure it's
@@ -679,7 +679,7 @@ impl FrameGraph for VulkanFrameGraph {
                 // begin render pass and bind pipeline
                 {
                     let render_pass_begin = vk::RenderPassBeginInfo::builder()
-                        .render_pass(renderpass)
+                        .render_pass(renderpass.borrow().renderpass.clone())
                         .framebuffer(framebuffer)
                         .render_area(vk::Rect2D::builder()
                             .offset(vk::Offset2D{x: 0, y: 0})

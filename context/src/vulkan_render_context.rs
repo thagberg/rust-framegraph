@@ -431,13 +431,6 @@ impl RenderContext for VulkanRenderContext {
     type Create = vk::RenderPassCreateInfo;
     type RP = vk::RenderPass;
 
-    fn create_renderpass(&self, create_info: &Self::Create) -> Self::RP {
-        unsafe {
-            self.device.borrow().get().create_render_pass(create_info, None)
-                .expect("Failed to create renderpass")
-        }
-    }
-
     fn get_device(&self) -> Rc<RefCell<DeviceWrapper>> { self.device.clone() }
 
 }

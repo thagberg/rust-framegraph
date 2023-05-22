@@ -6,8 +6,6 @@ pub trait RenderContext  {
     type Create;
     type RP;
 
-    fn create_renderpass(&self, create_info: &Self::Create) -> Self::RP;
-
     fn get_device(&self) -> Rc<RefCell<DeviceWrapper>>;
 }
 

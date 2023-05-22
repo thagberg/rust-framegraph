@@ -544,11 +544,30 @@ impl DeviceWrapper {
                 .expect("Failed to create Graphics Pipeline")
         }[0];
 
-        device.borrow().set_debug_name(Default::default(), pipeline.as_raw(), "Test");
+        device.borrow().set_debug_name(vk::ObjectType::PIPELINE, pipeline.as_raw(), "Test");
+        device.borrow().set_debug_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.as_raw(), "Test-Layout");
 
         DevicePipeline {
             pipeline,
             pipeline_layout,
+            device
+        }
+    }
+
+    pub fn create_renderpass(
+        device: Rc<RefCell<DeviceWrapper>>,
+        create_info: &vk::RenderPassCreateInfo,
+        name: &str
+    ) -> DeviceRenderpass {
+        let renderpass = unsafe {
+            device.borrow().get().create_render_pass(create_info, None)
+                .expect("Failed to create renderpass")
+        };
+
+        device.borrow().set_debug_name(vk::ObjectType::RENDER_PASS, renderpass.as_raw(), name);
+
+        DeviceRenderpass {
+            renderpass,
             device
         }
     }
@@ -602,6 +621,32 @@ impl DevicePipeline {
         DevicePipeline {
             pipeline,
             pipeline_layout,
+            device
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct DeviceRenderpass {
+    pub renderpass: vk::RenderPass,
+    pub device: Rc<RefCell<DeviceWrapper>>
+}
+
+impl Drop for DeviceRenderpass {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.borrow().get().destroy_render_pass(self.renderpass, None);
+        }
+    }
+}
+
+impl DeviceRenderpass {
+    pub fn new(
+        renderpass: vk::RenderPass,
+        device: Rc<RefCell<DeviceWrapper>>) -> Self {
+
+        DeviceRenderpass {
+            renderpass,
             device
         }
     }
