@@ -479,6 +479,9 @@ impl VulkanFrameGraph {
         //usage_cache
     }
 
+    /// The purpose of finalize is to either generate new "finalized" nodes or mutate the existing
+    /// nodes to add framebuffer and renderpass. This is to ensure that framebuffer objects are getting
+    /// deleted after a frame completes rendering
     fn finalize(
         &mut self,
         nodes: &StableDiGraph<GraphicsPassNode, u32>,
