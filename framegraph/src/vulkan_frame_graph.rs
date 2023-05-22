@@ -530,13 +530,15 @@ impl FrameGraph for VulkanFrameGraph {
         }
 
         // excute nodes
-        for index in frame.get_sorted_nodes() {
-            let node = frame.nodes.node_weight(*index).unwrap();
+        let sorted_nodes = &frame.sorted_nodes;
+        for index in sorted_nodes {
+            let node = frame.nodes.node_weight_mut(*index).unwrap();
 
             // get input and output handles for this pass
-            let inputs = node.get_inputs();
-            let outputs = node.get_outputs();
-            let render_targets = node.get_rendertargets();
+            // let inputs = node.get_inputs();
+            // let inputs = &node.inputs;
+            // let outputs = node.get_outputs();
+            // let render_targets = node.get_rendertargets();
 
             // Prepare and execute resource barriers
             let barriers = self.node_barriers.get(index);
@@ -618,7 +620,10 @@ impl FrameGraph for VulkanFrameGraph {
             let active_pipeline = node.get_pipeline_description();
             if let Some(pipeline_description) = active_pipeline {
                 // resolve render targets for this node
-                let resolved_render_targets = resolve_render_targets(render_targets);
+                let resolved_render_targets = {
+                    let render_targets = node.get_rendertargets();
+                    resolve_render_targets(render_targets)
+                };
 
                 // Ensure all rendertargets are the same dimensions
                 let framebuffer_extent = {
@@ -645,10 +650,17 @@ impl FrameGraph for VulkanFrameGraph {
 
                 // create framebuffer
                 // TODO: should cache framebuffer objects to avoid creating the same ones each frame
-                let framebuffer = render_context.create_framebuffer(
-                    renderpass,
-                    &framebuffer_extent,
-                    &resolved_render_targets);
+                let framebuffer = {
+                    let framebuffer = render_context.create_framebuffer(
+                        renderpass,
+                        &framebuffer_extent,
+                        &resolved_render_targets);
+                    // Framebuffer needs to be owned by the GraphicsPassNode to ensure it's
+                    // destroyed after this frame has rendered
+                    // node.set_framebuffer(framebuffer);
+                    GraphicsPassNode::set_framebuffer(node, framebuffer);
+                    node.get_framebuffer()
+                };
 
                 // TODO: parameterize this per framebuffer attachment
                 let clear_value = vk::ClearValue {
@@ -660,6 +672,11 @@ impl FrameGraph for VulkanFrameGraph {
                 // prepare and perform descriptor writes
                 {
                     let mut descriptor_updates = DescriptorUpdate::new();
+
+                    // get input and output handles for this pass
+                    // let inputs = node.get_inputs();
+                    let inputs = &node.inputs;
+                    let outputs = node.get_outputs();
 
                     resolve_descriptors(
                         inputs,
@@ -691,6 +708,7 @@ impl FrameGraph for VulkanFrameGraph {
                 {
                     let render_pass_begin = vk::RenderPassBeginInfo::builder()
                         .render_pass(renderpass)
+                        // .framebuffer(framebuffer)
                         .framebuffer(framebuffer)
                         .render_area(vk::Rect2D::builder()
                             .offset(vk::Offset2D{x: 0, y: 0})

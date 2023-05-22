@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 use ash::{Device, vk};
-use context::api_types::device::DeviceResource;
+use context::api_types::device::{DeviceFramebuffer, DeviceResource};
 use context::api_types::renderpass::VulkanRenderPass;
 use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
 use crate::pass_node::{PassNode, ResolvedBindingMap};
@@ -23,13 +23,25 @@ type FillCallback = dyn (
 pub struct GraphicsPassNode {
     pipeline_description: Option<PipelineDescription>,
     render_targets: Vec<AttachmentReference>,
-    inputs: Vec<ResourceBinding>,
-    outputs: Vec<ResourceBinding>,
-    copy_sources: Vec<Rc<RefCell<DeviceResource>>>,
-    copy_dests: Vec<Rc<RefCell<DeviceResource>>>,
-    tagged_resources: Vec<Rc<RefCell<DeviceResource>>>,
+    pub inputs: Vec<ResourceBinding>,
+    pub outputs: Vec<ResourceBinding>,
+    pub copy_sources: Vec<Rc<RefCell<DeviceResource>>>,
+    pub copy_dests: Vec<Rc<RefCell<DeviceResource>>>,
+    pub tagged_resources: Vec<Rc<RefCell<DeviceResource>>>,
+    framebuffer: Option<DeviceFramebuffer>,
     fill_callback: Box<FillCallback>,
     name: String
+}
+
+pub struct ExecutionNode<'a> {
+    pub pipeline_description: &'a Option<PipelineDescription>,
+    pub render_targets: &'a Vec<AttachmentReference>,
+    pub inputs: &'a Vec<ResourceBinding>,
+    pub outputs: &'a Vec<ResourceBinding>,
+    pub copy_sources: &'a Vec<Rc<RefCell<DeviceResource>>>,
+    pub copy_dests: &'a Vec<Rc<RefCell<DeviceResource>>>,
+    pub framebuffer: &'a mut Option<DeviceFramebuffer>,
+    pub fill_callback: &'a Box<FillCallback>
 }
 
 #[derive(Default)]
@@ -111,7 +123,33 @@ impl GraphicsPassNode  {
         }
     }
 
+    pub fn get_execution_view(&mut self) -> ExecutionNode {
+        ExecutionNode {
+            pipeline_description: &self.pipeline_description,
+            render_targets: &self.render_targets,
+            inputs: &self.inputs,
+            outputs: &self.outputs,
+            copy_sources: &self.copy_sources,
+            copy_dests: &self.copy_dests,
+            framebuffer: &mut self.framebuffer,
+            fill_callback: &self.fill_callback
+        }
+    }
+
     pub fn get_pipeline_description(&self) -> &Option<PipelineDescription> { &self.pipeline_description }
+
+    // pub fn set_framebuffer(&mut self, framebuffer: DeviceFramebuffer) {
+    pub fn set_framebuffer(passnode: &mut Self, framebuffer: DeviceFramebuffer) {
+        passnode.framebuffer = Some(framebuffer);
+    }
+
+    pub fn get_framebuffer(&self) -> vk::Framebuffer {
+        if let Some(fb) = &self.framebuffer {
+            fb.get_framebuffer()
+        } else {
+            panic!("No framebuffer was set on this pass");
+        }
+    }
 }
 
 impl PassNodeBuilder {
@@ -175,6 +213,7 @@ impl PassNodeBuilder {
                 copy_sources: self.copy_sources.into_iter().take(copy_sources_len).collect(),
                 copy_dests: self.copy_dests.into_iter().take(copy_dests_len).collect(),
                 tagged_resources: self.tagged_resources.into_iter().take(tagged_resources_len).collect(),
+                framebuffer: None,
                 fill_callback: self.fill_callback.take().unwrap()
             })
         } else {

@@ -148,6 +148,32 @@ impl DeviceResource {
     }
 }
 
+pub struct DeviceFramebuffer {
+    framebuffer: vk::Framebuffer,
+    device: Rc<RefCell<DeviceWrapper>>
+}
+
+impl Drop for DeviceFramebuffer {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.borrow().device.destroy_framebuffer(
+                self.framebuffer,
+                None);
+        }
+    }
+}
+
+impl DeviceFramebuffer {
+    pub fn new(framebuffer: vk::Framebuffer, device: Rc<RefCell<DeviceWrapper>>) -> Self {
+        DeviceFramebuffer {
+            framebuffer: framebuffer,
+            device: device
+        }
+    }
+
+    pub fn get_framebuffer(&self) -> vk::Framebuffer { self.framebuffer }
+}
+
 impl Drop for DeviceWrapper {
     fn drop(&mut self) {
         unsafe {

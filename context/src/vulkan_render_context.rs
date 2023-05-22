@@ -7,7 +7,7 @@ use ash::{Device, vk};
 use ash::vk::PresentModeKHR;
 use ash::extensions::ext::DebugUtils;
 
-use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper, DeviceWrapper};
+use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper, DeviceWrapper, DeviceFramebuffer};
 use crate::api_types::swapchain::SwapchainWrapper;
 use crate::api_types::image::ImageWrapper;
 use crate::api_types::surface::SurfaceWrapper;
@@ -601,7 +601,7 @@ impl VulkanRenderContext {
         &self,
         render_pass: vk::RenderPass,
         extent: &vk::Extent3D,
-        images: &[ImageWrapper]) -> vk::Framebuffer {
+        images: &[ImageWrapper]) -> DeviceFramebuffer {
 
         let image_views: Vec<vk::ImageView> = images.iter().map(|i| i.view).collect();
 
@@ -613,41 +613,11 @@ impl VulkanRenderContext {
             .layers(extent.depth);
 
         unsafe {
-            self.device.borrow().get().create_framebuffer(&create_info, None)
-                .expect("Failed to create framebuffer")
+            let framebuffer = self.device.borrow().get().create_framebuffer(&create_info, None)
+                .expect("Failed to create framebuffer");
+            DeviceFramebuffer::new(framebuffer, self.device.clone())
         }
     }
-
-    pub fn create_framebuffers(
-        &self,
-        render_pass: vk::RenderPass,
-        extent: &vk::Extent2D,
-        images: &[ImageWrapper]) -> Vec<vk::Framebuffer>
-    {
-        let mut framebuffers = vec![];
-
-        // TODO: this shouldn't need to iterate over images twice
-        let image_views: Vec<vk::ImageView> = images.iter().map(|i| i.view).collect();
-        for view in image_views.iter()
-        {
-            let create_info = vk::FramebufferCreateInfo::builder()
-                .render_pass(render_pass)
-                .attachments(std::slice::from_ref(view))
-                .width(extent.width)
-                .height(extent.height)
-                .layers(1);
-
-            let framebuffer = unsafe {
-                self.device.borrow().get().create_framebuffer(&create_info, None)
-                    .expect("Failed to create framebuffer")
-            };
-
-            framebuffers.push(framebuffer);
-        }
-
-        framebuffers
-    }
-
 }
 
 impl Drop for VulkanRenderContext {
