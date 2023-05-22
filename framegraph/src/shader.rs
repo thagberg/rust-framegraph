@@ -1,23 +1,15 @@
+use std::cell::RefCell;
 use std::fs;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use ash::vk;
+use ash::vk::ShaderModule;
 use spirv_reflect::types::descriptor::{ReflectDescriptorType};
+use context::api_types::device::{DeviceShader, DeviceWrapper};
 
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
-
-#[derive(Clone)]
-pub struct ShaderModule
-{
-    pub shader: vk::ShaderModule,
-    pub descriptor_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>>
-}
-
-pub struct ShaderManager
-{
-    shader_cache: HashMap<String, ShaderModule>
-}
 
 fn translate_descriptor_type(reflect_type: ReflectDescriptorType) -> vk::DescriptorType
 {
@@ -39,7 +31,7 @@ fn translate_descriptor_type(reflect_type: ReflectDescriptorType) -> vk::Descrip
     }
 }
 
-fn create_shader_module(render_context: &VulkanRenderContext, file_name: &str) -> ShaderModule
+fn create_shader_module(device: Rc<RefCell<DeviceWrapper>>, file_name: &str) -> Shader
 {
     let (reflection_module, shader) = {
         let bytes = fs::read(file_name)
@@ -55,10 +47,7 @@ fn create_shader_module(render_context: &VulkanRenderContext, file_name: &str) -
             p_code: bytes.as_ptr() as *const u32
         };
 
-        let shader = unsafe {
-            render_context.get_device().borrow().get().create_shader_module(&create_info, None)
-                .expect("Failed to create shader")
-        };
+        let shader = DeviceWrapper::create_shader(device, &create_info);
 
         (reflection_module, shader)
     };
@@ -87,20 +76,32 @@ fn create_shader_module(render_context: &VulkanRenderContext, file_name: &str) -
         }
     }
 
-    ShaderModule::new(shader, binding_map)
+    Shader::new(shader, binding_map)
 }
 
-impl ShaderModule
+#[derive(Clone)]
+pub struct Shader
+{
+    pub shader: DeviceShader,
+    pub descriptor_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>>
+}
+
+impl Shader
 {
     pub fn new(
-        shader: vk::ShaderModule,
-        descriptor_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>>) -> ShaderModule
+        shader: DeviceShader,
+        descriptor_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>>) -> Shader
     {
-        ShaderModule {
+        Shader {
             shader,
             descriptor_bindings
         }
     }
+}
+
+pub struct ShaderManager
+{
+    shader_cache: HashMap<String, Rc<RefCell<Shader>>>
 }
 
 impl ShaderManager
@@ -112,7 +113,7 @@ impl ShaderManager
         }
     }
 
-    pub fn load_shader(&mut self, render_context: &VulkanRenderContext, file_name: &str) -> ShaderModule
+    pub fn load_shader(&mut self, device: Rc<RefCell<DeviceWrapper>>, file_name: &str) -> Rc<RefCell<Shader>>
     {
         // TODO: can this return a &ShaderModule without a double mutable borrow error in PipelineManager::create_pipeline?
         //let full_path = concat!(concat!(env!("OUT_DIR"), "/shaders/"), file_name);
@@ -127,7 +128,7 @@ impl ShaderManager
         match val {
             Some(sm) => {sm.clone()},
             None => {
-                let sm = create_shader_module(render_context, &full_name);
+                let sm = Rc::new(RefCell::new(create_shader_module(device, &full_name)));
                 self.shader_cache.insert(full_name, sm.clone());
                 sm
             }

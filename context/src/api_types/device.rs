@@ -518,4 +518,39 @@ impl DeviceWrapper {
             panic!("Cannot update an invalid buffer");
         }
     }
+
+    pub fn create_shader(
+        device: Rc<RefCell<DeviceWrapper>>,
+        shader_create: &vk::ShaderModuleCreateInfo) -> DeviceShader {
+
+        let shader = unsafe {
+            device.borrow().get().create_shader_module(&shader_create, None)
+                .expect("Failed to create shader module")
+        };
+
+        DeviceShader::new(shader, device)
+    }
+}
+
+#[derive(Clone)]
+pub struct DeviceShader {
+    pub shader_module: vk::ShaderModule,
+    pub device: Rc<RefCell<DeviceWrapper>>
+}
+
+impl Drop for DeviceShader {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.borrow().get().destroy_shader_module(self.shader_module, None)
+        }
+    }
+}
+
+impl DeviceShader {
+    pub fn new(shader_module: vk::ShaderModule, device: Rc<RefCell<DeviceWrapper>>) -> Self {
+        DeviceShader {
+            shader_module,
+            device
+        }
+    }
 }

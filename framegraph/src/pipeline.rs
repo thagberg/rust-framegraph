@@ -291,17 +291,17 @@ impl PipelineManager for VulkanPipelineManager {
             Some(pipeline) => { pipeline.clone() },
             None => {
                 let mut vertex_shader_module = self.shader_manager.load_shader(
-                    render_context,
+                    render_context.get_device(),
                     &pipeline_description.vertex_name);
                 let mut frag_shader_module = self.shader_manager.load_shader(
-                    render_context,
+                    render_context.get_device(),
                     &pipeline_description.fragment_name);
 
                 // Need to reconcile descriptor bindings between vertex and fragment stages
                 //  i.e. - Could have duplicate bindings for descriptors used in both stages, or
                 //  bindings only used in a single stage but are part of a larger descriptor set
                 let mut full_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>> = HashMap::new();
-                for (set, bindings) in &mut vertex_shader_module.descriptor_bindings {
+                for (set, bindings) in &mut vertex_shader_module.borrow_mut().descriptor_bindings {
                     let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
                     // set_bindings.copy_from_slice(&bindings);
                     set_bindings.extend(bindings.iter());
@@ -309,7 +309,7 @@ impl PipelineManager for VulkanPipelineManager {
                         binding.stage_flags = vk::ShaderStageFlags::VERTEX;
                     }
                 }
-                for (set, bindings) in &mut frag_shader_module.descriptor_bindings {
+                for (set, bindings) in &mut frag_shader_module.borrow_mut().descriptor_bindings {
                     let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
                     for binding in bindings {
                         let duplicate = set_bindings.iter_mut().find(|x| {
@@ -392,7 +392,7 @@ impl PipelineManager for VulkanPipelineManager {
                         s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
                         p_next: std::ptr::null(),
                         flags: vk::PipelineShaderStageCreateFlags::empty(),
-                        module: vertex_shader_module.shader.clone(),
+                        module: vertex_shader_module.borrow().shader.shader_module.clone(),
                         p_name: main_name.as_ptr(),
                         p_specialization_info: std::ptr::null(),
                         stage: vk::ShaderStageFlags::VERTEX,
@@ -402,7 +402,7 @@ impl PipelineManager for VulkanPipelineManager {
                         s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
                         p_next: std::ptr::null(),
                         flags: vk::PipelineShaderStageCreateFlags::empty(),
-                        module: frag_shader_module.shader.clone(),
+                        module: frag_shader_module.borrow().shader.shader_module.clone(),
                         p_name: main_name.as_ptr(),
                         p_specialization_info: std::ptr::null(),
                         stage: vk::ShaderStageFlags::FRAGMENT,
