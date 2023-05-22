@@ -26,13 +26,12 @@ pub struct AttachmentInfo {
 }
 
 pub trait RenderpassManager {
-    type PN;
     type RC;
     type RP;
 
     fn create_or_fetch_renderpass(
         &mut self,
-        pass_node: &Self::PN,
+        pass_name: &str,
         color_attachments: &[AttachmentReference],
         render_context: &Self::RC
     ) -> Self::RP;
@@ -43,17 +42,16 @@ pub struct VulkanRenderpassManager {
 }
 
 impl RenderpassManager for VulkanRenderpassManager {
-    type PN = GraphicsPassNode;
     type RC = VulkanRenderContext;
     type RP = vk::RenderPass;
 
     fn create_or_fetch_renderpass(
         &mut self,
-        pass_node: &Self::PN,
+        pass_name: &str,
         color_attachments: &[AttachmentReference],
         render_context: &Self::RC) -> Self::RP {
 
-        *self.renderpass_map.entry(pass_node.get_name().to_string()).or_insert_with_key(|pass_name| {
+        *self.renderpass_map.entry(pass_name.to_string()).or_insert_with_key(|pass_name| {
             // no cached renderpass found, create it and cache it now
             let mut color_attachment_descs: Vec<vk::AttachmentDescription> = Vec::new();
             let mut attachment_refs: Vec<vk::AttachmentReference> = Vec::new();

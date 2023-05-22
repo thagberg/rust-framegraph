@@ -274,7 +274,7 @@ impl PipelineDescription
 
 impl PipelineManager for VulkanPipelineManager {
     type P = Pipeline;
-    type RC = <<VulkanRenderpassManager as RenderpassManager>::PN as PassNode>::RC;
+    type RC = VulkanRenderContext;
     type RP = vk::RenderPass;
     type PD = PipelineDescription;
 

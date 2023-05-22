@@ -21,27 +21,16 @@ type FillCallback = dyn (
 );
 
 pub struct GraphicsPassNode {
-    pipeline_description: Option<PipelineDescription>,
-    render_targets: Vec<AttachmentReference>,
+    pub pipeline_description: Option<PipelineDescription>,
+    pub render_targets: Vec<AttachmentReference>,
     pub inputs: Vec<ResourceBinding>,
     pub outputs: Vec<ResourceBinding>,
     pub copy_sources: Vec<Rc<RefCell<DeviceResource>>>,
     pub copy_dests: Vec<Rc<RefCell<DeviceResource>>>,
     pub tagged_resources: Vec<Rc<RefCell<DeviceResource>>>,
-    framebuffer: Option<DeviceFramebuffer>,
-    fill_callback: Box<FillCallback>,
+    pub framebuffer: Option<DeviceFramebuffer>,
+    pub fill_callback: Box<FillCallback>,
     name: String
-}
-
-pub struct ExecutionNode<'a> {
-    pub pipeline_description: &'a Option<PipelineDescription>,
-    pub render_targets: &'a Vec<AttachmentReference>,
-    pub inputs: &'a Vec<ResourceBinding>,
-    pub outputs: &'a Vec<ResourceBinding>,
-    pub copy_sources: &'a Vec<Rc<RefCell<DeviceResource>>>,
-    pub copy_dests: &'a Vec<Rc<RefCell<DeviceResource>>>,
-    pub framebuffer: &'a mut Option<DeviceFramebuffer>,
-    pub fill_callback: &'a Box<FillCallback>
 }
 
 #[derive(Default)]
@@ -120,19 +109,6 @@ impl GraphicsPassNode  {
         PassNodeBuilder {
             name,
             ..Default::default()
-        }
-    }
-
-    pub fn get_execution_view(&mut self) -> ExecutionNode {
-        ExecutionNode {
-            pipeline_description: &self.pipeline_description,
-            render_targets: &self.render_targets,
-            inputs: &self.inputs,
-            outputs: &self.outputs,
-            copy_sources: &self.copy_sources,
-            copy_dests: &self.copy_dests,
-            framebuffer: &mut self.framebuffer,
-            fill_callback: &self.fill_callback
         }
     }
 
