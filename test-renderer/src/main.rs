@@ -484,32 +484,15 @@ impl Drop for VulkanApp {
                 device.borrow().get().destroy_fence(self.in_flight_fences[i], None);
             }
 
-            // device.destroy_command_pool(self.command_pool, None);
-
             for &framebuffer in self.swapchain_framebuffers.iter() {
                 device.borrow().get().destroy_framebuffer(framebuffer, None);
             }
 
-            // device.destroy_pipeline(self.graphics_pipeline, None);
-           // device .destroy_pipeline_layout(self.pipeline_layout, None);
             device.borrow().get().destroy_render_pass(self.render_pass, None);
 
-            // for &imageview in self.swapchain_imageviews.iter() {
-            //     device.destroy_image_view(imageview, None);
-            // }
-
-            // self.swapchain_loader
-            //     .destroy_swapchain(self.swapchain, None);
-            // device.destroy_device(None);
-            // self.surface_loader.destroy_surface(self.surface, None);
-
-            // if VALIDATION.is_enable {
-            //     self.debug_utils_loader
-            //         .destroy_debug_utils_messenger(self.debug_merssager, None);
-            // }
-
-            // self.render_context.get_instance().destroy_instance(None);
-            // self.instance.destroy_instance(None);
+            device.borrow().get_debug_utils().destroy_debug_utils_messenger(
+                self.debug_merssager,
+                None);
         }
     }
 }

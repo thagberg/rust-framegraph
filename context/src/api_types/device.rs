@@ -237,6 +237,8 @@ impl DeviceWrapper {
     }
     pub fn get_queue_family_indices(&self) -> &QueueFamilies { &self.queue_family_indices }
 
+    pub fn get_debug_utils(&self) -> &DebugUtils { &self.debug_utils }
+
     pub fn free_allocation(&mut self, allocation: Allocation) {
         self.allocator.free(allocation)
             .expect("Failed to free Device allocation");
