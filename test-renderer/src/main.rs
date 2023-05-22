@@ -45,21 +45,12 @@ struct SyncObjects {
 
 struct VulkanApp {
     window: winit::window::Window,
-    // debug_utils_loader: ash::extensions::ext::DebugUtils,
     debug_merssager: vk::DebugUtilsMessengerEXT,
 
-
     ubo_pass: UBOPass,
+
     frames: [Option<Box<Frame>>; MAX_FRAMES_IN_FLIGHT],
-    // ubo_pass: UBOPass,
-    // transient_pass: TransientInputPass,
-
     swapchain_images: Vec<Rc<RefCell<DeviceResource>>>,
-    swapchain_framebuffers: Vec<vk::Framebuffer>,
-
-    render_pass: vk::RenderPass,
-    // pipeline_layout: vk::PipelineLayout,
-    // graphics_pipeline: vk::Pipeline,
 
     image_available_semaphores: Vec<vk::Semaphore>,
     render_finished_semaphores: Vec<vk::Semaphore>,
@@ -107,39 +98,6 @@ impl VulkanApp {
             (swapchain.get_extent(), swapchain.get_format())
         };
 
-        let render_pass = VulkanApp::create_render_pass(
-            render_context.get_device().borrow().get(),
-            swapchain_format);
-        // let (graphics_pipeline, pipeline_layout) = share::v1::create_graphics_pipeline(
-        //     render_context.get_device(),
-        //     render_pass,
-        //     swapchain_extent);
-        let swapchain_framebuffers = {
-            assert!(render_context.get_swapchain().is_some(), "Can't continue without swapchain");
-            let swapchain = render_context.get_swapchain().as_ref().unwrap();
-            let image_views: Vec<vk::ImageView> = swapchain.get_images().iter()
-                .map(|s| {
-                    let image = s.borrow();
-                    if let Some(resource) = &image.resource_type {
-                        match &resource {
-                            ResourceType::Image(swapchain_image) => {
-                                swapchain_image.view
-                            },
-                            _ => {
-                                panic!("Non-image resource type in swapchain")
-                            }
-                        }
-                    } else {
-                        panic!("All swapchain resources should be valid")
-                    }
-                }).collect();
-            share::v1::create_framebuffers(
-                render_context.get_device().borrow().get(),
-                render_pass,
-                &image_views,
-                swapchain_extent)
-        };
-
         let pipeline_manager = VulkanPipelineManager::new();
 
         let ubo_pass = UBOPass::new(render_context.get_device());
@@ -174,7 +132,6 @@ impl VulkanApp {
 
         VulkanApp {
             window,
-            // debug_utils_loader,
             debug_merssager,
 
             render_context,
@@ -183,9 +140,6 @@ impl VulkanApp {
             frames: Default::default(),
 
             swapchain_images,
-            swapchain_framebuffers,
-
-            render_pass,
 
             image_available_semaphores: sync_ojbects.image_available_semaphores,
             render_finished_semaphores: sync_ojbects.render_finished_semaphores,
@@ -232,7 +186,6 @@ impl VulkanApp {
                 .expect("Failed to begin recording command buffer");
         }
 
-        // let surface_extent = self.render_context.get_swapchain().as_ref().unwrap().get_extent();
         {
             {
                 let mut imgui_io = self.imgui.io_mut();
@@ -367,68 +320,6 @@ impl VulkanApp {
         self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
-    fn create_render_pass(device: &ash::Device, surface_format: vk::Format) -> vk::RenderPass {
-        let color_attachment = vk::AttachmentDescription {
-            format: surface_format,
-            flags: vk::AttachmentDescriptionFlags::empty(),
-            samples: vk::SampleCountFlags::TYPE_1,
-            load_op: vk::AttachmentLoadOp::CLEAR,
-            store_op: vk::AttachmentStoreOp::STORE,
-            stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
-            stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
-            initial_layout: vk::ImageLayout::UNDEFINED,
-            final_layout: vk::ImageLayout::PRESENT_SRC_KHR,
-        };
-
-        let color_attachment_ref = vk::AttachmentReference {
-            attachment: 0,
-            layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-        };
-
-        let subpasses = [vk::SubpassDescription {
-            color_attachment_count: 1,
-            p_color_attachments: &color_attachment_ref,
-            p_depth_stencil_attachment: ptr::null(),
-            flags: vk::SubpassDescriptionFlags::empty(),
-            pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
-            input_attachment_count: 0,
-            p_input_attachments: ptr::null(),
-            p_resolve_attachments: ptr::null(),
-            preserve_attachment_count: 0,
-            p_preserve_attachments: ptr::null(),
-        }];
-
-        let render_pass_attachments = [color_attachment];
-
-        let subpass_dependencies = [vk::SubpassDependency {
-            src_subpass: vk::SUBPASS_EXTERNAL,
-            dst_subpass: 0,
-            src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-            dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-            src_access_mask: vk::AccessFlags::empty(),
-            dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-            dependency_flags: vk::DependencyFlags::empty(),
-        }];
-
-        let renderpass_create_info = vk::RenderPassCreateInfo {
-            s_type: vk::StructureType::RENDER_PASS_CREATE_INFO,
-            flags: vk::RenderPassCreateFlags::empty(),
-            p_next: ptr::null(),
-            attachment_count: render_pass_attachments.len() as u32,
-            p_attachments: render_pass_attachments.as_ptr(),
-            subpass_count: subpasses.len() as u32,
-            p_subpasses: subpasses.as_ptr(),
-            dependency_count: subpass_dependencies.len() as u32,
-            p_dependencies: subpass_dependencies.as_ptr(),
-        };
-
-        unsafe {
-            device
-                .create_render_pass(&renderpass_create_info, None)
-                .expect("Failed to create render pass!")
-        }
-    }
-
     fn create_sync_objects(device: &ash::Device) -> SyncObjects {
         let mut sync_objects = SyncObjects {
             image_available_semaphores: vec![],
@@ -484,12 +375,6 @@ impl Drop for VulkanApp {
                 device.borrow().get().destroy_fence(self.in_flight_fences[i], None);
             }
 
-            for &framebuffer in self.swapchain_framebuffers.iter() {
-                device.borrow().get().destroy_framebuffer(framebuffer, None);
-            }
-
-            device.borrow().get().destroy_render_pass(self.render_pass, None);
-
             device.borrow().get_debug_utils().destroy_debug_utils_messenger(
                 self.debug_merssager,
                 None);
@@ -497,7 +382,6 @@ impl Drop for VulkanApp {
     }
 }
 
-// Fix content -------------------------------------------------------------------------------
 impl VulkanApp {
 
     pub fn main_loop(mut self, event_loop: EventLoop<()>) {
@@ -557,10 +441,8 @@ impl VulkanApp {
 }
 
 fn main() {
-
     let event_loop = EventLoop::new();
 
     let vulkan_app = VulkanApp::new(&event_loop);
     vulkan_app.main_loop(event_loop);
 }
-// -------------------------------------------------------------------------------------------
