@@ -530,6 +530,28 @@ impl DeviceWrapper {
 
         DeviceShader::new(shader, device)
     }
+
+    pub fn create_pipeline(
+        device: Rc<RefCell<DeviceWrapper>>,
+        create_info: &vk::GraphicsPipelineCreateInfo,
+        pipeline_layout: vk::PipelineLayout
+    ) -> DevicePipeline {
+        let pipeline = unsafe {
+            device.borrow().get().create_graphics_pipelines(
+                vk::PipelineCache::null(),
+                std::slice::from_ref(create_info),
+                None)
+                .expect("Failed to create Graphics Pipeline")
+        }[0];
+
+        device.borrow().set_debug_name(Default::default(), pipeline.as_raw(), "Test");
+
+        DevicePipeline {
+            pipeline,
+            pipeline_layout,
+            device
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -550,6 +572,36 @@ impl DeviceShader {
     pub fn new(shader_module: vk::ShaderModule, device: Rc<RefCell<DeviceWrapper>>) -> Self {
         DeviceShader {
             shader_module,
+            device
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct DevicePipeline {
+    pub pipeline: vk::Pipeline,
+    pub pipeline_layout: vk::PipelineLayout,
+    pub device: Rc<RefCell<DeviceWrapper>>
+}
+
+impl Drop for DevicePipeline {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.borrow().get().destroy_pipeline_layout(self.pipeline_layout, None);
+            self.device.borrow().get().destroy_pipeline(self.pipeline, None);
+        }
+    }
+}
+
+impl DevicePipeline {
+    pub fn new(
+        pipeline: vk::Pipeline,
+        pipeline_layout: vk::PipelineLayout,
+        device: Rc<RefCell<DeviceWrapper>>) -> Self {
+
+        DevicePipeline {
+            pipeline,
+            pipeline_layout,
             device
         }
     }

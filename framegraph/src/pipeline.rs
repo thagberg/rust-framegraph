@@ -1,8 +1,11 @@
+use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 
 use ash::vk;
+use context::api_types::device::{DevicePipeline, DeviceWrapper};
 use context::render_context::RenderContext;
 
 use crate::shader::ShaderManager;
@@ -55,9 +58,18 @@ impl Hash for PipelineDescription
 #[derive(Clone)]
 pub struct Pipeline
 {
-    pub graphics_pipeline: vk::Pipeline,
+    pub graphics_pipeline: DevicePipeline,
     pub descriptor_sets: Vec<vk::DescriptorSet>,
-    pub pipeline_layout: vk::PipelineLayout
+}
+
+impl Pipeline {
+    pub fn get_pipeline(&self) -> vk::Pipeline {
+        self.graphics_pipeline.pipeline
+    }
+
+    pub fn get_pipeline_layout(&self) -> vk::PipelineLayout {
+        self.graphics_pipeline.pipeline_layout
+    }
 }
 
 pub trait PipelineManager {
@@ -75,7 +87,7 @@ pub trait PipelineManager {
 
 pub struct VulkanPipelineManager
 {
-    pipeline_cache: HashMap<u64, Pipeline>,
+    pipeline_cache: HashMap<u64, Rc<RefCell<Pipeline>>>,
     shader_manager: ShaderManager
 }
 
@@ -232,14 +244,12 @@ fn generate_blend_state(blend_type: BlendType, attachments: &[vk::PipelineColorB
 impl Pipeline
 {
     pub fn new(
-        graphics_pipeline: vk::Pipeline,
-        descriptor_sets: Vec<vk::DescriptorSet>,
-        pipeline_layout: vk::PipelineLayout) -> Pipeline
+        graphics_pipeline: DevicePipeline,
+        descriptor_sets: Vec<vk::DescriptorSet>) -> Pipeline
     {
         Pipeline {
             graphics_pipeline,
-            descriptor_sets,
-            pipeline_layout
+            descriptor_sets
         }
     }
 }
@@ -270,7 +280,7 @@ impl PipelineDescription
 }
 
 impl PipelineManager for VulkanPipelineManager {
-    type P = Pipeline;
+    type P = Rc<RefCell<Pipeline>>;
     type RC = VulkanRenderContext;
     type RP = vk::RenderPass;
     type PD = PipelineDescription;
@@ -434,17 +444,13 @@ impl PipelineManager for VulkanPipelineManager {
                     .subpass(0); // TODO: this shouldn't be static
                 // .build();
 
-                let graphics_pipeline = unsafe {
-                    render_context.get_device().borrow().get().create_graphics_pipelines(
-                        vk::PipelineCache::null(),
-                        std::slice::from_ref(&graphics_pipeline_info),
-                        None
-                    ).expect("Failed to create Graphics Pipeline")
-                };
-                let pipeline = Pipeline::new(
-                    graphics_pipeline[0],
-                    descriptor_sets,
+                let device_pipeline = DeviceWrapper::create_pipeline(
+                    render_context.get_device(),
+                    &graphics_pipeline_info,
                     pipeline_layout);
+                let pipeline = Rc::new(RefCell::new(Pipeline::new(
+                    device_pipeline,
+                    descriptor_sets)));
                 self.pipeline_cache.insert(pipeline_key, pipeline.clone());
                 pipeline
             }

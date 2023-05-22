@@ -50,7 +50,6 @@ struct VulkanApp {
 
 
     ubo_pass: UBOPass,
-    frame_graph: VulkanFrameGraph,
     frames: [Option<Box<Frame>>; MAX_FRAMES_IN_FLIGHT],
     // ubo_pass: UBOPass,
     // transient_pass: TransientInputPass,
@@ -70,6 +69,7 @@ struct VulkanApp {
     imgui: Context,
     imgui_renderer: ImguiRender,
 
+    frame_graph: VulkanFrameGraph,
     render_context: VulkanRenderContext
 }
 

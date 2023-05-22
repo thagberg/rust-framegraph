@@ -17,6 +17,7 @@ use crate::pipeline::{Pipeline, PipelineManager, VulkanPipelineManager};
 use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager};
 
 use std::collections::HashMap;
+use std::ops::Deref;
 use ash::vk::DeviceSize;
 use petgraph::data::DataMap;
 use petgraph::visit::Dfs;
@@ -651,11 +652,11 @@ impl FrameGraph for VulkanFrameGraph {
 
                     resolve_descriptors(
                         inputs,
-                        &pipeline,
+                        pipeline.borrow().deref(),
                         &mut descriptor_updates);
                     resolve_descriptors(
                         outputs,
-                        &pipeline,
+                        pipeline.borrow().deref(),
                         &mut descriptor_updates);
 
                     unsafe {
@@ -668,9 +669,9 @@ impl FrameGraph for VulkanFrameGraph {
                         render_context.get_device().borrow().get().cmd_bind_descriptor_sets(
                             *command_buffer,
                             vk::PipelineBindPoint::GRAPHICS,
-                            pipeline.pipeline_layout,
+                            pipeline.borrow().get_pipeline_layout(),
                             0,
-                            &pipeline.descriptor_sets,
+                            &pipeline.borrow().descriptor_sets,
                             &[]);
                     }
                 };
@@ -698,7 +699,7 @@ impl FrameGraph for VulkanFrameGraph {
                         render_context.get_device().borrow().get().cmd_bind_pipeline(
                             *command_buffer,
                             vk::PipelineBindPoint::GRAPHICS,
-                            pipeline.graphics_pipeline);
+                            pipeline.borrow().get_pipeline());
                     }
                 }
             }
