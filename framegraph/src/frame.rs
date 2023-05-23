@@ -1,11 +1,5 @@
-use std::collections::HashMap;
-use ash::vk;
-use petgraph::stable_graph::{StableDiGraph, Edges, NodeIndex};
-use context::api_types::buffer::BufferCreateInfo;
-use context::api_types::device::DeviceResource;
-use context::api_types::image::ImageCreateInfo;
+use petgraph::stable_graph::{StableDiGraph, NodeIndex};
 use crate::graphics_pass_node::GraphicsPassNode;
-use crate::pass_node::PassNode;
 
 #[derive(Eq, PartialEq)]
 enum FrameState {
@@ -42,28 +36,9 @@ impl Frame {
         self.root_index = Some(self.add_node(root_node));
     }
 
-    pub (crate) fn set_sorted_nodes(&mut self, sorted_nodes: Vec<NodeIndex>) {
-        assert!(self.state == FrameState::Ended, "Frame must be ended before setting sort order");
-        self.sorted_nodes = sorted_nodes;
-    }
-
-    pub (crate) fn get_sorted_nodes(&self) -> &[NodeIndex] {
-        &self.sorted_nodes
-    }
-
     pub (crate) fn end(&mut self) {
         assert!(self.state == FrameState::Started, "Frame must be in Started state to be ended");
         self.state = FrameState::Ended;
-    }
-
-    pub (crate) fn get_nodes(&mut self) -> &mut StableDiGraph<GraphicsPassNode, u32> {
-        assert!(self.state == FrameState::Ended, "Frame must be ended before fetching nodes");
-        &mut self.nodes
-    }
-
-    pub (crate) fn take_nodes(&mut self) -> StableDiGraph<GraphicsPassNode, u32>{
-        assert!(self.state == FrameState::Ended, "Frame must be ended before taking nodes");
-        std::mem::replace(&mut self.nodes, StableDiGraph::new())
     }
 
     pub (crate) fn get_root_index(&self) -> NodeIndex {

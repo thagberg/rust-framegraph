@@ -39,25 +39,6 @@ fn translate_descriptor_type(reflect_type: ReflectDescriptorType) -> vk::Descrip
     }
 }
 
-fn convert_vec8_to_vec32(mut vec8: Vec<u8>) -> Vec<u32>
-{
-    unsafe {
-        vec8.shrink_to_fit();
-        let mut len = vec8.len();
-
-        let padding = len % 4;
-        for i in 0..padding {
-            vec8.push(0);
-        }
-
-        let ptr = vec8.as_mut_ptr() as *mut u32;
-        let cap = vec8.capacity();
-        len = vec8.len();
-
-        Vec::from_raw_parts(ptr, len / 4, cap / 4)
-    }
-}
-
 fn create_shader_module(render_context: &VulkanRenderContext, file_name: &str) -> ShaderModule
 {
     let (reflection_module, shader) = {
@@ -65,8 +46,6 @@ fn create_shader_module(render_context: &VulkanRenderContext, file_name: &str) -
             .expect(&format!("Unable to load shader at {}", file_name));
         let reflection_module = spirv_reflect::ShaderModule::load_u8_data(&bytes)
             .expect(&format!("Failed to parse shader for reflection data at {}", file_name));
-        // let bytes32 = convert_vec8_to_vec32(bytes);
-        // assert!(bytes.len() % 4 == 0);
 
         let create_info = vk::ShaderModuleCreateInfo {
             s_type: vk::StructureType::SHADER_MODULE_CREATE_INFO,
@@ -76,8 +55,6 @@ fn create_shader_module(render_context: &VulkanRenderContext, file_name: &str) -
             p_code: bytes.as_ptr() as *const u32
         };
 
-        // let create_info = vk::ShaderModuleCreateInfo::builder()
-        //     .code(&bytes32);
         let shader = unsafe {
             render_context.get_device().borrow().get().create_shader_module(&create_info, None)
                 .expect("Failed to create shader")

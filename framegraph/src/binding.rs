@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use ash::vk;
-use context::api_types::device::{DeviceResource, ResourceType};
+use context::api_types::device::{DeviceResource};
 
 #[derive(Clone)]
 pub struct ImageBindingInfo {

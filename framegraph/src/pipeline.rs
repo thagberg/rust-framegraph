@@ -3,15 +3,12 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 use ash::vk;
-use ash::vk::BlendOp;
 use context::render_context::RenderContext;
 
 use crate::shader::ShaderManager;
 
 extern crate context;
 use context::vulkan_render_context::VulkanRenderContext;
-use crate::pass_node::PassNode;
-use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager};
 
 #[derive(Copy, Clone)]
 pub enum BlendType
@@ -315,11 +312,11 @@ impl PipelineManager for VulkanPipelineManager {
                 for (set, bindings) in &mut frag_shader_module.descriptor_bindings {
                     let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
                     for binding in bindings {
-                        let mut duplicate = set_bindings.iter_mut().find(|x| {
+                        let duplicate = set_bindings.iter_mut().find(|x| {
                             x.binding == binding.binding && x.descriptor_count == binding.descriptor_count && x.descriptor_type == binding.descriptor_type
                         });
                         match duplicate {
-                            Some(mut dupe_binding) => {
+                            Some(dupe_binding) => {
                                dupe_binding.stage_flags |= vk::ShaderStageFlags::FRAGMENT;
                             },
                             None => {

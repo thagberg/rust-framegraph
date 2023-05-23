@@ -1,32 +1,27 @@
 extern crate petgraph;
 
-use std::cell::{RefCell, RefMut};
-use petgraph::{graph, stable_graph, Direction, Directed};
-use petgraph::stable_graph::{Edges, NodeIndex, StableDiGraph};
+use petgraph::stable_graph::{NodeIndex, StableDiGraph};
 extern crate multimap;
 use multimap::MultiMap;
 
 extern crate context;
-use context::render_context::{RenderContext, CommandBuffer};
+use context::render_context::{RenderContext};
 
 use ash::vk;
 use crate::frame::Frame;
 use crate::frame_graph::FrameGraph;
 use crate::pass_node::PassNode;
-use crate::binding::{ResourceBinding, BindingInfo, ImageBindingInfo, BufferBindingInfo, BindingType};
+use crate::binding::{ResourceBinding, ImageBindingInfo, BufferBindingInfo, BindingType};
 use crate::graphics_pass_node::{GraphicsPassNode};
 use crate::pipeline::{Pipeline, PipelineManager, VulkanPipelineManager};
-use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager, AttachmentInfo, StencilAttachmentInfo};
+use crate::renderpass_manager::{RenderpassManager, VulkanRenderpassManager};
 
 use std::collections::HashMap;
-use std::marker::PhantomData;
-use std::rc::Rc;
-use ash::vk::{BufferMemoryBarrier, DeviceSize, Sampler};
-use petgraph::adj::DefaultIx;
+use ash::vk::DeviceSize;
 use petgraph::data::DataMap;
-use petgraph::visit::{Dfs, EdgeRef, NodeCount};
+use petgraph::visit::Dfs;
 use context::api_types::buffer::BufferWrapper;
-use context::api_types::device::{DeviceResource, ResourceType};
+use context::api_types::device::ResourceType;
 use context::api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::attachment::AttachmentReference;
@@ -222,7 +217,7 @@ impl VulkanFrameGraph {
         // so now we can use a topological sort to generate an execution order
         let mut sorted_nodes: Vec<NodeIndex> = Vec::new();
         {
-            let mut sort_result = petgraph::algo::toposort(&*nodes, None);
+            let sort_result = petgraph::algo::toposort(&*nodes, None);
             match sort_result {
                 Ok(mut sorted_list) => {
                     // DFS requires we order nodes as input -> output, but for sorting we want output -> input
@@ -471,7 +466,7 @@ impl VulkanFrameGraph {
         sorted_nodes: &Vec<NodeIndex>) {
 
         for index in sorted_nodes {
-            let node = nodes.node_weight(*index).unwrap();
+            let _node = nodes.node_weight(*index).unwrap();
 
             // generate renderpass
 
@@ -623,7 +618,7 @@ impl FrameGraph for VulkanFrameGraph {
                     &node.render_targets,
                     render_context);
 
-                let mut pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass, pipeline_description);
+                let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass, pipeline_description);
 
                 // create framebuffer
                 // TODO: should cache framebuffer objects to avoid creating the same ones each frame

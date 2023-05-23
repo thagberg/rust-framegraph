@@ -1,12 +1,10 @@
 use core::ffi::c_void;
-use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use ash::vk;
 use gpu_allocator::MemoryLocation;
 
-use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
 use context::api_types::image::ImageCreateInfo;
 use context::api_types::buffer::BufferCreateInfo;
 use context::api_types::device::{DeviceResource, DeviceWrapper};
@@ -14,10 +12,9 @@ use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::attachment::AttachmentReference;
 
-use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding};
-use framegraph::frame::Frame;
+use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ResourceBinding};
 use framegraph::graphics_pass_node::{GraphicsPassNode};
-use framegraph::pipeline::{PipelineDescription, RasterizationType, DepthStencilType, BlendType, Pipeline};
+use framegraph::pipeline::{PipelineDescription, RasterizationType, DepthStencilType, BlendType};
 
 pub struct OffsetUBO {
     pub offset: [f32; 3]
@@ -56,7 +53,7 @@ impl UBOPass {
         };
 
         // TODO: pretty sure count should actually just be 1 here
-        device.borrow().update_buffer(&uniform_buffer, |mapped_memory: *mut c_void, size: u64| {
+        device.borrow().update_buffer(&uniform_buffer, |mapped_memory: *mut c_void, _size: u64| {
             unsafe {
                 core::ptr::copy_nonoverlapping(
                     &ubo_value,

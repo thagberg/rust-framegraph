@@ -4,7 +4,6 @@ use ash::vk;
 use glam::IVec2;
 use context::api_types::device::{DeviceResource, ResourceType};
 
-use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::graphics_pass_node::GraphicsPassNode;

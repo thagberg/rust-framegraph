@@ -1,13 +1,10 @@
 use std::collections::HashMap;
-use std::collections::vec_deque::VecDeque;
-use crate::pass_node::PassNode;
 
-use context::render_context::{RenderContext, CommandBuffer};
+use context::render_context::{RenderContext};
 
 use ash::vk;
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::attachment::AttachmentReference;
-use crate::graphics_pass_node::GraphicsPassNode;
 
 pub struct StencilAttachmentInfo {
     pub stencil_load_op: vk::AttachmentLoadOp,
@@ -49,7 +46,7 @@ impl RenderpassManager for VulkanRenderpassManager {
         color_attachments: &[AttachmentReference],
         render_context: &Self::RC) -> Self::RP {
 
-        *self.renderpass_map.entry(pass_name.to_string()).or_insert_with_key(|pass_name| {
+        *self.renderpass_map.entry(pass_name.to_string()).or_insert_with_key(|_| {
             // no cached renderpass found, create it and cache it now
             let mut color_attachment_descs: Vec<vk::AttachmentDescription> = Vec::new();
             let mut attachment_refs: Vec<vk::AttachmentReference> = Vec::new();
@@ -68,6 +65,7 @@ impl RenderpassManager for VulkanRenderpassManager {
                     .attachment(attachment_index)
                     .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
                     .build());
+                attachment_index += 1;
             }
 
             let subpass = vk::SubpassDescription::builder()

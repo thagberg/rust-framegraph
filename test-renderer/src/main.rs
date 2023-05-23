@@ -13,7 +13,6 @@ use crate::{
 use ash::vk;
 use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent, MouseButton};
 use winit::event_loop::{EventLoop, ControlFlow};
-use glam::IVec2;
 use imgui::Context;
 
 extern crate framegraph;
@@ -21,13 +20,8 @@ extern crate context;
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use context::api_types::surface::SurfaceWrapper;
-use context::api_types::swapchain::SwapchainWrapper;
-use context::api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
-use context::api_types::instance::InstanceWrapper;
-use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
+use context::api_types::device::{DeviceResource, ResourceType};
 use framegraph::frame::Frame;
-use framegraph::shader::ShaderManager;
-use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::frame_graph::FrameGraph;
 use framegraph::vulkan_frame_graph::VulkanFrameGraph;
 use framegraph::renderpass_manager::VulkanRenderpassManager;
@@ -69,8 +63,6 @@ struct VulkanApp {
     // pipeline_layout: vk::PipelineLayout,
     // graphics_pipeline: vk::Pipeline,
 
-    shader_manager: ShaderManager,
-
     image_available_semaphores: Vec<vk::Semaphore>,
     render_finished_semaphores: Vec<vk::Semaphore>,
     in_flight_fences: Vec<vk::Fence>,
@@ -101,7 +93,7 @@ impl VulkanApp {
             &window
         );
 
-        let mut render_context = VulkanRenderContext::new(
+        let render_context = VulkanRenderContext::new(
             entry,
             instance,
             debug_utils_loader,
@@ -153,8 +145,6 @@ impl VulkanApp {
 
         let frame_graph = VulkanFrameGraph::new(VulkanRenderpassManager::new(), pipeline_manager);
 
-        let shader_manager = ShaderManager::new();
-
         let sync_ojbects = VulkanApp::create_sync_objects(
             render_context.get_device().borrow().get());
 
@@ -162,7 +152,7 @@ impl VulkanApp {
 
         let mut swapchain_images: Vec<Rc<RefCell<DeviceResource>>> = Vec::new();
         if let Some(swapchain) = render_context.get_swapchain().as_ref() {
-            for (index, image) in swapchain.get_images().into_iter().enumerate() {
+            for (_index, image) in swapchain.get_images().into_iter().enumerate() {
                 swapchain_images.push(image.clone());
             }
         }
@@ -195,8 +185,6 @@ impl VulkanApp {
             swapchain_framebuffers,
 
             render_pass,
-
-            shader_manager,
 
             image_available_semaphores: sync_ojbects.image_available_semaphores,
             render_finished_semaphores: sync_ojbects.render_finished_semaphores,

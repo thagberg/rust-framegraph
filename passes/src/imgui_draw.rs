@@ -3,7 +3,7 @@ use std::ffi::c_void;
 use std::rc::Rc;
 
 use ash::vk;
-use ash::vk::{DeviceSize, Handle, wl_display};
+use ash::vk::{DeviceSize, Handle};
 use gpu_allocator::MemoryLocation;
 use imgui::{DrawData, DrawVert, DrawIdx};
 
@@ -77,7 +77,7 @@ impl ImguiRender {
             &font_buffer_create,
             MemoryLocation::CpuToGpu);
 
-        device.borrow().update_buffer(&font_buffer, |mapped_memory: *mut c_void, size: u64| {
+        device.borrow().update_buffer(&font_buffer, |mapped_memory: *mut c_void, _size: u64| {
             unsafe {
                 core::ptr::copy_nonoverlapping(
                     font_atlas.data.as_ptr(),
@@ -285,7 +285,7 @@ impl ImguiRender {
                 &display_create_info,
                 MemoryLocation::CpuToGpu);
 
-            device.borrow().update_buffer(&display_buffer, |mapped_memory: *mut c_void, size: u64| {
+            device.borrow().update_buffer(&display_buffer, |mapped_memory: *mut c_void, _size: u64| {
                 let mut display_scale: [f32; 2] = [0.0, 0.0];
                 display_scale[0] = 2.0 / draw_data.display_size[0];
                 display_scale[1] = 2.0 / draw_data.display_size[1];
@@ -324,7 +324,7 @@ impl ImguiRender {
                 &vtx_create,
                 MemoryLocation::CpuToGpu)));
             let vtx_data = draw_list.vtx_buffer();
-            device.borrow().update_buffer(&vtx_buffer.borrow(), |mapped_memory: *mut c_void, size: u64| {
+            device.borrow().update_buffer(&vtx_buffer.borrow(), |mapped_memory: *mut c_void, _size: u64| {
                 unsafe {
                     core::ptr::copy_nonoverlapping(
                         vtx_data.as_ptr(),
@@ -347,7 +347,7 @@ impl ImguiRender {
                 MemoryLocation::CpuToGpu)));
 
             let idx_data = draw_list.idx_buffer();
-            device.borrow().update_buffer(&idx_buffer.borrow(), |mapped_memory: *mut c_void, size: u64| {
+            device.borrow().update_buffer(&idx_buffer.borrow(), |mapped_memory: *mut c_void, _size: u64| {
                 unsafe {
                     core::ptr::copy_nonoverlapping(
                         idx_data.as_ptr(),
@@ -357,7 +357,6 @@ impl ImguiRender {
                 }
             });
 
-            let vtx_length = vtx_data.len() as u32;
             let idx_length = idx_data.len() as u32;
 
             let rt_ref = AttachmentReference::new(

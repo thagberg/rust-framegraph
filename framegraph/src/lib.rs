@@ -1,4 +1,3 @@
-pub mod resource;
 pub mod pipeline;
 pub mod shader;
 pub mod pass_node;

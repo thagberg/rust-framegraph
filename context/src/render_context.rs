@@ -11,6 +11,6 @@ pub trait RenderContext  {
     fn get_device(&self) -> Rc<RefCell<DeviceWrapper>>;
 }
 
-pub trait CommandBuffer {
-
-}
+// pub trait CommandBuffer {
+//
+// }

@@ -1,12 +1,10 @@
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use ash::{Device, vk};
+use ash::vk;
 use context::api_types::device::{DeviceFramebuffer, DeviceResource};
-use context::api_types::vulkan_command_buffer::VulkanCommandBuffer;
 use crate::pass_node::{PassNode};
 use crate::binding::{ResourceBinding};
-use context::render_context::{RenderContext, CommandBuffer};
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::attachment::AttachmentReference;
 use crate::pipeline::{PipelineDescription};
@@ -46,7 +44,6 @@ pub struct PassNodeBuilder {
 
 impl PassNode for GraphicsPassNode  {
     type RC = VulkanRenderContext;
-    // type CB = VulkanCommandBuffer;
     type CB = vk::CommandBuffer;
     type PD = PipelineDescription;
 

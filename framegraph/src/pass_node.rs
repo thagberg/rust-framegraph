@@ -1,12 +1,7 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
-use std::fmt::Debug;
 use std::rc::Rc;
-use ash::vk;
 use context::api_types::device::DeviceResource;
-use context::render_context::{RenderContext, CommandBuffer};
 use crate::attachment::AttachmentReference;
-use crate::barrier::{BufferBarrier, ImageBarrier};
 use crate::binding::{ResourceBinding};
 
 pub trait PassNode {
