@@ -48,7 +48,6 @@ struct VulkanApp {
     // debug_utils_loader: ash::extensions::ext::DebugUtils,
     debug_merssager: vk::DebugUtilsMessengerEXT,
 
-    render_context: VulkanRenderContext,
 
     ubo_pass: UBOPass,
     frame_graph: VulkanFrameGraph,
@@ -69,7 +68,9 @@ struct VulkanApp {
     current_frame: usize,
 
     imgui: Context,
-    imgui_renderer: ImguiRender
+    imgui_renderer: ImguiRender,
+
+    render_context: VulkanRenderContext
 }
 
 impl VulkanApp {

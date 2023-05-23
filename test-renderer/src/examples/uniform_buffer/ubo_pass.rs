@@ -26,7 +26,7 @@ pub struct UBOPass {
 
 impl Drop for UBOPass {
     fn drop(&mut self) {
-
+        println!("Dropping UBOPass");
     }
 }
 

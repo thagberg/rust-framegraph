@@ -14,22 +14,6 @@ use crate::api_types::surface::SurfaceWrapper;
 use crate::api_types::instance::InstanceWrapper;
 use crate::render_context::RenderContext;
 
-pub struct VulkanRenderContext {
-    graphics_queue: vk::Queue,
-    present_queue: vk::Queue,
-    compute_queue: vk::Queue,
-    surface: Option<SurfaceWrapper>,
-    swapchain: Option<SwapchainWrapper>,
-    graphics_command_pool: vk::CommandPool,
-    graphics_command_buffers: Vec<vk::CommandBuffer>,
-    immediate_command_buffer: vk::CommandBuffer,
-    descriptor_pool: vk::DescriptorPool,
-    device: Rc<RefCell<DeviceWrapper>>,
-    physical_device: PhysicalDeviceWrapper,
-    instance: InstanceWrapper,
-    entry: ash::Entry
-}
-
 fn get_queue_family_indices(
     instance: &InstanceWrapper,
     physical_device: vk::PhysicalDevice,
@@ -401,7 +385,8 @@ fn create_swapchain(
                         width: swapchain_extent.width,
                         height: swapchain_extent.height,
                         depth: 1
-                    })))
+                    },
+                    true)))
             })
             .collect()
     };
@@ -412,6 +397,34 @@ fn create_swapchain(
         swapchain_images,
         swapchain_format.format,
         swapchain_extent)
+}
+
+pub struct VulkanRenderContext {
+    graphics_queue: vk::Queue,
+    present_queue: vk::Queue,
+    compute_queue: vk::Queue,
+    graphics_command_pool: vk::CommandPool,
+    graphics_command_buffers: Vec<vk::CommandBuffer>,
+    immediate_command_buffer: vk::CommandBuffer,
+    descriptor_pool: vk::DescriptorPool,
+    swapchain: Option<SwapchainWrapper>,
+    device: Rc<RefCell<DeviceWrapper>>,
+    physical_device: PhysicalDeviceWrapper,
+    surface: Option<SurfaceWrapper>,
+    instance: InstanceWrapper,
+    entry: ash::Entry
+}
+
+impl Drop for VulkanRenderContext {
+    fn drop(&mut self) {
+        unsafe {
+            let device = self.device.borrow();
+            device.get().destroy_descriptor_pool(self.descriptor_pool, None);
+            device.get().free_command_buffers(self.graphics_command_pool, &[self.immediate_command_buffer]);
+            device.get().free_command_buffers(self.graphics_command_pool, &self.graphics_command_buffers);
+            device.get().destroy_command_pool(self.graphics_command_pool, None);
+        }
+    }
 }
 
 impl RenderContext for VulkanRenderContext {
@@ -615,20 +628,6 @@ impl VulkanRenderContext {
             let framebuffer = self.device.borrow().get().create_framebuffer(&create_info, None)
                 .expect("Failed to create framebuffer");
             DeviceFramebuffer::new(framebuffer, self.device.clone())
-        }
-    }
-}
-
-impl Drop for VulkanRenderContext {
-    fn drop(&mut self) {
-        unsafe {
-            self.device.borrow().get().destroy_command_pool(self.graphics_command_pool, None);
-
-            // if self.swapchain_image_views.is_some() {
-            //     for &imageview in self.swapchain_image_views.as_ref().unwrap().iter() {
-            //         self.device.get().destroy_image_view(imageview, None);
-            //     }
-            // }
         }
     }
 }

@@ -28,7 +28,8 @@ pub struct ImageWrapper {
     pub view: vk::ImageView,
     pub layout: vk::ImageLayout,
     pub extent: vk::Extent3D,
-    pub sampler: Option<vk::Sampler>
+    pub sampler: Option<vk::Sampler>,
+    pub is_swapchain_image: bool
 }
 
 impl ImageWrapper {
@@ -37,13 +38,15 @@ impl ImageWrapper {
         view: vk::ImageView,
         layout: vk::ImageLayout,
         extent: vk::Extent3D,
+        is_swapchain_image: bool,
         sampler: Option<vk::Sampler>) -> ImageWrapper {
         ImageWrapper {
             image,
             view,
             layout,
             extent,
-            sampler
+            sampler,
+            is_swapchain_image
         }
     }
 

@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::ffi::{CString};
 use core::ffi::c_void;
 use std::rc::Rc;
-use ash::vk;
+use ash::{Device, vk};
 use ash::extensions::ext::DebugUtils;
 use ash::vk::{DebugUtilsObjectNameInfoEXT, Handle};
 use gpu_allocator::vulkan::*;
@@ -39,13 +39,48 @@ impl PhysicalDeviceWrapper {
     pub fn get(&self) -> vk::PhysicalDevice { self.physical_device }
 }
 
+/// DeviceLifetime exists to ensure DeviceWrapper can destroy its Allocator before
+/// ash::Device::destroy_device gets called
+pub struct DeviceLifetime {
+    device: ash::Device
+}
+
+impl Drop for DeviceLifetime {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.destroy_device(None);
+        }
+    }
+}
+
+impl DeviceLifetime {
+    pub fn new(device: ash::Device) -> Self {
+        DeviceLifetime {
+            device
+        }
+    }
+
+    pub fn get(&self) -> &ash::Device {
+        &self.device
+    }
+}
+
 pub struct DeviceWrapper {
-    device: ash::Device,
+    handle_generator: u64,
     debug_utils: DebugUtils,
     queue_family_indices: QueueFamilies,
     allocator: Allocator,
-    handle_generator: u64
+    device: DeviceLifetime,
 }
+
+impl Drop for DeviceWrapper {
+    fn drop(&mut self) {
+        unsafe {
+            self.allocator.report_memory_leaks(log::Level::Warn);
+        }
+    }
+}
+
 
 #[derive(Clone)]
 pub enum ResourceType {
@@ -155,7 +190,7 @@ pub struct DeviceFramebuffer {
 impl Drop for DeviceFramebuffer {
     fn drop(&mut self) {
         unsafe {
-            self.device.borrow().device.destroy_framebuffer(
+            self.device.borrow().get().destroy_framebuffer(
                 self.framebuffer,
                 None);
         }
@@ -171,15 +206,6 @@ impl DeviceFramebuffer {
     }
 
     pub fn get_framebuffer(&self) -> vk::Framebuffer { self.framebuffer }
-}
-
-impl Drop for DeviceWrapper {
-    fn drop(&mut self) {
-        unsafe {
-            self.allocator.report_memory_leaks(log::Level::Warn);
-            self.device.destroy_device(None);
-        }
-    }
 }
 
 impl DeviceWrapper {
@@ -199,7 +225,7 @@ impl DeviceWrapper {
         }).expect("Failed to create GPU memory allocator");
 
         DeviceWrapper {
-            device,
+            device: DeviceLifetime::new(device),
             debug_utils,
             queue_family_indices,
             allocator,
@@ -207,7 +233,7 @@ impl DeviceWrapper {
         }
     }
     pub fn get(&self) -> &ash::Device {
-        &self.device
+        self.device.get()
     }
     pub fn get_queue_family_indices(&self) -> &QueueFamilies { &self.queue_family_indices }
 
@@ -218,17 +244,20 @@ impl DeviceWrapper {
 
     pub fn destroy_buffer(&mut self, buffer: &BufferWrapper) {
         unsafe {
-            self.device.destroy_buffer(buffer.buffer, None);
+            self.device.get().destroy_buffer(buffer.buffer, None);
         }
     }
 
     pub fn destroy_image(&mut self, image: &ImageWrapper) {
         unsafe {
             if let Some(sampler) = image.sampler {
-                self.device.destroy_sampler(sampler, None);
+                self.device.get().destroy_sampler(sampler, None);
             }
-            self.device.destroy_image_view(image.view, None);
-            self.device.destroy_image(image.image, None);
+            self.device.get().destroy_image_view(image.view, None);
+            // We're not responsible for cleaning up the swapchain images
+            if !image.is_swapchain_image {
+                self.device.get().destroy_image(image.image, None);
+            }
         }
     }
 
@@ -263,7 +292,7 @@ impl DeviceWrapper {
         };
 
         unsafe {
-            self.device.create_image_view(&create_info, None)
+            self.device.get().create_image_view(&create_info, None)
                 .expect("Failed to create image view.")
         }
     }
@@ -278,7 +307,7 @@ impl DeviceWrapper {
             .object_name(&c_name)
             .build();
         unsafe {
-            self.debug_utils.debug_utils_set_object_name(self.device.handle(), &debug_info)
+            self.debug_utils.debug_utils_set_object_name(self.device.get().handle(), &debug_info)
                 .expect("Failed to set debug object name");
         }
     }
@@ -358,6 +387,7 @@ impl DeviceWrapper {
                 image_view,
                 create_info.initial_layout,
                 create_info.extent,
+                false, // Swapchain images only go through wrap_image
                 None);
 
             device.borrow().set_image_name(&image_wrapper, image_desc.get_name());
@@ -378,7 +408,8 @@ impl DeviceWrapper {
         format: vk::Format,
         image_aspect_flags: vk::ImageAspectFlags,
         mip_levels: u32,
-        extent: vk::Extent3D
+        extent: vk::Extent3D,
+        is_swapchain_image: bool
     ) -> DeviceResource {
         let new_handle = device.borrow_mut().generate_handle();
 
@@ -394,6 +425,7 @@ impl DeviceWrapper {
             image_view,
             vk::ImageLayout::UNDEFINED,
             extent,
+            is_swapchain_image,
             None);
 
         DeviceResource {
@@ -469,14 +501,14 @@ impl DeviceWrapper {
                     fill_callback(mapped.as_ptr(), allocation.size());
                 } else {
                     unsafe {
-                        let mapped_memory = self.device.map_memory(
+                        let mapped_memory = self.device.get().map_memory(
                             allocation.memory(),
                             allocation.offset(),
                             allocation.size(),
                             vk::MemoryMapFlags::empty())
                             .expect("Failed to map buffer");
                         fill_callback(mapped_memory, allocation.size());
-                        self.device.unmap_memory(allocation.memory());
+                        self.device.get().unmap_memory(allocation.memory());
                     }
                 }
             } else {

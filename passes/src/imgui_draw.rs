@@ -58,6 +58,12 @@ pub struct ImguiRender {
     font_texture: Rc<RefCell<DeviceResource>>
 }
 
+impl Drop for ImguiRender {
+    fn drop(&mut self) {
+        println!("Dropping ImguiRender");
+    }
+}
+
 impl ImguiRender {
     pub fn new(
         device: Rc<RefCell<DeviceWrapper>>,
