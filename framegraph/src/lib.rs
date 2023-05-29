@@ -12,6 +12,7 @@ pub mod barrier;
 pub mod command_list;
 pub mod pass_type;
 pub mod copy_pass_node;
+pub mod compute_pass_node;
 
 #[cfg(test)]
 mod tests

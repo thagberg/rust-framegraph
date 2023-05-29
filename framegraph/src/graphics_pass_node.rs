@@ -37,34 +37,6 @@ impl PassNode for GraphicsPassNode  {
         &self.name
     }
 
-   // fn get_inputs(&self) -> &[ResourceBinding] {
-   //      &self.inputs
-   //  }
-   //
-   //  fn get_inputs_mut(&mut self) -> &mut [ResourceBinding] {
-   //      &mut self.inputs
-   //  }
-   //
-   // fn get_outputs(&self) -> &[ResourceBinding] {
-   //      &self.outputs
-   //  }
-   //
-   //  fn get_outputs_mut(&mut self) -> &mut [ResourceBinding] {
-   //      &mut self.outputs
-   //  }
-
-   // fn get_rendertargets(&self) -> &[AttachmentReference] { &self.render_targets }
-   //
-   //  fn get_rendertargets_mut(&mut self) -> &mut [AttachmentReference] { &mut self.render_targets }
-   //
-   //  fn get_copy_sources(&self) -> &[Rc<RefCell<DeviceResource>>] { &self.copy_sources }
-   //
-   //  fn get_copy_dests(&self) -> &[Rc<RefCell<DeviceResource>>] { &self.copy_dests }
-
-    // fn get_pipeline_description(&self) -> &Option<PipelineDescription> {
-    //     &self.pipeline_description
-    // }
-
     fn get_reads(&self) -> Vec<u64> {
         let mut reads: Vec<u64> = Vec::new();
         reads.reserve(self.inputs.len() + self.render_targets.len());
