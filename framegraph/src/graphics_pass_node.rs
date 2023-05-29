@@ -3,26 +3,17 @@ use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 use ash::vk;
 use context::api_types::device::{DeviceFramebuffer, DeviceResource};
-use crate::pass_node::{PassNode};
+use crate::pass_node::{PassNode, FillCallback};
 use crate::binding::{ResourceBinding};
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::attachment::AttachmentReference;
 use crate::pipeline::{PipelineDescription};
-
-type FillCallback = dyn (
-    Fn(
-        &VulkanRenderContext,
-        &vk::CommandBuffer
-    )
-);
 
 pub struct GraphicsPassNode {
     pub pipeline_description: Option<PipelineDescription>,
     pub render_targets: Vec<AttachmentReference>,
     pub inputs: Vec<ResourceBinding>,
     pub outputs: Vec<ResourceBinding>,
-    pub copy_sources: Vec<Rc<RefCell<DeviceResource>>>,
-    pub copy_dests: Vec<Rc<RefCell<DeviceResource>>>,
     pub tagged_resources: Vec<Rc<RefCell<DeviceResource>>>,
     pub framebuffer: Option<DeviceFramebuffer>,
     pub fill_callback: Box<FillCallback>,
@@ -35,8 +26,6 @@ pub struct PassNodeBuilder {
     render_targets: Vec<AttachmentReference>,
     inputs: Vec<ResourceBinding>,
     outputs: Vec<ResourceBinding>,
-    copy_sources: Vec<Rc<RefCell<DeviceResource>>>,
-    copy_dests: Vec<Rc<RefCell<DeviceResource>>>,
     tagged_resources: Vec<Rc<RefCell<DeviceResource>>>,
     fill_callback: Option<Box<FillCallback>>,
     name: String
@@ -48,21 +37,21 @@ impl PassNode for GraphicsPassNode  {
         &self.name
     }
 
-   fn get_inputs(&self) -> &[ResourceBinding] {
-        &self.inputs
-    }
-
-    fn get_inputs_mut(&mut self) -> &mut [ResourceBinding] {
-        &mut self.inputs
-    }
-
-   fn get_outputs(&self) -> &[ResourceBinding] {
-        &self.outputs
-    }
-
-    fn get_outputs_mut(&mut self) -> &mut [ResourceBinding] {
-        &mut self.outputs
-    }
+   // fn get_inputs(&self) -> &[ResourceBinding] {
+   //      &self.inputs
+   //  }
+   //
+   //  fn get_inputs_mut(&mut self) -> &mut [ResourceBinding] {
+   //      &mut self.inputs
+   //  }
+   //
+   // fn get_outputs(&self) -> &[ResourceBinding] {
+   //      &self.outputs
+   //  }
+   //
+   //  fn get_outputs_mut(&mut self) -> &mut [ResourceBinding] {
+   //      &mut self.outputs
+   //  }
 
    // fn get_rendertargets(&self) -> &[AttachmentReference] { &self.render_targets }
    //
@@ -72,9 +61,9 @@ impl PassNode for GraphicsPassNode  {
    //
    //  fn get_copy_dests(&self) -> &[Rc<RefCell<DeviceResource>>] { &self.copy_dests }
 
-    fn get_pipeline_description(&self) -> &Option<PipelineDescription> {
-        &self.pipeline_description
-    }
+    // fn get_pipeline_description(&self) -> &Option<PipelineDescription> {
+    //     &self.pipeline_description
+    // }
 
     fn get_reads(&self) -> Vec<u64> {
         let mut reads: Vec<u64> = Vec::new();
@@ -140,6 +129,22 @@ impl GraphicsPassNode  {
             panic!("No framebuffer was set on this pass");
         }
     }
+
+    pub fn get_inputs(&self) -> &[ResourceBinding] {
+        &self.inputs
+    }
+
+    pub fn get_inputs_mut(&mut self) -> &mut [ResourceBinding] {
+        &mut self.inputs
+    }
+
+    pub fn get_outputs(&self) -> &[ResourceBinding] {
+        &self.outputs
+    }
+
+    pub fn get_outputs_mut(&mut self) -> &mut [ResourceBinding] {
+        &mut self.outputs
+    }
 }
 
 impl PassNodeBuilder {
@@ -168,16 +173,6 @@ impl PassNodeBuilder {
         self
     }
 
-    pub fn copy_src(mut self, copy_src: Rc<RefCell<DeviceResource>>) -> Self {
-        self.copy_sources.push(copy_src);
-        self
-    }
-
-    pub fn copy_dst(mut self, copy_dst: Rc<RefCell<DeviceResource>>) -> Self {
-        self.copy_dests.push(copy_dst);
-        self
-    }
-
     pub fn fill_commands(mut self, fill_callback: Box<FillCallback>) -> Self
     {
         self.fill_callback = Some(fill_callback);
@@ -191,8 +186,6 @@ impl PassNodeBuilder {
             let rt_len = self.render_targets.len();
             let inputs_len = self.inputs.len();
             let outputs_len = self.outputs.len();
-            let copy_sources_len = self.copy_sources.len();
-            let copy_dests_len = self.copy_dests.len();
             let tagged_resources_len = self.tagged_resources.len();
             Ok(GraphicsPassNode {
                 name: self.name,
@@ -200,8 +193,6 @@ impl PassNodeBuilder {
                 render_targets: self.render_targets.into_iter().take(rt_len).collect(),
                 inputs: self.inputs.into_iter().take(inputs_len).collect(),
                 outputs: self.outputs.into_iter().take(outputs_len).collect(),
-                copy_sources: self.copy_sources.into_iter().take(copy_sources_len).collect(),
-                copy_dests: self.copy_dests.into_iter().take(copy_dests_len).collect(),
                 tagged_resources: self.tagged_resources.into_iter().take(tagged_resources_len).collect(),
                 framebuffer: None,
                 fill_callback: self.fill_callback.take().unwrap()

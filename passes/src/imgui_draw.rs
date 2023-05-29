@@ -15,6 +15,7 @@ use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::attachment::AttachmentReference;
 use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding};
 use framegraph::graphics_pass_node::GraphicsPassNode;
+use framegraph::pass_type::PassType;
 use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
 
 const IMGUI_VERTEX_BINDING: vk::VertexInputBindingDescription = vk::VertexInputBindingDescription{
@@ -272,9 +273,9 @@ impl ImguiRender {
         &self,
         draw_data: &DrawData,
         render_target: Rc<RefCell<DeviceResource>>,
-        device: Rc<RefCell<DeviceWrapper>>) -> Vec<GraphicsPassNode> {
+        device: Rc<RefCell<DeviceWrapper>>) -> Vec<PassType> {
 
-        let mut pass_nodes: Vec<GraphicsPassNode> = Vec::new();
+        let mut pass_nodes: Vec<PassType> = Vec::new();
         // one passnode per drawlist
         pass_nodes.reserve(draw_data.draw_lists_count());
 
@@ -468,7 +469,7 @@ impl ImguiRender {
                 .build()
                 .expect("Failed to create imgui passnode");
 
-            pass_nodes.push(pass_node);
+            pass_nodes.push(PassType::Graphics(pass_node));
         }
 
         pass_nodes
