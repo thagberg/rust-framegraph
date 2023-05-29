@@ -14,6 +14,7 @@ use framegraph::attachment::AttachmentReference;
 
 use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ResourceBinding};
 use framegraph::graphics_pass_node::{GraphicsPassNode};
+use framegraph::pass_type::PassType;
 use framegraph::pipeline::{PipelineDescription, RasterizationType, DepthStencilType, BlendType};
 
 pub struct OffsetUBO {
@@ -70,7 +71,7 @@ impl UBOPass {
     pub fn generate_pass(
         &self,
         device: Rc<RefCell<DeviceWrapper>>,
-        rendertarget_extent: vk::Extent2D) -> (GraphicsPassNode, Rc<RefCell<DeviceResource>>) {
+        rendertarget_extent: vk::Extent2D) -> (PassType, Rc<RefCell<DeviceResource>>) {
 
         let vertex_input_state_create_info = vk::PipelineVertexInputStateCreateInfo {
             s_type: vk::StructureType::PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -180,6 +181,6 @@ impl UBOPass {
             .build()
             .expect("Failed to create PassNode");
 
-        return (passnode, render_target.clone());
+        return (PassType::Graphics(passnode), render_target.clone());
     }
 }

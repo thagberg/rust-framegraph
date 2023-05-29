@@ -6,16 +6,17 @@ use context::api_types::device::{DeviceResource, ResourceType};
 
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
-use framegraph::graphics_pass_node::GraphicsPassNode;
+use framegraph::copy_pass_node::CopyPassNode;
+use framegraph::pass_type::PassType;
 
 pub fn generate_pass(
     source: Rc<RefCell<DeviceResource>>,
     source_layer: u32,
     dest: Rc<RefCell<DeviceResource>>,
     dest_layer: u32,
-    offsets: [IVec2; 2]) -> GraphicsPassNode {
+    offsets: [IVec2; 2]) -> PassType {
 
-    GraphicsPassNode::builder("blit".to_string())
+    let pass_node = CopyPassNode::builder("blit".to_string())
         .copy_src(source.clone())
         .copy_dst(dest.clone())
         .fill_commands(Box::new(
@@ -80,5 +81,7 @@ pub fn generate_pass(
                 }
         }))
         .build()
-        .expect("Failed to create Blit passnode")
+        .expect("Failed to create Blit passnode");
+
+        PassType::Copy(pass_node)
 }
