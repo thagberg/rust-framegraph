@@ -145,6 +145,10 @@ impl GraphicsPassNode  {
     pub fn get_outputs_mut(&mut self) -> &mut [ResourceBinding] {
         &mut self.outputs
     }
+
+    pub fn get_rendertargets_mut(&mut self) -> &mut [AttachmentReference] {
+        &mut self.render_targets
+    }
 }
 
 impl PassNodeBuilder {

@@ -28,6 +28,7 @@ use context::vulkan_render_context::VulkanRenderContext;
 use crate::attachment::AttachmentReference;
 use crate::barrier::{BufferBarrier, ImageBarrier};
 use crate::command_list::CommandList;
+use crate::copy_pass_node::CopyPassNode;
 use crate::pass_type::PassType;
 
 fn resolve_render_targets(
@@ -275,184 +276,191 @@ impl VulkanFrameGraph {
                     buffer_barriers: vec![]
                 };
 
-                // for input in node.get_inputs() {
-                //     let handle = input.resource.borrow().get_handle();
-                //
-                //     let mut resource = input.resource.borrow_mut();
-                //     let resolved_resource = {
-                //         match &mut resource.resource_type {
-                //             None => {
-                //                 panic!("Invalid input binding")
-                //             }
-                //             Some(resource) => {
-                //                 resource
-                //             }
-                //         }
-                //     };
-                //
-                //     match resolved_resource {
-                //         ResourceType::Buffer(_) => {
-                //             // Not implemented yet
-                //         }
-                //         ResourceType::Image(resolved_image) => {
-                //             let last_usage = {
-                //                 let usage = usage_cache.get(&handle);
-                //                 match usage {
-                //                     Some(found_usage) => {found_usage.clone()},
-                //                     _ => {
-                //                         ResourceUsage {
-                //                             access: vk::AccessFlags::NONE,
-                //                             stage: vk::PipelineStageFlags::ALL_COMMANDS,
-                //                             // layout: Some(vk::ImageLayout::UNDEFINED)
-                //                             layout: Some(resolved_image.layout)
-                //                         }
-                //                     }
-                //                 }
-                //             };
-                //
-                //             // barrier required if:
-                //             //  * last usage was a write
-                //             //  * image layout has changed
-                //             let prev_write = is_write(last_usage.access, last_usage.stage);
-                //
-                //             if let BindingType::Image(image_binding) = &input.binding_info.binding_type {
-                //                 let new_usage = ResourceUsage{
-                //                     access: input.binding_info.access,
-                //                     stage: input.binding_info.stage,
-                //                     layout: Some(image_binding.layout)
-                //                 };
-                //
-                //                 let layout_changed = {
-                //                     if let Some(layout) = last_usage.layout {
-                //                         layout != image_binding.layout
-                //                     } else {
-                //                         true
-                //                     }
-                //                 };
-                //
-                //                 // need a barrier
-                //                 if layout_changed || prev_write {
-                //                     let image_barrier = ImageBarrier {
-                //                         resource: input.resource.clone(),
-                //                         source_stage: last_usage.stage,
-                //                         dest_stage: new_usage.stage,
-                //                         source_access: last_usage.access,
-                //                         dest_access: new_usage.access,
-                //                         old_layout: last_usage.layout.expect("Using a non-image for an image transition"),
-                //                         new_layout: new_usage.layout.unwrap()
-                //                     };
-                //                     node_barrier.image_barriers.push(image_barrier);
-                //                     resolved_image.layout = new_usage.layout.unwrap();
-                //                 }
-                //
-                //                 usage_cache.insert(handle, new_usage);
-                //                 //image_binding.layout = update_usage(input.handle, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
-                //             } else {
-                //                 panic!("Buffer binding used on an image reosurce?");
-                //             }
-                //         }
-                //     }
-                //
-                // }
+                match node {
+                    PassType::Graphics(gn) => {
+                        for input in gn.get_inputs() {
+                            let handle = input.resource.borrow().get_handle();
 
-                // for rt in node.get_rendertargets_mut() {
-                //     // rendertargets always write, so if this isn't the first usage of this resource
-                //     // then we know we need a barrier
-                //     let handle = rt.resource_image.borrow().get_handle();
-                //     let last_usage = usage_cache.get(&handle);
-                //     let new_usage = ResourceUsage {
-                //         access: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-                //         stage: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-                //         // layout: Some(rt.layout)
-                //         layout: Some(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                //     };
-                //     if let Some(usage) = last_usage {
-                //         rt.layout = usage.layout.expect("Tried to get image layout from non-image");
-                //
-                //         let image_barrier = ImageBarrier {
-                //             resource: rt.resource_image.clone(),
-                //             source_stage: usage.stage,
-                //             dest_stage: new_usage.stage,
-                //             source_access: usage.access,
-                //             dest_access: new_usage.access,
-                //             old_layout: rt.layout,
-                //             new_layout: new_usage.layout.unwrap()
-                //         };
-                //         node_barrier.image_barriers.push(image_barrier);
-                //     }
-                //
-                //     usage_cache.insert(handle, new_usage);
-                // }
+                            let mut resource = input.resource.borrow_mut();
+                            let resolved_resource = {
+                                match &mut resource.resource_type {
+                                    None => {
+                                        panic!("Invalid input binding")
+                                    }
+                                    Some(resource) => {
+                                        resource
+                                    }
+                                }
+                            };
 
-                // for resource in node.get_copy_sources() {
-                //     let handle = resource.borrow().get_handle();
-                //     let last_usage = {
-                //         let usage = usage_cache.get(&handle);
-                //         match usage {
-                //             Some(found_usage) => {found_usage.clone()},
-                //             _ => {
-                //                 ResourceUsage {
-                //                     access: vk::AccessFlags::NONE,
-                //                     stage: vk::PipelineStageFlags::ALL_COMMANDS,
-                //                     layout: Some(vk::ImageLayout::UNDEFINED)
-                //                 }
-                //             }
-                //         }
-                //     };
-                //
-                //     let new_usage = ResourceUsage{
-                //         access: vk::AccessFlags::TRANSFER_READ,
-                //         stage: vk::PipelineStageFlags::TRANSFER,
-                //         layout: Some(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-                //     };
-                //
-                //     // for copy sources and destinations, a barrier is always required
-                //     let image_barrier = ImageBarrier {
-                //         resource: resource.clone(),
-                //         source_stage: last_usage.stage,
-                //         dest_stage: new_usage.stage,
-                //         source_access: last_usage.access,
-                //         dest_access: new_usage.access,
-                //         old_layout: last_usage.layout.expect("Using a non-image for an image transition"),
-                //         new_layout: new_usage.layout.unwrap()
-                //     };
-                //     node_barrier.image_barriers.push(image_barrier);
-                // }
+                            match resolved_resource {
+                                ResourceType::Buffer(_) => {
+                                    // Not implemented yet
+                                }
+                                ResourceType::Image(resolved_image) => {
+                                    let last_usage = {
+                                        let usage = usage_cache.get(&handle);
+                                        match usage {
+                                            Some(found_usage) => {found_usage.clone()},
+                                            _ => {
+                                                ResourceUsage {
+                                                    access: vk::AccessFlags::NONE,
+                                                    stage: vk::PipelineStageFlags::ALL_COMMANDS,
+                                                    // layout: Some(vk::ImageLayout::UNDEFINED)
+                                                    layout: Some(resolved_image.layout)
+                                                }
+                                            }
+                                        }
+                                    };
 
-                // for resource in node.get_copy_dests() {
-                //     let handle = resource.borrow().get_handle();
-                //     let last_usage = {
-                //         let usage = usage_cache.get(&handle);
-                //         match usage {
-                //             Some(found_usage) => {found_usage.clone()},
-                //             _ => {
-                //                 ResourceUsage {
-                //                     access: vk::AccessFlags::NONE,
-                //                     stage: vk::PipelineStageFlags::TOP_OF_PIPE,
-                //                     layout: Some(vk::ImageLayout::UNDEFINED)
-                //                 }
-                //             }
-                //         }
-                //     };
-                //
-                //     let new_usage = ResourceUsage{
-                //         access: vk::AccessFlags::TRANSFER_WRITE,
-                //         stage: vk::PipelineStageFlags::TRANSFER,
-                //         layout: Some(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                //     };
-                //
-                //     // for copy sources and destinations, a barrier is always required
-                //     let image_barrier = ImageBarrier {
-                //         resource: resource.clone(),
-                //         source_stage: last_usage.stage,
-                //         dest_stage: new_usage.stage,
-                //         source_access: last_usage.access,
-                //         dest_access: new_usage.access,
-                //         old_layout: last_usage.layout.expect("Using a non-image for an image transition"),
-                //         new_layout: new_usage.layout.unwrap()
-                //     };
-                //     node_barrier.image_barriers.push(image_barrier);
-                // }
+                                    // barrier required if:
+                                    //  * last usage was a write
+                                    //  * image layout has changed
+                                    let prev_write = is_write(last_usage.access, last_usage.stage);
+
+                                    if let BindingType::Image(image_binding) = &input.binding_info.binding_type {
+                                        let new_usage = ResourceUsage{
+                                            access: input.binding_info.access,
+                                            stage: input.binding_info.stage,
+                                            layout: Some(image_binding.layout)
+                                        };
+
+                                        let layout_changed = {
+                                            if let Some(layout) = last_usage.layout {
+                                                layout != image_binding.layout
+                                            } else {
+                                                true
+                                            }
+                                        };
+
+                                        // need a barrier
+                                        if layout_changed || prev_write {
+                                            let image_barrier = ImageBarrier {
+                                                resource: input.resource.clone(),
+                                                source_stage: last_usage.stage,
+                                                dest_stage: new_usage.stage,
+                                                source_access: last_usage.access,
+                                                dest_access: new_usage.access,
+                                                old_layout: last_usage.layout.expect("Using a non-image for an image transition"),
+                                                new_layout: new_usage.layout.unwrap()
+                                            };
+                                            node_barrier.image_barriers.push(image_barrier);
+                                            resolved_image.layout = new_usage.layout.unwrap();
+                                        }
+
+                                        usage_cache.insert(handle, new_usage);
+                                        //image_binding.layout = update_usage(input.handle, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+                                    } else {
+                                        panic!("Buffer binding used on an image reosurce?");
+                                    }
+                                }
+                            }
+
+                        }
+
+                        for rt in gn.get_rendertargets_mut() {
+                            // rendertargets always write, so if this isn't the first usage of this resource
+                            // then we know we need a barrier
+                            let handle = rt.resource_image.borrow().get_handle();
+                            let last_usage = usage_cache.get(&handle);
+                            let new_usage = ResourceUsage {
+                                access: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                                stage: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                                // layout: Some(rt.layout)
+                                layout: Some(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                            };
+                            if let Some(usage) = last_usage {
+                                rt.layout = usage.layout.expect("Tried to get image layout from non-image");
+
+                                let image_barrier = ImageBarrier {
+                                    resource: rt.resource_image.clone(),
+                                    source_stage: usage.stage,
+                                    dest_stage: new_usage.stage,
+                                    source_access: usage.access,
+                                    dest_access: new_usage.access,
+                                    old_layout: rt.layout,
+                                    new_layout: new_usage.layout.unwrap()
+                                };
+                                node_barrier.image_barriers.push(image_barrier);
+                            }
+
+                            usage_cache.insert(handle, new_usage);
+                        }
+                    }
+                    PassType::Copy(cn) => {
+                        for resource in &cn.copy_sources {
+                            let handle = resource.borrow().get_handle();
+                            let last_usage = {
+                                let usage = usage_cache.get(&handle);
+                                match usage {
+                                    Some(found_usage) => {found_usage.clone()},
+                                    _ => {
+                                        ResourceUsage {
+                                            access: vk::AccessFlags::NONE,
+                                            stage: vk::PipelineStageFlags::ALL_COMMANDS,
+                                            layout: Some(vk::ImageLayout::UNDEFINED)
+                                        }
+                                    }
+                                }
+                            };
+
+                            let new_usage = ResourceUsage{
+                                access: vk::AccessFlags::TRANSFER_READ,
+                                stage: vk::PipelineStageFlags::TRANSFER,
+                                layout: Some(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                            };
+
+                            // for copy sources and destinations, a barrier is always required
+                            let image_barrier = ImageBarrier {
+                                resource: resource.clone(),
+                                source_stage: last_usage.stage,
+                                dest_stage: new_usage.stage,
+                                source_access: last_usage.access,
+                                dest_access: new_usage.access,
+                                old_layout: last_usage.layout.expect("Using a non-image for an image transition"),
+                                new_layout: new_usage.layout.unwrap()
+                            };
+                            node_barrier.image_barriers.push(image_barrier);
+                        }
+
+                        for resource in &cn.copy_dests {
+                            let handle = resource.borrow().get_handle();
+                            let last_usage = {
+                                let usage = usage_cache.get(&handle);
+                                match usage {
+                                    Some(found_usage) => {found_usage.clone()},
+                                    _ => {
+                                        ResourceUsage {
+                                            access: vk::AccessFlags::NONE,
+                                            stage: vk::PipelineStageFlags::TOP_OF_PIPE,
+                                            layout: Some(vk::ImageLayout::UNDEFINED)
+                                        }
+                                    }
+                                }
+                            };
+
+                            let new_usage = ResourceUsage{
+                                access: vk::AccessFlags::TRANSFER_WRITE,
+                                stage: vk::PipelineStageFlags::TRANSFER,
+                                layout: Some(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                            };
+
+                            // for copy sources and destinations, a barrier is always required
+                            let image_barrier = ImageBarrier {
+                                resource: resource.clone(),
+                                source_stage: last_usage.stage,
+                                dest_stage: new_usage.stage,
+                                source_access: last_usage.access,
+                                dest_access: new_usage.access,
+                                old_layout: last_usage.layout.expect("Using a non-image for an image transition"),
+                                new_layout: new_usage.layout.unwrap()
+                            };
+                            node_barrier.image_barriers.push(image_barrier);
+                        }
+                    }
+                }
+
+
 
                 self.node_barriers.insert(*node_index, node_barrier);
             }
@@ -478,6 +486,18 @@ impl VulkanFrameGraph {
 
             // add to passnode?
         }
+    }
+
+    fn execute_copy_node(
+        &mut self,
+        render_context: &mut VulkanRenderContext,
+        command_buffer: &vk::CommandBuffer,
+        node: &mut CopyPassNode) {
+
+        // Copy node is ez-pz
+        node.execute(
+            render_context,
+            command_buffer);
     }
 
     fn execute_graphics_node(
@@ -731,6 +751,9 @@ impl FrameGraph for VulkanFrameGraph {
                 PassType::Graphics(graphics_node) => {
                     self.execute_graphics_node(render_context, command_buffer, graphics_node);
                 },
+                PassType::Copy(copy_node) => {
+                    self.execute_copy_node(render_context, command_buffer, copy_node);
+                }
                 _ => {}
             }
         }
