@@ -1,5 +1,6 @@
 use petgraph::stable_graph::{StableDiGraph, NodeIndex};
 use crate::graphics_pass_node::GraphicsPassNode;
+use crate::pass_type::PassType;
 
 #[derive(Eq, PartialEq)]
 enum FrameState {
@@ -9,7 +10,7 @@ enum FrameState {
 }
 
 pub struct Frame {
-    pub nodes: StableDiGraph<GraphicsPassNode, u32>,
+    pub nodes: StableDiGraph<PassType, u32>,
     root_index: Option<NodeIndex>,
     state: FrameState,
     pub sorted_nodes: Vec<NodeIndex>
@@ -25,12 +26,12 @@ impl Frame {
         }
     }
 
-    pub fn add_node(&mut self, node: GraphicsPassNode) -> NodeIndex {
+    pub fn add_node(&mut self, node: PassType) -> NodeIndex {
         assert!(self.state == FrameState::Started, "Frame must be started before adding nodes");
         self.nodes.add_node(node)
     }
 
-    pub fn start(&mut self, root_node: GraphicsPassNode) {
+    pub fn start(&mut self, root_node: PassType) {
         assert!(self.state == FrameState::New, "Frame has already been started");
         self.state = FrameState::Started;
         self.root_index = Some(self.add_node(root_node));

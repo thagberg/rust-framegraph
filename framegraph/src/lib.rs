@@ -9,6 +9,8 @@ pub mod binding;
 pub mod attachment;
 pub mod frame;
 pub mod barrier;
+pub mod command_list;
+pub mod pass_type;
 
 #[cfg(test)]
 mod tests

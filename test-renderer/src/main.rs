@@ -202,7 +202,6 @@ impl VulkanApp {
             let blit_offsets = [glam::IVec2::new(0, 0), glam::IVec2::new(extent.width as i32, extent.height as i32)];
             self.frames[self.current_frame] = Some(self.frame_graph.start());
             let current_frame = self.frames[self.current_frame].as_mut().unwrap();
-            //self.frame_graph.start(blit::generate_pass(ubo_render_target, 0, swapchain_handle, 0, blit_offsets));
             let (ubo_pass_node, ubo_render_target) = self.ubo_pass.generate_pass(self.render_context.get_device(), self.render_context.get_swapchain().as_ref().unwrap().get_extent());
             let blit_node = blit::generate_pass(ubo_render_target.clone(), 0, swapchain_resource.clone(), 0, blit_offsets);
             let imgui_nodes = self.imgui_renderer.generate_passes(ui_draw_data, ubo_render_target.clone(), self.render_context.get_device());
