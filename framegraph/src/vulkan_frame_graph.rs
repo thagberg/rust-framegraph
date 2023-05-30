@@ -27,6 +27,8 @@ use context::api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::attachment::AttachmentReference;
 use crate::barrier::{BufferBarrier, ImageBarrier};
+use crate::command_list::CommandList;
+use crate::pass_type::PassType;
 
 fn resolve_render_targets(
     attachments: &[AttachmentReference]) -> Vec<ImageWrapper> {
@@ -158,27 +160,17 @@ impl VulkanFrameGraph {
         }
     }
 
-    fn compile(&mut self, nodes: &mut StableDiGraph<GraphicsPassNode, u32>, root_index: NodeIndex) -> Vec<NodeIndex>{
+    fn compile(&mut self, nodes: &mut StableDiGraph<PassType, u32>, root_index: NodeIndex) -> Vec<NodeIndex>{
         // create input/output maps to detect graph edges
         let mut input_map = MultiMap::new();
         let mut output_map = MultiMap::new();
         for node_index in nodes.node_indices() {
             let node = &nodes[node_index];
-            for input in node.get_inputs() {
-                input_map.insert(input.resource.borrow().get_handle(), node_index);
+            for read in node.get_reads() {
+                input_map.insert(read, node_index);
             }
-            for copy_source in node.get_copy_sources() {
-                input_map.insert(copy_source.borrow().get_handle(), node_index);
-            }
-
-            for output in node.get_outputs() {
-                output_map.insert(output.resource.borrow().get_handle(), node_index);
-            }
-            for rt in node.get_rendertargets() {
-                output_map.insert(rt.resource_image.borrow().get_handle(), node_index);
-            }
-            for copy_dest in node.get_copy_dests() {
-                output_map.insert(copy_dest.borrow().get_handle(), node_index);
+            for write in node.get_writes() {
+                output_map.insert(write, node_index);
             }
         }
 
@@ -229,8 +221,19 @@ impl VulkanFrameGraph {
                     sorted_nodes = sorted_list;
                 },
                 Err(cycle_error) => {
-                    println!("A cycle was detected in the framegraph: {:?}", cycle_error);
+                    panic!("A cycle was detected in the framegraph: {:?}", cycle_error);
                 }
+            }
+        }
+
+        // with sorted execution order we now want to look for opportunities to break the full set
+        // of nodes into multiple command lists
+        // This is required when execution requires synchronization across queues (e.g. going from
+        // graphics to compute) or between CPU and GPU
+        let mut command_lists: Vec<CommandList<NodeIndex>> = Vec::new();
+        for i in &sorted_nodes {
+            if let Some(node) = nodes.node_weight(*i) {
+
             }
         }
 
@@ -239,7 +242,7 @@ impl VulkanFrameGraph {
 
     fn link(
         &mut self,
-        nodes: &mut StableDiGraph<GraphicsPassNode, u32>,
+        nodes: &mut StableDiGraph<PassType, u32>,
         sorted_nodes: &Vec<NodeIndex>) {
 
         // All image bindings and attachments require the most recent usage for that resource
