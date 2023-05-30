@@ -43,9 +43,6 @@ pub struct PassNodeBuilder {
 }
 
 impl PassNode for GraphicsPassNode  {
-    type RC = VulkanRenderContext;
-    type CB = vk::CommandBuffer;
-    type PD = PipelineDescription;
 
     fn get_name(&self) -> &str {
         &self.name
@@ -67,22 +64,44 @@ impl PassNode for GraphicsPassNode  {
         &mut self.outputs
     }
 
-   fn get_rendertargets(&self) -> &[AttachmentReference] { &self.render_targets }
+   // fn get_rendertargets(&self) -> &[AttachmentReference] { &self.render_targets }
+   //
+   //  fn get_rendertargets_mut(&mut self) -> &mut [AttachmentReference] { &mut self.render_targets }
+   //
+   //  fn get_copy_sources(&self) -> &[Rc<RefCell<DeviceResource>>] { &self.copy_sources }
+   //
+   //  fn get_copy_dests(&self) -> &[Rc<RefCell<DeviceResource>>] { &self.copy_dests }
 
-    fn get_rendertargets_mut(&mut self) -> &mut [AttachmentReference] { &mut self.render_targets }
-
-    fn get_copy_sources(&self) -> &[Rc<RefCell<DeviceResource>>] { &self.copy_sources }
-
-    fn get_copy_dests(&self) -> &[Rc<RefCell<DeviceResource>>] { &self.copy_dests }
-
-    fn get_pipeline_description(&self) -> &Option<Self::PD> {
+    fn get_pipeline_description(&self) -> &Option<PipelineDescription> {
         &self.pipeline_description
     }
 
-   fn execute(
+    fn get_reads(&self) -> Vec<u64> {
+        let mut reads: Vec<u64> = Vec::new();
+        reads.reserve(self.inputs.len() + self.render_targets.len());
+        for input in &self.inputs {
+           reads.push(input.resource.borrow().get_handle());
+        }
+
+        reads
+    }
+
+    fn get_writes(&self) -> Vec<u64> {
+        let mut writes: Vec<u64> = Vec::new();
+        for output in &self.outputs {
+            writes.push(output.resource.borrow().get_handle());
+        }
+        for rt in &self.render_targets {
+            writes.push(rt.resource_image.borrow().get_handle());
+        }
+
+        writes
+    }
+
+    fn execute(
         &self,
-        render_context: &mut Self::RC,
-        command_buffer: &Self::CB)
+        render_context: &mut VulkanRenderContext,
+        command_buffer: &vk::CommandBuffer)
     {
         (self.fill_callback)(
             render_context,
