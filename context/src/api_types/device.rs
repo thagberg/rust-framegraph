@@ -557,6 +557,30 @@ impl DeviceWrapper {
             device)
     }
 
+    pub fn create_compute_pipeline(
+        device: Rc<RefCell<DeviceWrapper>>,
+        create_info: &vk::ComputePipelineCreateInfo,
+        pipeline_layout: vk::PipelineLayout,
+        descriptor_set_layouts: Vec<vk::DescriptorSetLayout>
+    ) -> DevicePipeline {
+        let pipeline = unsafe {
+            device.borrow().get().create_compute_pipelines(
+                vk::PipelineCache::null(),
+                std::slice::from_ref(create_info),
+                None)
+                .expect("Failed to create Graphics Pipeline")
+        }[0];
+
+        device.borrow().set_debug_name(vk::ObjectType::PIPELINE, pipeline.as_raw(), "Test");
+        device.borrow().set_debug_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.as_raw(), "Test-Layout");
+
+        DevicePipeline::new(
+            pipeline,
+            pipeline_layout,
+            descriptor_set_layouts,
+            device)
+    }
+
     pub fn create_renderpass(
         device: Rc<RefCell<DeviceWrapper>>,
         create_info: &vk::RenderPassCreateInfo,

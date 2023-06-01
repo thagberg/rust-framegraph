@@ -13,7 +13,7 @@ use crate::frame_graph::FrameGraph;
 use crate::pass_node::PassNode;
 use crate::binding::{ResourceBinding, ImageBindingInfo, BufferBindingInfo, BindingType};
 use crate::graphics_pass_node::{GraphicsPassNode};
-use crate::pipeline::{Pipeline, PipelineManager, VulkanPipelineManager};
+use crate::pipeline::{Pipeline, VulkanPipelineManager};
 use crate::renderpass_manager::VulkanRenderpassManager;
 
 use std::collections::HashMap;
@@ -28,6 +28,7 @@ use context::vulkan_render_context::VulkanRenderContext;
 use crate::attachment::AttachmentReference;
 use crate::barrier::{BufferBarrier, ImageBarrier};
 use crate::command_list::CommandList;
+use crate::compute_pass_node::ComputePassNode;
 use crate::copy_pass_node::CopyPassNode;
 use crate::pass_type::PassType;
 
@@ -501,6 +502,21 @@ impl VulkanFrameGraph {
         node.execute(
             render_context,
             command_buffer);
+    }
+
+    fn execute_compute_node(
+        &mut self,
+        render_context: &mut VulkanRenderContext,
+        command_buffer: &vk::CommandBuffer,
+        node: &mut ComputePassNode) {
+
+        // get compute pipeline from node's pipeline description
+
+        // resolve and update descriptor sets
+
+        // bind pipeline
+
+        // execute node
     }
 
     fn execute_graphics_node(
