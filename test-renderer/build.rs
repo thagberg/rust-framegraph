@@ -42,14 +42,19 @@ fn main() {
 
     let vert_shaders = glob("shaders/*.vert").expect("No vert shaders found");
     let frag_shaders = glob("shaders/*.frag").expect("No frag shaders found");
+    let compute_shaders = glob("shaders/*.comp").expect("No compute shaders found");
 
     let pass_vert_shaders = glob("../passes/shaders/*.vert")
         .expect("No pass vert shaders");
-    let pass_frag_shaders = glob("../passes/shaders/*frag")
+    let pass_frag_shaders = glob("../passes/shaders/*.frag")
         .expect("No pass frag shaders");
+    let pass_compute_shaders = glob("../passes/shaders/*.comp")
+        .expect("No pass compute shaders");
 
     compile_shaders(vert_shaders, &out_dir);
     compile_shaders(frag_shaders, &out_dir);
+    compile_shaders(compute_shaders, &out_dir);
     compile_shaders(pass_vert_shaders, &out_dir);
     compile_shaders(pass_frag_shaders, &out_dir);
+    compile_shaders(pass_compute_shaders, &out_dir);
 }

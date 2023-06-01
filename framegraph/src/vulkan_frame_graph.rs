@@ -457,6 +457,9 @@ impl VulkanFrameGraph {
                             };
                             node_barrier.image_barriers.push(image_barrier);
                         }
+                    },
+                    PassType::Compute(_) => {
+                        panic!("Not implemented yet");
                     }
                 }
 
