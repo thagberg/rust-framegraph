@@ -11,15 +11,22 @@ use framegraph::binding::{BindingInfo, BindingType, ImageBindingInfo, ResourceBi
 use framegraph::compute_pass_node::ComputePassNode;
 use framegraph::pass_type::PassType;
 
-const BLUR_TARGET_CREATE_INFO: ImageCreateInfo = ImageCreateInfo::new(
-    Default::default(),
-    "blur_target".to_string());
-
 pub fn generate_pass(
     device: Rc<RefCell<DeviceWrapper>>,
     source: Rc<RefCell<DeviceResource>>
-) -> PassType {
-    
+) -> (PassType, Rc<RefCell<DeviceResource>>) {
+
+    let image_extent = source.borrow().get_image().extent.clone();
+
+    let blur_target_create_info: ImageCreateInfo = ImageCreateInfo::new(
+        vk::ImageCreateInfo::builder()
+            .image_type(vk::ImageType::TYPE_2D)
+            .format(vk::Format::R8G8B8A8_UNORM)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .extent(image_extent)
+            .build(),
+        String::from("blur_target"));
+
     let source_binding = ResourceBinding {
         resource: source.clone(),
         binding_info: BindingInfo {
@@ -35,19 +42,19 @@ pub fn generate_pass(
 
     let blur_target = Rc::new(RefCell::new(DeviceWrapper::create_image(
         device,
-        &BLUR_TARGET_CREATE_INFO,
+        &blur_target_create_info,
         MemoryLocation::Unknown)));
 
     let target_binding = ResourceBinding {
-        resource: blur_target,
+        resource: blur_target.clone(),
         binding_info: BindingInfo {
             binding_type: BindingType::Image(ImageBindingInfo {
                 layout: vk::ImageLayout::GENERAL
             }),
             set: 0,
-            slot: 0,
-            stage: Default::default(),
-            access: Default::default()
+            slot: 1,
+            stage: vk::PipelineStageFlags::COMPUTE_SHADER,
+            access: vk::AccessFlags::SHADER_WRITE
         }
     };
 
@@ -58,10 +65,11 @@ pub fn generate_pass(
             move |render_ctx: &VulkanRenderContext,
                   command_buffer: &vk::CommandBuffer | {
 
+                println!("Performing blur");
             }
         ))
         .build()
         .expect("Failed to create blur passnode");
 
-    PassType::Compute(pass_node)
+    (PassType::Compute(pass_node), blur_target.clone())
 }

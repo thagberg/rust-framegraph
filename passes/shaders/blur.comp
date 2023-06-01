@@ -1,0 +1,30 @@
+#version 450
+
+layout(rgba8, set=0, binding=0) uniform restrict readonly image2D sourceImage;
+layout(rgba8, set=0, binding=1) uniform restrict writeonly image2D outputImage;
+
+const float kernel[25] = float[25](
+    0.0039, 0.0156, 0.0234, 0.0156, 0.0039,
+    0.0156, 0.0625, 0.0938, 0.0625, 0.0156,
+    0.0234, 0.0938, 0.1406, 0.0938, 0.0234,
+    0.0156, 0.0625, 0.0938, 0.0625, 0.0156,
+    0.0039, 0.0156, 0.0234, 0.0156, 0.0039
+);
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+void main() {
+
+    if (gl_GlobalInvocationID.x < imageSize(outputImage).x && gl_GlobalInvocationID.y < imageSize(outputImage).y) {
+        vec3 blurredColor = vec3(0.0,0.0,0.0);
+        for (int i = 0; i < 5; ++i) {
+            for (int j = 0; j < 5; ++j) {
+                vec3 neighbor = imageLoad(sourceImage, ivec2(j, i)).xyz;
+                blurredColor += neighbor;
+            }
+        }
+
+        barrier();
+
+        imageStore(outputImage, ivec2(gl_GlobalInvocationID.xy), vec4(blurredColor, 1.0));
+    }
+}
