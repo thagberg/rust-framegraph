@@ -55,34 +55,69 @@ impl Hash for PipelineDescription
     }
 }
 
+impl PipelineDescription
+{
+    pub fn new(
+        vertex_input: vk::PipelineVertexInputStateCreateInfo,
+        dynamic_states: Vec<vk::DynamicState>,
+        rasterization: RasterizationType,
+        depth_stencil: DepthStencilType,
+        blend: BlendType,
+        vertex_name: &str,
+        fragment_name: &str) -> Self
+    {
+        PipelineDescription {
+            vertex_input,
+            dynamic_states,
+            rasterization,
+            depth_stencil,
+            blend,
+            vertex_name: vertex_name.to_string(),
+            fragment_name: fragment_name.to_string()
+        }
+    }
+
+    pub fn get_name(&self) -> &str { &self.vertex_name }
+}
+
+
+pub struct ComputePipelineDescription
+{
+    compute_name: String
+}
+
+impl Hash for ComputePipelineDescription
+{
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.compute_name.hash(state);
+    }
+}
+
+impl ComputePipelineDescription {
+    pub fn new(
+        compute_name: &str
+    ) -> Self {
+        ComputePipelineDescription {
+            compute_name: compute_name.to_string()
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Pipeline
 {
-    pub graphics_pipeline: DevicePipeline,
+    pub device_pipeline: DevicePipeline,
     pub descriptor_sets: Vec<vk::DescriptorSet>,
 }
 
 impl Pipeline {
     pub fn get_pipeline(&self) -> vk::Pipeline {
-        self.graphics_pipeline.pipeline
+        self.device_pipeline.pipeline
     }
 
     pub fn get_pipeline_layout(&self) -> vk::PipelineLayout {
-        self.graphics_pipeline.pipeline_layout
+        self.device_pipeline.pipeline_layout
     }
-}
-
-pub trait PipelineManager {
-    type P;
-    type RC;
-    type RP;
-    type PD;
-
-    fn create_pipeline(
-        &mut self,
-        render_context: &Self::RC,
-        render_pass: Self::RP,
-        pipeline_description: &Self::PD) -> Self::P where Self::RC: RenderContext;
 }
 
 pub struct VulkanPipelineManager
@@ -241,55 +276,117 @@ fn generate_blend_state(blend_type: BlendType, attachments: &[vk::PipelineColorB
     }
 }
 
+fn create_descriptor_set_layouts(render_context: &VulkanRenderContext, full_bindings: &HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>>) -> Vec<vk::DescriptorSetLayout> {
+
+    let mut descriptor_set_layouts: Vec<vk::DescriptorSetLayout> = Vec::new();
+    descriptor_set_layouts.resize(full_bindings.len(), vk::DescriptorSetLayout::null());
+    for (set, bindings) in full_bindings {
+        let layout_create_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&bindings)
+            .build();
+
+        let layout = unsafe {
+            render_context.get_device().borrow().get().create_descriptor_set_layout(
+                &layout_create_info,
+                None)
+                .expect("Failed to create descriptor set layout")
+        };
+        descriptor_set_layouts[*set as usize] = layout;
+    }
+
+    descriptor_set_layouts
+}
+
 impl Pipeline
 {
     pub fn new(
-        graphics_pipeline: DevicePipeline,
+        device_pipeline: DevicePipeline,
         descriptor_sets: Vec<vk::DescriptorSet>) -> Pipeline
     {
         Pipeline {
-            graphics_pipeline,
+            device_pipeline,
             descriptor_sets
         }
     }
 }
 
-impl PipelineDescription
-{
-    pub fn new(
-        vertex_input: vk::PipelineVertexInputStateCreateInfo,
-        dynamic_states: Vec<vk::DynamicState>,
-        rasterization: RasterizationType,
-        depth_stencil: DepthStencilType,
-        blend: BlendType,
-        vertex_name: &str,
-        fragment_name: &str) -> PipelineDescription
+impl VulkanPipelineManager {
+    pub fn new() -> VulkanPipelineManager
     {
-        PipelineDescription {
-            vertex_input,
-            dynamic_states,
-            rasterization,
-            depth_stencil,
-            blend,
-            vertex_name: vertex_name.to_string(),
-            fragment_name: fragment_name.to_string()
+        VulkanPipelineManager {
+            pipeline_cache: HashMap::new(),
+            shader_manager: ShaderManager::new()
         }
     }
 
-    pub fn get_name(&self) -> &str { &self.vertex_name }
-}
-
-impl PipelineManager for VulkanPipelineManager {
-    type P = Rc<RefCell<Pipeline>>;
-    type RC = VulkanRenderContext;
-    type RP = vk::RenderPass;
-    type PD = PipelineDescription;
-
-    fn create_pipeline(
+    pub fn create_compute_pipeline(
         &mut self,
-        render_context: &Self::RC,
-        render_pass: Self::RP,
-        pipeline_description: &Self::PD) -> Self::P where Self::RC: RenderContext {
+        render_context: &VulkanRenderContext,
+        pipeline_description: &ComputePipelineDescription) -> Rc<RefCell<Pipeline>> {
+
+        let mut pipeline_hasher = DefaultHasher::new();
+        pipeline_description.hash(&mut pipeline_hasher);
+        let pipeline_key = pipeline_hasher.finish();
+        let pipeline_val = self.pipeline_cache.get(&pipeline_key);
+        match pipeline_val {
+            Some(pipeline) => { pipeline.clone() },
+            None => {
+                let mut compute_shader_module = self.shader_manager.load_shader(
+                    render_context.get_device(),
+                    &pipeline_description.compute_name);
+
+                let mut full_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>> = HashMap::new();
+                for (set, bindings) in &mut compute_shader_module.borrow_mut().descriptor_bindings {
+                    let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
+                    set_bindings.extend(bindings.iter());
+                    for binding in set_bindings {
+                        binding.stage_flags = vk::ShaderStageFlags::COMPUTE;
+                    }
+                }
+
+                let descriptor_set_layouts = create_descriptor_set_layouts(render_context, &full_bindings);
+
+                let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
+
+                let pipeline_layout = {
+                    let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
+                        .set_layouts(&descriptor_set_layouts);
+                    unsafe {
+                        render_context.get_device().borrow().get().create_pipeline_layout(&pipeline_layout_create, None)
+                            .expect("Failed to create pipeline layout")
+                    }
+                };
+
+                let main_name = std::ffi::CString::new("main").unwrap();
+                let shader_stage = vk::PipelineShaderStageCreateInfo::builder()
+                    .module(compute_shader_module.borrow().shader.shader_module.clone())
+                    .name(&main_name)
+                    .stage(vk::ShaderStageFlags::COMPUTE);
+
+                let compute_pipeline_info = vk::ComputePipelineCreateInfo::builder()
+                    .stage(*shader_stage)
+                    .layout(pipeline_layout)
+                    .build();
+
+                let device_pipeline = DeviceWrapper::create_compute_pipeline(
+                    render_context.get_device(),
+                    &compute_pipeline_info,
+                    pipeline_layout,
+                    descriptor_set_layouts);
+                let pipeline = Rc::new(RefCell::new(Pipeline::new(
+                    device_pipeline,
+                    descriptor_sets)));
+                self.pipeline_cache.insert(pipeline_key, pipeline.clone());
+                pipeline
+            }
+        }
+    }
+
+    pub fn create_pipeline(
+        &mut self,
+        render_context: &VulkanRenderContext,
+        render_pass: vk::RenderPass,
+        pipeline_description: &PipelineDescription) -> Rc<RefCell<Pipeline>> {
 
         // TODO: define a PipelineKey type and require the consumer to provide it here
         //  to avoid needing to calculate a hash for each used pipeline each frame?
@@ -337,21 +434,7 @@ impl PipelineManager for VulkanPipelineManager {
                     }
                 }
 
-                let mut descriptor_set_layouts: Vec<vk::DescriptorSetLayout> = Vec::new();
-                descriptor_set_layouts.resize(full_bindings.len(), vk::DescriptorSetLayout::null());
-                for (set, bindings) in full_bindings {
-                    let layout_create_info = vk::DescriptorSetLayoutCreateInfo::builder()
-                        .bindings(&bindings)
-                        .build();
-
-                    let layout = unsafe {
-                        render_context.get_device().borrow().get().create_descriptor_set_layout(
-                            &layout_create_info,
-                            None)
-                            .expect("Failed to create descriptor set layout")
-                    };
-                    descriptor_set_layouts[set as usize] = layout;
-                }
+                let descriptor_set_layouts = create_descriptor_set_layouts(render_context, &full_bindings);
 
                 let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
 
@@ -455,17 +538,6 @@ impl PipelineManager for VulkanPipelineManager {
                 self.pipeline_cache.insert(pipeline_key, pipeline.clone());
                 pipeline
             }
-        }
-    }
-}
-
-impl VulkanPipelineManager
-{
-    pub fn new() -> VulkanPipelineManager
-    {
-        VulkanPipelineManager {
-            pipeline_cache: HashMap::new(),
-            shader_manager: ShaderManager::new()
         }
     }
 }
