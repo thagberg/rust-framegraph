@@ -10,6 +10,7 @@ use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::binding::{BindingInfo, BindingType, ImageBindingInfo, ResourceBinding};
 use framegraph::compute_pass_node::ComputePassNode;
 use framegraph::pass_type::PassType;
+use framegraph::pipeline::ComputePipelineDescription;
 
 pub fn generate_pass(
     device: Rc<RefCell<DeviceWrapper>>,
@@ -58,7 +59,10 @@ pub fn generate_pass(
         }
     };
 
+    let pipeline_description = ComputePipelineDescription::new("blur");
+
     let pass_node = ComputePassNode::builder("blur".to_string())
+        .pipeline_description(pipeline_description)
         .input(source_binding)
         .output(target_binding)
         .fill_commands(Box::new(

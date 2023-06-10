@@ -5,11 +5,13 @@ use context::api_types::device::DeviceResource;
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::binding::ResourceBinding;
 use crate::pass_node::{FillCallback, PassNode};
+use crate::pipeline::ComputePipelineDescription;
 
 pub struct ComputePassNode {
     pub inputs: Vec<ResourceBinding>,
     pub outputs: Vec<ResourceBinding>,
     pub fill_callback: Box<FillCallback>,
+    pub pipeline_description: ComputePipelineDescription,
     name: String
 }
 
@@ -45,10 +47,16 @@ pub struct ComputePassNodeBuilder {
     name: String,
     inputs: Vec<ResourceBinding>,
     outputs: Vec<ResourceBinding>,
+    pipeline_description: Option<ComputePipelineDescription>,
     fill_callback: Option<Box<FillCallback>>,
 }
 
 impl ComputePassNodeBuilder {
+    pub fn pipeline_description(mut self, pipeline_description: ComputePipelineDescription) -> Self {
+        self.pipeline_description = Some(pipeline_description);
+        self
+    }
+
     pub fn input(mut self, input: ResourceBinding) -> Self {
         self.inputs.push(input);
         self
@@ -73,7 +81,9 @@ impl ComputePassNodeBuilder {
                 inputs: self.inputs.into_iter().take(inputs_len).collect(),
                 outputs: self.outputs.into_iter().take(outputs_len).collect(),
                 fill_callback: self.fill_callback.take().unwrap(),
-                name: self.name
+                name: self.name,
+                pipeline_description: self.pipeline_description
+                    .expect("ComputePassNode requires a pipeline description")
             })
         } else {
             Err("ComputePassNodeBuilder was incomplete before building")

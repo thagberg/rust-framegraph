@@ -772,6 +772,9 @@ impl FrameGraph for VulkanFrameGraph {
                 },
                 PassType::Copy(copy_node) => {
                     self.execute_copy_node(render_context, command_buffer, copy_node);
+                },
+                PassType::Compute(compute_node) => {
+                    self.execute_compute_node(render_context, command_buffer, compute_node);
                 }
                 _ => {}
             }
