@@ -380,7 +380,8 @@ impl DeviceWrapper {
 
             let image_view = device.borrow().create_image_view(
                 image,
-                vk::Format::R8G8B8A8_SRGB,
+                // vk::Format::R8G8B8A8_SRGB,
+                image_desc.get_create_info().format,
                 vk::ImageViewCreateFlags::empty(),
                 vk::ImageAspectFlags::COLOR,
                 1);

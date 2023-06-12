@@ -25,6 +25,10 @@ pub fn generate_pass(
             .format(vk::Format::R8G8B8A8_UNORM)
             .initial_layout(vk::ImageLayout::UNDEFINED)
             .extent(image_extent)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .usage(vk::ImageUsageFlags::STORAGE)
+            .mip_levels(1)
+            .array_layers(1)
             .build(),
         String::from("blur_target"));
 
@@ -44,7 +48,7 @@ pub fn generate_pass(
     let blur_target = Rc::new(RefCell::new(DeviceWrapper::create_image(
         device,
         &blur_target_create_info,
-        MemoryLocation::Unknown)));
+        MemoryLocation::GpuOnly)));
 
     let target_binding = ResourceBinding {
         resource: blur_target.clone(),
@@ -59,7 +63,7 @@ pub fn generate_pass(
         }
     };
 
-    let pipeline_description = ComputePipelineDescription::new("blur");
+    let pipeline_description = ComputePipelineDescription::new("blur-comp.spv");
 
     let pass_node = ComputePassNode::builder("blur".to_string())
         .pipeline_description(pipeline_description)

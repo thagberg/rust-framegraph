@@ -26,19 +26,31 @@ impl ComputePassNode {
 
 impl PassNode for ComputePassNode {
     fn get_name(&self) -> &str {
-        todo!()
+       &self.name
     }
 
     fn get_reads(&self) -> Vec<u64> {
-        todo!()
+        let mut reads: Vec<u64> = Vec::new();
+        reads.reserve(self.inputs.len());
+        for input in &self.inputs {
+            reads.push(input.resource.borrow().get_handle());
+        }
+        reads
     }
 
     fn get_writes(&self) -> Vec<u64> {
-        todo!()
+        let mut writes: Vec<u64> = Vec::new();
+        writes.reserve(self.outputs.len());
+        for output in &self.outputs {
+            writes.push(output.resource.borrow().get_handle());
+        }
+        writes
     }
 
     fn execute(&self, render_context: &mut VulkanRenderContext, command_buffer: &CommandBuffer) {
-        todo!()
+        (self.fill_callback)(
+            render_context,
+            command_buffer);
     }
 }
 
