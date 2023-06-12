@@ -204,8 +204,8 @@ impl VulkanApp {
             let current_frame = self.frames[self.current_frame].as_mut().unwrap();
             let (ubo_pass_node, ubo_render_target) = self.ubo_pass.generate_pass(self.render_context.get_device(), self.render_context.get_swapchain().as_ref().unwrap().get_extent());
             let (blur_node, blur_target) = blur::generate_pass(self.render_context.get_device(), ubo_render_target.clone());
-            let blit_node = blit::generate_pass(blur_target.clone(), 0, swapchain_resource.clone(), 0, blit_offsets);
             let imgui_nodes = self.imgui_renderer.generate_passes(ui_draw_data, blur_target.clone(), self.render_context.get_device());
+            let blit_node = blit::generate_pass(blur_target.clone(), 0, swapchain_resource.clone(), 0, blit_offsets);
             current_frame.start(blit_node);
             current_frame.add_node(ubo_pass_node);
             current_frame.add_node(blur_node);

@@ -26,7 +26,7 @@ pub fn generate_pass(
             .initial_layout(vk::ImageLayout::UNDEFINED)
             .extent(image_extent)
             .samples(vk::SampleCountFlags::TYPE_1)
-            .usage(vk::ImageUsageFlags::STORAGE)
+            .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::TRANSFER_SRC)
             .mip_levels(1)
             .array_layers(1)
             .build(),
@@ -36,7 +36,7 @@ pub fn generate_pass(
         resource: source.clone(),
         binding_info: BindingInfo {
             binding_type: BindingType::Image(ImageBindingInfo {
-                layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL
+                layout: vk::ImageLayout::GENERAL
             }),
             set: 0,
             slot: 0,

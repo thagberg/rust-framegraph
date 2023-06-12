@@ -102,12 +102,13 @@ impl UBOPass {
         &ImageCreateInfo::new(
             vk::ImageCreateInfo::builder()
                 .image_type(vk::ImageType::TYPE_2D)
-                .format(vk::Format::R8G8B8A8_SRGB)
+                .format(vk::Format::R8G8B8A8_UNORM)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE)
                 // .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
                 .initial_layout(vk::ImageLayout::UNDEFINED)
                 .samples(vk::SampleCountFlags::TYPE_1)
-                .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT | vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::TRANSFER_DST)
+                // TODO: have to add storage bit so we can use this as an input to the blur passnode
+                .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT | vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::STORAGE)
                 .extent(vk::Extent3D::builder()
                     .height(rendertarget_extent.height)
                     .width(rendertarget_extent.width)
@@ -121,7 +122,7 @@ impl UBOPass {
 
         let rt_ref = AttachmentReference::new(
             render_target.clone(),
-            vk::Format::R8G8B8A8_SRGB,
+            vk::Format::R8G8B8A8_UNORM,
             vk::SampleCountFlags::TYPE_1,
             vk::AttachmentLoadOp::CLEAR,
             vk::AttachmentStoreOp::STORE);
