@@ -158,7 +158,8 @@ fn get_descriptor_image_info(
 
     let (sampler, descriptor_type) = match image.sampler {
         Some(s) => {(s, vk::DescriptorType::COMBINED_IMAGE_SAMPLER)}
-        None => {(vk::Sampler::null(), vk::DescriptorType::SAMPLED_IMAGE)}
+        // None => {(vk::Sampler::null(), vk::DescriptorType::SAMPLED_IMAGE)}
+        None => {(vk::Sampler::null(), vk::DescriptorType::STORAGE_IMAGE)}
     };
     let image_info = vk::DescriptorImageInfo::builder()
         .image_view(image.view)
