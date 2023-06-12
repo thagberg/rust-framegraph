@@ -467,6 +467,7 @@ impl VulkanFrameGraph {
                     },
                     PassType::Compute(cn) => {
                         link_inputs(&cn.inputs, &mut node_barrier, &mut usage_cache);
+                        link_inputs(&cn.outputs, &mut node_barrier, &mut usage_cache);
                     }
                 }
 

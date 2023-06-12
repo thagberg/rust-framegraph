@@ -385,6 +385,7 @@ impl DeviceWrapper {
                 vk::ImageViewCreateFlags::empty(),
                 vk::ImageAspectFlags::COLOR,
                 1);
+            device.borrow().set_debug_name(vk::ObjectType::IMAGE_VIEW, image_view.as_raw(), image_desc.get_name());
             let image_wrapper = ImageWrapper::new(
                 image,
                 image_view,

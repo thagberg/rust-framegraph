@@ -95,7 +95,7 @@ impl ImguiRender {
 
         let font_texture_create = ImageCreateInfo::new(
             vk::ImageCreateInfo::builder()
-                .format(vk::Format::R8G8B8A8_SRGB)
+                .format(vk::Format::R8G8B8A8_UNORM)
                 .image_type(vk::ImageType::TYPE_2D)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE)
                 .initial_layout(vk::ImageLayout::UNDEFINED)
@@ -368,7 +368,7 @@ impl ImguiRender {
 
             let rt_ref = AttachmentReference::new(
                 render_target.clone(),
-                vk::Format::R8G8B8A8_SRGB, // TODO: this should be parameterized
+                vk::Format::R8G8B8A8_UNORM, // TODO: this should be parameterized
                 vk::SampleCountFlags::TYPE_1,
                 vk::AttachmentLoadOp::LOAD,
                 vk::AttachmentStoreOp::STORE);
