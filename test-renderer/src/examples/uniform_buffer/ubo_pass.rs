@@ -153,15 +153,15 @@ impl UBOPass {
                         let viewport = vk::Viewport::builder()
                             .x(0.0)
                             .y(0.0)
-                            .width(1200.0)
-                            .height(900.0)
+                            .width(800.0)
+                            .height(600.0)
                             .min_depth(0.0)
                             .max_depth(1.0)
                             .build();
 
                         let scissor = vk::Rect2D::builder()
                             .offset(vk::Offset2D{x: 0, y: 0})
-                            .extent(vk::Extent2D::builder().width(1200).height(900).build())
+                            .extent(vk::Extent2D::builder().width(800).height(600).build())
                             .build();
 
                         unsafe {
