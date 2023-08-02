@@ -200,18 +200,34 @@ impl VulkanApp {
             let swapchain_resource = self.swapchain_images[image_index as usize].clone();
             let extent = self.render_context.get_swapchain().as_ref().unwrap().get_extent();
             let blit_offsets = [glam::IVec2::new(0, 0), glam::IVec2::new(extent.width as i32, extent.height as i32)];
+
             self.frames[self.current_frame] = Some(self.frame_graph.start());
             let current_frame = self.frames[self.current_frame].as_mut().unwrap();
-            let (ubo_pass_node, ubo_render_target) = self.ubo_pass.generate_pass(self.render_context.get_device(), self.render_context.get_swapchain().as_ref().unwrap().get_extent());
-            let (blur_node, blur_target) = blur::generate_pass(self.render_context.get_device(), ubo_render_target.clone());
-            let imgui_nodes = self.imgui_renderer.generate_passes(ui_draw_data, blur_target.clone(), self.render_context.get_device());
-            let blit_node = blit::generate_pass(blur_target.clone(), 0, swapchain_resource.clone(), 0, blit_offsets);
+
+            let (ubo_pass_node, ubo_render_target) = self.ubo_pass.generate_pass(
+                self.render_context.get_device(),
+                self.render_context.get_swapchain().as_ref().unwrap().get_extent());
+            let (blur_node, blur_target) = blur::generate_pass(
+                self.render_context.get_device(),
+                ubo_render_target.clone());
+            let imgui_nodes = self.imgui_renderer.generate_passes(
+                ui_draw_data,
+                blur_target.clone(),
+                self.render_context.get_device());
+            let blit_node = blit::generate_pass(
+                blur_target.clone(),
+                0,
+                swapchain_resource.clone(),
+                0,
+                blit_offsets);
+
             current_frame.start(blit_node);
             current_frame.add_node(ubo_pass_node);
             current_frame.add_node(blur_node);
             for imgui_node in imgui_nodes {
                 current_frame.add_node(imgui_node);
             }
+
             self.frame_graph.end(
                 current_frame,
                 &mut self.render_context,

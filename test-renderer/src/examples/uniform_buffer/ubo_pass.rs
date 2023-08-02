@@ -149,7 +149,6 @@ impl UBOPass {
                 move |render_ctx: &VulkanRenderContext,
                       command_buffer: &vk::CommandBuffer|
                     {
-                        println!("I'm doing something!");
                         let viewport = vk::Viewport::builder()
                             .x(0.0)
                             .y(0.0)
@@ -175,7 +174,12 @@ impl UBOPass {
                                 0,
                                 std::slice::from_ref(&scissor));
 
-                            render_ctx.get_device().borrow().get().cmd_draw(*command_buffer, 3, 1, 0, 0);
+                            render_ctx.get_device().borrow().get().cmd_draw(
+                                *command_buffer,
+                                3,
+                                1,
+                                0,
+                                0);
                         }
                     }
             ))
