@@ -738,6 +738,7 @@ impl FrameGraph for VulkanFrameGraph {
         let sorted_nodes = &frame.sorted_nodes;
         for index in sorted_nodes {
             let node = frame.nodes.node_weight_mut(*index).unwrap();
+            render_context.get_device().borrow().push_debug_label(*command_buffer, node.get_name());
 
             // Prepare and execute resource barriers
             let barriers = self.node_barriers.get(index);
@@ -828,6 +829,8 @@ impl FrameGraph for VulkanFrameGraph {
                 }
                 _ => {}
             }
+
+            render_context.get_device().borrow().pop_debug_label(*command_buffer);
         }
     }
 }
