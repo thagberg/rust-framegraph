@@ -4,7 +4,7 @@ use core::ffi::c_void;
 use std::rc::Rc;
 use ash::{Device, vk};
 use ash::extensions::ext::DebugUtils;
-use ash::vk::{DebugUtilsObjectNameInfoEXT, Handle};
+use ash::vk::{DebugUtilsLabelEXT, DebugUtilsObjectNameInfoEXT, Handle};
 use gpu_allocator::vulkan::*;
 use gpu_allocator::MemoryLocation;
 
@@ -598,6 +598,28 @@ impl DeviceWrapper {
         DeviceRenderpass {
             renderpass,
             device
+        }
+    }
+
+    pub fn push_debug_label(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        label: &str) {
+        unsafe {
+            let c_label = CString::new(label)
+                .expect("Failed to create C-string for debug label");
+            let debug_label = DebugUtilsLabelEXT::builder()
+                .label_name(&c_label)
+                .build();
+            self.debug_utils.cmd_begin_debug_utils_label(command_buffer, &debug_label);
+        }
+    }
+
+    pub fn pop_debug_label(
+        &self,
+        command_buffer: vk::CommandBuffer) {
+        unsafe {
+            self.debug_utils.cmd_end_debug_utils_label(command_buffer);
         }
     }
 }
