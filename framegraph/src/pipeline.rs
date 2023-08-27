@@ -372,7 +372,8 @@ impl VulkanPipelineManager {
                     render_context.get_device(),
                     &compute_pipeline_info,
                     pipeline_layout,
-                    descriptor_set_layouts);
+                    descriptor_set_layouts,
+                    &pipeline_description.compute_name);
                 let pipeline = Rc::new(RefCell::new(Pipeline::new(
                     device_pipeline,
                     descriptor_sets)));
@@ -531,7 +532,8 @@ impl VulkanPipelineManager {
                     render_context.get_device(),
                     &graphics_pipeline_info,
                     pipeline_layout,
-                    descriptor_set_layouts);
+                    descriptor_set_layouts,
+                    pipeline_description.get_name());
                 let pipeline = Rc::new(RefCell::new(Pipeline::new(
                     device_pipeline,
                     descriptor_sets)));

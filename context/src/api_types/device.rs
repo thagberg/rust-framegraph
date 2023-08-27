@@ -539,7 +539,8 @@ impl DeviceWrapper {
         device: Rc<RefCell<DeviceWrapper>>,
         create_info: &vk::GraphicsPipelineCreateInfo,
         pipeline_layout: vk::PipelineLayout,
-        descriptor_set_layouts: Vec<vk::DescriptorSetLayout>
+        descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
+        name: &str
     ) -> DevicePipeline {
         let pipeline = unsafe {
             device.borrow().get().create_graphics_pipelines(
@@ -549,8 +550,8 @@ impl DeviceWrapper {
                 .expect("Failed to create Graphics Pipeline")
         }[0];
 
-        device.borrow().set_debug_name(vk::ObjectType::PIPELINE, pipeline.as_raw(), "Test");
-        device.borrow().set_debug_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.as_raw(), "Test-Layout");
+        device.borrow().set_debug_name(vk::ObjectType::PIPELINE, pipeline.as_raw(), name);
+        device.borrow().set_debug_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.as_raw(), &(name.to_owned() + "_layout"));
 
         DevicePipeline::new(
             pipeline,
@@ -563,7 +564,8 @@ impl DeviceWrapper {
         device: Rc<RefCell<DeviceWrapper>>,
         create_info: &vk::ComputePipelineCreateInfo,
         pipeline_layout: vk::PipelineLayout,
-        descriptor_set_layouts: Vec<vk::DescriptorSetLayout>
+        descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
+        name: &str
     ) -> DevicePipeline {
         let pipeline = unsafe {
             device.borrow().get().create_compute_pipelines(
@@ -573,8 +575,8 @@ impl DeviceWrapper {
                 .expect("Failed to create Graphics Pipeline")
         }[0];
 
-        device.borrow().set_debug_name(vk::ObjectType::PIPELINE, pipeline.as_raw(), "Test");
-        device.borrow().set_debug_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.as_raw(), "Test-Layout");
+        device.borrow().set_debug_name(vk::ObjectType::PIPELINE, pipeline.as_raw(), name);
+        device.borrow().set_debug_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.as_raw(), &(name.to_owned() + "_layout"));
 
         DevicePipeline::new(
             pipeline,
