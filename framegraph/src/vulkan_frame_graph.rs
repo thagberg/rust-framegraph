@@ -81,7 +81,6 @@ fn link_inputs(inputs: &[ResourceBinding], node_barrier: &mut NodeBarriers, usag
                             ResourceUsage {
                                 access: vk::AccessFlags::NONE,
                                 stage: vk::PipelineStageFlags::ALL_COMMANDS,
-                                // layout: Some(vk::ImageLayout::UNDEFINED)
                                 layout: Some(resolved_image.layout)
                             }
                         }
@@ -377,7 +376,9 @@ impl VulkanFrameGraph {
                                 layout: Some(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
                             };
                             if let Some(usage) = last_usage {
-                                rt.layout = usage.layout.expect("Tried to get image layout from non-image");
+                                // The RenderPassManager expects the RT layout to be in the
+                                // post-barrier (i.e. new) layout
+                                rt.layout = new_usage.layout.unwrap();
 
                                 let image_barrier = ImageBarrier {
                                     resource: rt.resource_image.clone(),
@@ -385,8 +386,8 @@ impl VulkanFrameGraph {
                                     dest_stage: new_usage.stage,
                                     source_access: usage.access,
                                     dest_access: new_usage.access,
-                                    old_layout: rt.layout,
-                                    new_layout: new_usage.layout.unwrap()
+                                    old_layout: usage.layout.expect("Tried to get image layout from non-image"),
+                                    new_layout: rt.layout
                                 };
                                 node_barrier.image_barriers.push(image_barrier);
                             }
