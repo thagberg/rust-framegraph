@@ -32,7 +32,8 @@ fn compile_shaders(paths: Paths, out_dir: &str) {
 }
 
 fn main() {
-    // println!("cargo:rerun-if-changed=shaders");
+    println!("cargo:rerun-if-changed=shaders");
+    println!("cargo:rerun-if-changed='../passes/shaders'");
     println!("Compiling shaders");
     let out_dir = env::var("OUT_DIR").unwrap();
 

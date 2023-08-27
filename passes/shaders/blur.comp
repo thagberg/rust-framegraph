@@ -10,18 +10,19 @@ const float kernel[25] = float[25](
     0.0156, 0.0625, 0.0938, 0.0625, 0.0156,
     0.0039, 0.0156, 0.0234, 0.0156, 0.0039
 );
-
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 void main() {
 
     if (gl_GlobalInvocationID.x < imageSize(outputImage).x && gl_GlobalInvocationID.y < imageSize(outputImage).y) {
         vec3 blurredColor = vec3(0.0,0.0,0.0);
-        for (int i = 0; i < 5; ++i) {
-            for (int j = 0; j < 5; ++j) {
-                vec3 neighbor = imageLoad(sourceImage, ivec2(j, i)).xyz;
+        for (int i = -4; i < 4; ++i) {
+            for (int j = -4; j < 4; ++j) {
+                vec3 neighbor = imageLoad(sourceImage, ivec2(gl_GlobalInvocationID.x + j, gl_GlobalInvocationID.y + i)).xyz;
                 blurredColor += neighbor;
             }
         }
+
+        blurredColor /= 64;
 
         barrier();
 

@@ -520,6 +520,14 @@ impl VulkanFrameGraph {
             render_context,
             &node.pipeline_description);
 
+        // bind pipeline
+        unsafe {
+            render_context.get_device().borrow().get().cmd_bind_pipeline(
+                *command_buffer,
+                vk::PipelineBindPoint::COMPUTE,
+                pipeline.borrow().get_pipeline());
+        }
+
         // prepare and perform descriptor writes
         {
             let mut descriptor_updates = DescriptorUpdate::new();
@@ -547,21 +555,13 @@ impl VulkanFrameGraph {
                 // TODO: COMPUTE SUPPORT
                 render_context.get_device().borrow().get().cmd_bind_descriptor_sets(
                     *command_buffer,
-                    vk::PipelineBindPoint::GRAPHICS,
+                    vk::PipelineBindPoint::COMPUTE,
                     pipeline.borrow().get_pipeline_layout(),
                     0,
                     &pipeline.borrow().descriptor_sets,
                     &[]);
             }
         };
-
-        // bind pipeline
-        unsafe {
-            render_context.get_device().borrow().get().cmd_bind_pipeline(
-                *command_buffer,
-                vk::PipelineBindPoint::COMPUTE,
-                pipeline.borrow().get_pipeline());
-        }
 
         // execute node
         node.execute(

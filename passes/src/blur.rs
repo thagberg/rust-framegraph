@@ -6,6 +6,7 @@ use gpu_allocator::MemoryLocation;
 
 use context::api_types::device::{DeviceResource, DeviceWrapper};
 use context::api_types::image::ImageCreateInfo;
+use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::binding::{BindingInfo, BindingType, ImageBindingInfo, ResourceBinding};
 use framegraph::compute_pass_node::ComputePassNode;
@@ -74,6 +75,13 @@ pub fn generate_pass(
                   command_buffer: &vk::CommandBuffer | {
 
                 println!("Performing blur");
+                unsafe {
+                    render_ctx.get_device().borrow().get().cmd_dispatch(
+                        *command_buffer,
+                        image_extent.width / 8,
+                        image_extent.height / 8,
+                        1);
+                }
             }
         ))
         .build()
