@@ -14,6 +14,7 @@ use ash::vk;
 use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent, MouseButton};
 use winit::event_loop::{EventLoop, ControlFlow};
 use imgui::Context;
+use imgui_winit_support::{HiDpiMode, WinitPlatform};
 
 extern crate framegraph;
 extern crate context;
@@ -45,6 +46,7 @@ struct SyncObjects {
 
 struct VulkanApp {
     window: winit::window::Window,
+    platform: WinitPlatform,
     debug_merssager: vk::DebugUtilsMessengerEXT,
 
     ubo_pass: UBOPass,
@@ -119,8 +121,8 @@ impl VulkanApp {
         let mut imgui = Context::create();
         imgui.set_ini_filename(None);
         let font_texture = {
-            let mut imgui_io = imgui.io_mut();
-            imgui_io.display_size = [swapchain_extent.width as f32, swapchain_extent.height as f32];
+            //let mut imgui_io = imgui.io_mut();
+            //imgui_io.display_size = [swapchain_extent.width as f32, swapchain_extent.height as f32];
             let fonts = imgui.fonts();
             fonts.build_rgba32_texture()
         };
@@ -130,8 +132,12 @@ impl VulkanApp {
             &render_context,
             font_texture);
 
+        let mut winit_platform = WinitPlatform::init(&mut imgui);
+        winit_platform.attach_window(imgui.io_mut(), &window, HiDpiMode::Default);
+
         VulkanApp {
             window,
+            platform: winit_platform,
             debug_merssager,
 
             render_context,
@@ -187,11 +193,13 @@ impl VulkanApp {
         }
 
         {
-            {
-                let mut imgui_io = self.imgui.io_mut();
-                imgui_io.mouse_pos = [mouse_pos.0, mouse_pos.1];
-                imgui_io.mouse_down[0] = mouse_down;
-            }
+            // {
+            //     let mut imgui_io = self.imgui.io_mut();
+            //     //imgui_io.mouse_pos = [mouse_pos.0, mouse_pos.1];
+            //     imgui_io.add_mouse_pos_event([mouse_pos.0, mouse_pos.1]);
+            //     imgui_io.add_mouse_button_event(imgui::MouseButton::Left, mouse_down);
+            //     //imgui_io.mouse_down[0] = mouse_down;
+            // }
             let ui = self.imgui.new_frame();
             ui.text("Testing UI");
             let ui_draw_data = self.imgui.render();
@@ -402,6 +410,8 @@ impl Drop for VulkanApp {
 impl VulkanApp {
 
     pub fn main_loop(mut self, event_loop: EventLoop<()>) {
+        // The RenderPassManager expects the RT layout to be in the
+        // post-barrier (i.e. new) layout
 
         let mut mouse_pos: (f32, f32) = (0.0, 0.0);
         let mut mouse_down = false;
@@ -409,36 +419,9 @@ impl VulkanApp {
         event_loop.run(move |event, _, control_flow| {
 
             match event {
-                | Event::WindowEvent { event, .. } => {
-                    match event {
-                        | WindowEvent::CloseRequested => {
-                            *control_flow = ControlFlow::Exit
-                        },
-                        | WindowEvent::KeyboardInput { input, .. } => {
-                            match input {
-                                | KeyboardInput { virtual_keycode, state, .. } => {
-                                    match (virtual_keycode, state) {
-                                        | (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
-                                            *control_flow = ControlFlow::Exit
-                                        },
-                                        | _ => {},
-                                    }
-                                },
-                            }
-                        },
-                        | WindowEvent::CursorMoved { position, .. } => {
-                            mouse_pos.0 = position.x as f32;
-                            mouse_pos.1 = position.y as f32;
-                        },
-                        | WindowEvent::MouseInput {button, state, .. } => {
-                            if button == MouseButton::Left && state == ElementState::Pressed {
-                                mouse_down = true;
-                            }
-                        }
-                        | _ => {},
-                    }
-                },
                 | Event::MainEventsCleared => {
+                    self.platform.prepare_frame(self.imgui.io_mut(), &self.window)
+                        .expect("Failed to prepare frame");
                     self.window.request_redraw();
                 },
                 | Event::RedrawRequested(_window_id) => {
@@ -450,7 +433,9 @@ impl VulkanApp {
                             .expect("Failed to wait device idle!")
                     };
                 },
-                _ => (),
+                event => {
+                    self.platform.handle_event(self.imgui.io_mut(), &self.window, &event);
+                },
             }
 
         })
