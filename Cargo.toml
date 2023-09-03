@@ -4,5 +4,6 @@ members = [
     "context",
     "framegraph",
     "passes",
-    "test-renderer"
+    "test-renderer",
+    "framegraph-examples"
 ]

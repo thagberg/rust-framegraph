@@ -553,6 +553,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "framegraph-examples"
+version = "0.0.1"
+dependencies = [
+ "ash",
+ "ash-window",
+ "cgmath",
+ "context",
+ "framegraph",
+ "glam",
+ "glob",
+ "gpu-allocator",
+ "image",
+ "imgui",
+ "imgui-winit-support",
+ "libc",
+ "memoffset 0.6.5",
+ "num",
+ "passes",
+ "tobj",
+ "winapi",
+ "winit",
+]
+
+[[package]]
 name = "freetype-rs"
 version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -803,9 +827,9 @@ dependencies = [
 
 [[package]]
 name = "memchr"
-version = "2.6.2"
+version = "2.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5486aed0026218e61b8a01d5fbd5a0a134649abb71a0e53b7bc088529dced86e"
+checksum = "8f232d6ef707e1956a43342693d2a31e72989554d58299d7a88738cc95b0d35c"
 
 [[package]]
 name = "memmap2"
