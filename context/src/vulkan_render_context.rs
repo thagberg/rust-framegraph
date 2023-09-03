@@ -8,6 +8,9 @@ use ash::vk::{DebugUtilsMessengerEXT, PresentModeKHR};
 use ash::extensions::ext::DebugUtils;
 use winit::window::Window;
 
+use ash::vk::DebugUtilsMessageSeverityFlagsEXT as severity_flags;
+use ash::vk::DebugUtilsMessageTypeFlagsEXT as type_flags;
+
 use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper, DeviceWrapper, DeviceFramebuffer};
 use crate::api_types::swapchain::SwapchainWrapper;
 use crate::api_types::image::ImageWrapper;
@@ -39,6 +42,49 @@ unsafe extern "system" fn debug_utils_callback(
     println!("[Debug]{}{}{:?}", severity, types, message);
 
     vk::FALSE
+}
+
+fn create_vulkan_instance(
+    entry: &ash::Entry,
+    application_info: &vk::ApplicationInfo,
+    required_layer_names: &[&CStr],
+    required_extension_names: &[&CStr]) -> ash::Instance {
+
+    // let layer_names_raw: Vec<CString> = required_layer_names
+    //     .iter()
+    //     .
+
+    let raw_layer_names: Vec<*const c_char> = required_layer_names
+        .iter()
+        .map(|layer_name| layer_name.as_ptr())
+        .collect();
+
+    let raw_extension_names: Vec<*const c_char> = required_extension_names
+        .iter()
+        .map(|extension_name| extension_name.as_ptr())
+        .collect();
+
+    let mut builder = vk::InstanceCreateInfo::builder()
+        .application_info(&application_info)
+        .enabled_layer_names(&raw_layer_names)
+        .enabled_extension_names(&raw_extension_names);
+
+    let mut instance_debug = vk::DebugUtilsMessengerCreateInfoEXT::builder()
+        .message_severity(severity_flags::WARNING | severity_flags::ERROR)
+        .message_type(type_flags::GENERAL | type_flags::PERFORMANCE | type_flags::VALIDATION)
+        .pfn_user_callback(Some(debug_utils_callback))
+        .build();
+
+    if required_layer_names.len() > 0 {
+        builder = builder.push_next(&mut instance_debug);
+    }
+
+    let instance = unsafe {
+        entry.create_instance(&builder, None)
+            .expect("Failed to create Vulkan Instance")
+    };
+
+    instance
 }
 
 fn get_queue_family_indices(
@@ -470,8 +516,7 @@ impl RenderContext for VulkanRenderContext {
 
 impl VulkanRenderContext {
     pub fn new(
-        entry: ash::Entry,
-        instance: ash::Instance,
+        application_info: &vk::ApplicationInfo,
         debug_enabled: bool,
         window: Option<&winit::window::Window>
     ) -> VulkanRenderContext {
@@ -479,13 +524,14 @@ impl VulkanRenderContext {
         let extensions = vec!("VK_KHR_swapchain");
         // let extensions = vec!(ash::extensions::khr::Swapchain::name().as_ptr());
 
+        let entry = ash::Entry::linked();
+        let instance = create_vulkan_instance(&entry, application_info, &[], &[]);
+
         let (debug_utils, debug_utils_messenger) = {
             let debug_utils_loader = ash::extensions::ext::DebugUtils::new(&entry, &instance);
 
             if debug_enabled {
                 let messenger = unsafe {
-                    use vk::DebugUtilsMessageSeverityFlagsEXT as severity_flags;
-                    use vk::DebugUtilsMessageTypeFlagsEXT as type_flags;
                     debug_utils_loader.create_debug_utils_messenger(
                         &vk::DebugUtilsMessengerCreateInfoEXT::builder()
                             .message_severity(severity_flags::WARNING | severity_flags::ERROR)
