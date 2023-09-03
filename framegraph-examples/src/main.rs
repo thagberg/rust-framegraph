@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use winit;
 use winit::window::{Window, WindowBuilder};
 use winit::event::{Event, WindowEvent};
@@ -8,17 +10,15 @@ use imgui;
 struct WindowedVulkanApp {
     window: Window,
     platform: WinitPlatform,
-    event_loop: EventLoop<()>,
     imgui: imgui::Context
 }
 
 impl WindowedVulkanApp {
-    pub fn new(title: &str, width: u32, height: u32) -> WindowedVulkanApp {
-        let event_loop: EventLoop<()> = EventLoop::new();
+    pub fn new(event_loop: &EventLoop<()>, title: &str, width: u32, height: u32) -> WindowedVulkanApp {
         let window = WindowBuilder::new()
             .with_title(title)
             .with_inner_size(winit::dpi::PhysicalSize::new(width, height))
-            .build(&event_loop)
+            .build(event_loop)
             .expect("Failed to create window");
 
         let mut imgui = imgui::Context::create();
@@ -30,16 +30,35 @@ impl WindowedVulkanApp {
         WindowedVulkanApp {
             window,
             platform,
-            event_loop,
             imgui
         }
     }
 
-    pub fn run(mut self) -> Result<u32, &'static str>{
-        self.event_loop.run(move |event, _, control_flow| {
+    pub fn draw_frame(&self) {
+
+    }
+
+    pub fn run(mut self, event_loop: EventLoop<()>) -> Result<u32, &'static str>{
+        let mut last_frame = Instant::now();
+
+        // &self.event_loop.run(move |event, _, control_flow| {
+        event_loop.run(move |event, _, control_flow| {
             match event {
+                Event::NewEvents(_) => {
+                    let now = Instant::now();
+                    self.imgui.io_mut().update_delta_time(now - last_frame);
+                    last_frame = now;
+                },
+                Event::MainEventsCleared => {
+                    self.platform.prepare_frame(self.imgui.io_mut(), &self.window)
+                        .expect("Failed to prepare frame");
+                    self.window.request_redraw();
+                },
                 Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
                     *control_flow = ControlFlow::Exit;
+                },
+                Event::RedrawRequested(_) => {
+                    self.draw_frame();
                 },
                 event => {
                     self.platform.handle_event(self.imgui.io_mut(), &self.window, &event);
@@ -53,7 +72,8 @@ impl WindowedVulkanApp {
 
 fn main() {
     // create app
-    let mut app = WindowedVulkanApp::new("Examples", 1200, 800);
-    let exit = app.run();
+    let event_loop: EventLoop<()> = EventLoop::new();
+    let app = WindowedVulkanApp::new(&event_loop, "Examples", 1200, 800);
+    let exit = app.run(event_loop);
 
 }
