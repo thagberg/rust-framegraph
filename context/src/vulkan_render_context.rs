@@ -1,10 +1,10 @@
 use std::cell::RefCell;
-use std::ffi::CStr;
+use std::ffi::{c_void, CStr};
 use std::ffi::CString;
 use std::os::raw::c_char;
 use std::rc::Rc;
 use ash::{vk};
-use ash::vk::PresentModeKHR;
+use ash::vk::{DebugUtilsMessengerEXT, PresentModeKHR};
 use ash::extensions::ext::DebugUtils;
 
 use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper, DeviceWrapper, DeviceFramebuffer};
@@ -13,6 +13,32 @@ use crate::api_types::image::ImageWrapper;
 use crate::api_types::surface::SurfaceWrapper;
 use crate::api_types::instance::InstanceWrapper;
 use crate::render_context::RenderContext;
+
+unsafe extern "system" fn debug_utils_callback(
+    severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+    message_type: vk::DebugUtilsMessageTypeFlagsEXT,
+    p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
+    p_user_data: *mut c_void
+) -> vk::Bool32 {
+    let severity = match severity {
+        vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => "[Verbose]",
+        vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => "[Warning]",
+        vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => "[Error]",
+        vk::DebugUtilsMessageSeverityFlagsEXT::INFO => "[Info]",
+        _ => "[Unknown]",
+    };
+    let types = match message_type {
+        vk::DebugUtilsMessageTypeFlagsEXT::GENERAL => "[General]",
+        vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE => "[Performance]",
+        vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION => "[Validation]",
+        _ => "[Unknown]",
+    };
+
+    let message = CStr::from_ptr((*p_callback_data).p_message);
+    println!("[Debug]{}{}{:?}", severity, types, message);
+
+    vk::FALSE
+}
 
 fn get_queue_family_indices(
     instance: &InstanceWrapper,
@@ -399,6 +425,11 @@ fn create_swapchain(
         swapchain_extent)
 }
 
+pub struct VulkanDebug {
+    debug_utils: DebugUtils,
+    debug_messenger: DebugUtilsMessengerEXT
+}
+
 pub struct VulkanRenderContext {
     graphics_queue: vk::Queue,
     present_queue: vk::Queue,
@@ -411,6 +442,7 @@ pub struct VulkanRenderContext {
     device: Rc<RefCell<DeviceWrapper>>,
     physical_device: PhysicalDeviceWrapper,
     surface: Option<SurfaceWrapper>,
+    debug_messenger: Option<DebugUtilsMessengerEXT>,
     instance: InstanceWrapper,
     entry: ash::Entry
 }
@@ -439,7 +471,7 @@ impl VulkanRenderContext {
     pub fn new(
         entry: ash::Entry,
         instance: ash::Instance,
-        debug_utils: DebugUtils,
+        debug_enabled: bool,
         surface: Option<SurfaceWrapper>,
         window: &winit::window::Window
     ) -> VulkanRenderContext {
@@ -447,7 +479,31 @@ impl VulkanRenderContext {
         let extensions = vec!("VK_KHR_swapchain");
         // let extensions = vec!(ash::extensions::khr::Swapchain::name().as_ptr());
 
+        let (debug_utils, debug_utils_messenger) = {
+            let debug_utils_loader = ash::extensions::ext::DebugUtils::new(&entry, &instance);
+
+            if debug_enabled {
+                let messenger = unsafe {
+                    use vk::DebugUtilsMessageSeverityFlagsEXT as severity_flags;
+                    use vk::DebugUtilsMessageTypeFlagsEXT as type_flags;
+                    debug_utils_loader.create_debug_utils_messenger(
+                        &vk::DebugUtilsMessengerCreateInfoEXT::builder()
+                            .message_severity(severity_flags::WARNING | severity_flags::ERROR)
+                            .message_type(type_flags::GENERAL | type_flags::PERFORMANCE | type_flags::VALIDATION)
+                            .pfn_user_callback(Some(debug_utils_callback))
+                            .build(),
+                       None)
+                        .expect("Failed to create Debug Utils Messenger")
+                };
+
+                (debug_utils_loader, Some(messenger))
+            } else {
+                (debug_utils_loader, None)
+            }
+        };
+
         let instance_wrapper = InstanceWrapper::new(instance);
+
         let physical_device = pick_physical_device(
     &instance_wrapper,
             &surface,
@@ -547,7 +603,8 @@ impl VulkanRenderContext {
             swapchain,
             descriptor_pool,
             graphics_command_buffers,
-            immediate_command_buffer: immediate_command_buffer[0]
+            immediate_command_buffer: immediate_command_buffer[0],
+            debug_messenger: debug_utils_messenger,
         }
     }
 
