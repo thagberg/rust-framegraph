@@ -1,0 +1,28 @@
+[package]
+name = "framegraph-examples"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+libc                = "0.2.147"
+winit               = "^0.27"
+ash                 = {version = "^0.36", features = ["linked"]}
+ash-window          = "^0.9"
+image               = "^0.23"
+memoffset           = "^0.6"
+cgmath              = "^0.18"
+tobj                = "^3.2"
+num                 = "^0.4"
+context             = {path="../context"}
+framegraph          = {path="../framegraph"}
+passes              = {path="../passes"}
+glam                = "0.21.2"
+gpu-allocator       = "^0.17"
+imgui               = "^0.11.0"
+imgui-winit-support = "0.11.0"
+
+[build-dependencies]
+glob        = "0.3.0"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winapi = { version = "^0.3", features = ["windef", "libloaderapi"] }
