@@ -6,6 +6,7 @@ use std::rc::Rc;
 use ash::{vk};
 use ash::vk::{DebugUtilsMessengerEXT, PresentModeKHR};
 use ash::extensions::ext::DebugUtils;
+use winit::window::Window;
 
 use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper, DeviceWrapper, DeviceFramebuffer};
 use crate::api_types::swapchain::SwapchainWrapper;
@@ -472,8 +473,7 @@ impl VulkanRenderContext {
         entry: ash::Entry,
         instance: ash::Instance,
         debug_enabled: bool,
-        surface: Option<SurfaceWrapper>,
-        window: &winit::window::Window
+        window: Option<&winit::window::Window>
     ) -> VulkanRenderContext {
         let layers = vec!("VK_LAYER_KHRONOS_validation");
         let extensions = vec!("VK_KHR_swapchain");
@@ -502,11 +502,26 @@ impl VulkanRenderContext {
             }
         };
 
+        let surface_wrapper = {
+            match window {
+                Some(win) => {
+                    Some(SurfaceWrapper::new(
+                        &entry,
+                        &instance,
+                        win
+                    ))
+                }
+                None => {
+                    None
+                }
+            }
+        };
+
         let instance_wrapper = InstanceWrapper::new(instance);
 
         let physical_device = pick_physical_device(
     &instance_wrapper,
-            &surface,
+            &surface_wrapper,
             // &extensions).expect("Failed to select a suitable physical device.");
         &[]).expect("Failed to select a suitable physical device.");
 
@@ -514,7 +529,7 @@ impl VulkanRenderContext {
             &instance_wrapper,
             debug_utils,
             &physical_device,
-            &surface,
+            &surface_wrapper,
             layers,
             extensions
         )));
@@ -550,13 +565,13 @@ impl VulkanRenderContext {
             1);
 
         let swapchain = {
-            if surface.is_some() {
+            if window.is_some() && surface_wrapper.is_some() {
                 Some(create_swapchain(
                     &instance_wrapper,
                     logical_device.clone(),
                     &physical_device,
-                    &surface.as_ref().unwrap(),
-                    window))
+                    &surface_wrapper.as_ref().unwrap(),
+                    window.unwrap()))
             } else {
                 None
             }
@@ -599,7 +614,7 @@ impl VulkanRenderContext {
             present_queue,
             compute_queue,
             graphics_command_pool,
-            surface,
+            surface: surface_wrapper,
             swapchain,
             descriptor_pool,
             graphics_command_buffers,
