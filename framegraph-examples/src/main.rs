@@ -27,6 +27,8 @@ impl WindowedVulkanApp {
         let mut platform = WinitPlatform::init(&mut imgui);
         platform.attach_window(imgui.io_mut(), &window, HiDpiMode::Default);
 
+        let entry = ash::Entry::linked();
+
         WindowedVulkanApp {
             window,
             platform,
