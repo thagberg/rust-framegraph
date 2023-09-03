@@ -1,4 +1,6 @@
+use std::ffi::CString;
 use std::time::Instant;
+use ash::vk;
 
 use winit;
 use winit::window::{Window, WindowBuilder};
@@ -6,6 +8,7 @@ use winit::event::{Event, WindowEvent};
 use winit::event_loop::{EventLoop, ControlFlow};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use imgui;
+use context::vulkan_render_context::VulkanRenderContext;
 
 struct WindowedVulkanApp {
     window: Window,
@@ -27,7 +30,16 @@ impl WindowedVulkanApp {
         let mut platform = WinitPlatform::init(&mut imgui);
         platform.attach_window(imgui.io_mut(), &window, HiDpiMode::Default);
 
-        let entry = ash::Entry::linked();
+        let render_context = {
+            let c_title = CString::new(title).unwrap();
+            let application_info = vk::ApplicationInfo::builder()
+                .application_name(&c_title);
+
+            VulkanRenderContext::new(
+                &application_info,
+                true,
+                Some(&window))
+        };
 
         WindowedVulkanApp {
             window,
