@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::char::MAX;
 use std::ffi::{c_void, CStr};
 use std::ffi::CString;
 use std::os::raw::c_char;
@@ -17,6 +18,8 @@ use crate::api_types::image::ImageWrapper;
 use crate::api_types::surface::SurfaceWrapper;
 use crate::api_types::instance::InstanceWrapper;
 use crate::render_context::RenderContext;
+
+const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 
 unsafe extern "system" fn debug_utils_callback(
     severity: vk::DebugUtilsMessageSeverityFlagsEXT,
@@ -386,7 +389,7 @@ fn create_swapchain(
     };
 
     // just assume double-buffering for now
-    let image_count = 2;
+    let image_count = MAX_FRAMES_IN_FLIGHT;
 
     // TODO: using exclusive mode right now but might want to make this concurrent
     let image_sharing_mode = vk::SharingMode::EXCLUSIVE;
@@ -456,7 +459,13 @@ pub struct VulkanDebug {
     debug_messenger: DebugUtilsMessengerEXT
 }
 
+pub struct VulkanFrameObjects {
+    pub graphics_command_buffer: vk::CommandBuffer,
+    pub swapchain_image: Option<Rc<RefCell<DeviceResource>>>
+}
+
 pub struct VulkanRenderContext {
+    frame_index: u32,
     graphics_queue: vk::Queue,
     present_queue: vk::Queue,
     compute_queue: vk::Queue,
@@ -597,7 +606,7 @@ impl VulkanRenderContext {
         let graphics_command_buffers = create_command_buffers(
             &logical_device.borrow(),
             graphics_command_pool,
-            2);
+            MAX_FRAMES_IN_FLIGHT);
 
         let immediate_command_buffer = create_command_buffers(
             &logical_device.borrow(),
@@ -620,13 +629,13 @@ impl VulkanRenderContext {
         let swapchain_semaphores = {
             let mut semaphores: Vec<vk::Semaphore> = Vec::new();
             if let Some(swapchain) = &swapchain {
-                semaphores.reserve(swapchain.get_images.len());
-                for i in 0..swapchain.get_images.len() {
+                semaphores.reserve(swapchain.get_images().len());
+                for i in 0..swapchain.get_images().len() {
                     let create_info = vk::SemaphoreCreateInfo::builder()
                         .build();
 
                     semaphores.push(unsafe {
-                        device.borrow().get().create_semaphore(&create_info, None)
+                        logical_device.borrow().get().create_semaphore(&create_info, None)
                             .expect("Failed to create semaphore for swapchain image")
                     });
                 }
@@ -664,6 +673,8 @@ impl VulkanRenderContext {
                 .expect("Failed to create descriptor pool")
         };
 
+        let frame_index = 0;
+
         VulkanRenderContext {
             entry,
             instance: instance_wrapper,
@@ -680,6 +691,7 @@ impl VulkanRenderContext {
             graphics_command_buffers,
             immediate_command_buffer: immediate_command_buffer[0],
             debug_messenger: debug_utils_messenger,
+            frame_index
         }
     }
 
@@ -704,20 +716,36 @@ impl VulkanRenderContext {
 
     pub fn get_graphics_command_pool(&self) -> vk::CommandPool { self.graphics_command_pool }
 
-    pub fn get_graphics_command_buffer(&self, index: usize) -> vk::CommandBuffer { self.graphics_command_buffers[index] }
+    fn get_graphics_command_buffer(&self, index: usize) -> vk::CommandBuffer { self.graphics_command_buffers[index] }
 
     pub fn get_immediate_command_buffer(&self) -> vk::CommandBuffer { self.immediate_command_buffer }
 
     pub fn get_swapchain(&self) -> &Option<SwapchainWrapper> { &self.swapchain }
 
-    pub fn get_next_swapchain_image(&mut self, timeout: Option<u64>, fence: Option<vk::Fence>) -> Option<(Rc<RefCell<DeviceResource>>, u32)> {
+    fn get_next_swapchain_image(
+        &mut self,
+        timeout: Option<u64>,
+        semaphore: Option<vk::Semaphore>,
+        fence: Option<vk::Fence>) -> Option<(Rc<RefCell<DeviceResource>>, u32)> {
+
         match &mut self.swapchain {
             Some(swapchain) => {
-                Some(swapchain.acquire_next_image(timeout, None, fence))
+                Some(swapchain.acquire_next_image(timeout, semaphore, fence))
             }
             None => {
                 None
             }
+        }
+    }
+
+    pub fn get_next_frame_objects(&mut self) -> VulkanFrameObjects {
+        let old_index = self.frame_index;
+        self.frame_index = (self.frame_index + 1) % MAX_FRAMES_IN_FLIGHT;
+
+        self.get_next_swapchain_image(None, Some(self.swapchain_semaphores[old_index as usize]), None);
+        VulkanFrameObjects {
+            graphics_command_buffer: self.graphics_command_buffers[old_index as usize],
+            swapchain_image: None,
         }
     }
 
