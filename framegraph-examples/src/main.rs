@@ -9,7 +9,7 @@ use winit::event_loop::{EventLoop, ControlFlow};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use imgui;
 use context::render_context::RenderContext;
-use context::vulkan_render_context::VulkanRenderContext;
+use context::vulkan_render_context::{VulkanFrameObjects, VulkanRenderContext};
 use framegraph::pipeline::VulkanPipelineManager;
 use framegraph::renderpass_manager::VulkanRenderpassManager;
 use framegraph::vulkan_frame_graph::VulkanFrameGraph;
@@ -26,8 +26,6 @@ struct WindowedVulkanApp {
     frame_graph: VulkanFrameGraph,
 
     imgui_renderer: ImguiRender,
-
-    current_frame: usize
 }
 
 impl WindowedVulkanApp {
@@ -77,8 +75,7 @@ impl WindowedVulkanApp {
             imgui,
             render_context,
             frame_graph,
-            imgui_renderer,
-            current_frame: 0
+            imgui_renderer
         }
     }
 
@@ -86,12 +83,12 @@ impl WindowedVulkanApp {
         // wait for fence if necessary (can we avoid this using just semaphores?)
 
         // get swapchain image for this frame
-        // TODO: add semaphore to this
-        let (swapchain_image, image_index) = self.render_context.get_swapchain().as_mut().unwrap()
-            .acquire_next_image(None, None);
+        let VulkanFrameObjects {
+            graphics_command_buffer: command_buffer,
+            swapchain_image: swapchain_image
+        } = self.render_context.get_next_frame_objects();
 
         // begin commandbuffer
-        let command_buffer = self.render_context.get_graphics_command_buffer(image_index as usize);
         unsafe {
             self.render_context.get_device().borrow().get().reset_command_buffer(
                 command_buffer,
@@ -119,9 +116,6 @@ impl WindowedVulkanApp {
         // prepare present
 
         // queue present (wait on semaphores)
-
-        // update frame index
-        self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT; // TODO: parameterize double-buffering
     }
 
     pub fn run(mut self, event_loop: EventLoop<()>) -> Result<u32, &'static str>{
