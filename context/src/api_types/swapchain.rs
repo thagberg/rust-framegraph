@@ -43,7 +43,7 @@ impl SwapchainWrapper {
         timeout: u64,
         semaphore: vk::Semaphore,
         fence: vk::Fence
-    ) -> (Rc<RefCell<DeviceResource>>, u32)
+    ) -> Rc<RefCell<DeviceResource>>
     {
         let (image_index, _is_sub_optimal) = unsafe
         {
@@ -54,14 +54,14 @@ impl SwapchainWrapper {
                 fence)
             .expect("Failed to acquire next swpachain image")
         };
-        (self.images[image_index as usize].clone(), image_index)
+        self.images[image_index as usize].clone()
     }
 
     pub fn acquire_next_image(
         &self,
         timeout: Option<u64>,
         semaphore: Option<vk::Semaphore>,
-        fence: Option<vk::Fence>) -> (Rc<RefCell<DeviceResource>>, u32)
+        fence: Option<vk::Fence>) -> Rc<RefCell<DeviceResource>>
     {
         let t = match timeout
         {
