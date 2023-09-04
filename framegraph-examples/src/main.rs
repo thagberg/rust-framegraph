@@ -10,6 +10,8 @@ use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use imgui;
 use context::render_context::RenderContext;
 use context::vulkan_render_context::{VulkanFrameObjects, VulkanRenderContext};
+use framegraph::frame::Frame;
+use framegraph::frame_graph::FrameGraph;
 use framegraph::pipeline::VulkanPipelineManager;
 use framegraph::renderpass_manager::VulkanRenderpassManager;
 use framegraph::vulkan_frame_graph::VulkanFrameGraph;
@@ -26,6 +28,8 @@ struct WindowedVulkanApp {
     frame_graph: VulkanFrameGraph,
 
     imgui_renderer: ImguiRender,
+
+    frames: [Option<Box<Frame>>; MAX_FRAMES_IN_FLIGHT]
 }
 
 impl WindowedVulkanApp {
@@ -75,7 +79,8 @@ impl WindowedVulkanApp {
             imgui,
             render_context,
             frame_graph,
-            imgui_renderer
+            imgui_renderer,
+            frames: Default::default(),
         }
     }
 
@@ -85,7 +90,8 @@ impl WindowedVulkanApp {
         // get swapchain image for this frame
         let VulkanFrameObjects {
             graphics_command_buffer: command_buffer,
-            swapchain_image: swapchain_image
+            swapchain_image: swapchain_image,
+            frame_index: frame_index
         } = self.render_context.get_next_frame_objects();
 
         // begin commandbuffer
@@ -110,6 +116,23 @@ impl WindowedVulkanApp {
         };
 
         // prepare framegraph
+        self.frames[frame_index as usize] = Some(self.frame_graph.start());
+        let current_frame = self.frames[frame_index as usize].as_mut().unwrap();
+
+        {
+            let imgui_nodes = self.imgui_renderer.generate_passes(
+                imgui_draw_data,
+                swapchain_image.unwrap(),
+                self.render_context.get_device());
+
+            for imgui_node in imgui_nodes {
+                current_frame.start(imgui_node);
+            }
+        }
+        self.frame_graph.end(
+            current_frame,
+            &mut self.render_context,
+            &command_buffer);
 
         // queue submit
 

@@ -461,7 +461,8 @@ pub struct VulkanDebug {
 
 pub struct VulkanFrameObjects {
     pub graphics_command_buffer: vk::CommandBuffer,
-    pub swapchain_image: Option<Rc<RefCell<DeviceResource>>>
+    pub swapchain_image: Option<Rc<RefCell<DeviceResource>>>,
+    pub frame_index: u32
 }
 
 pub struct VulkanRenderContext {
@@ -726,7 +727,7 @@ impl VulkanRenderContext {
         &mut self,
         timeout: Option<u64>,
         semaphore: Option<vk::Semaphore>,
-        fence: Option<vk::Fence>) -> Option<(Rc<RefCell<DeviceResource>>, u32)> {
+        fence: Option<vk::Fence>) -> Option<(Rc<RefCell<DeviceResource>>)> {
 
         match &mut self.swapchain {
             Some(swapchain) => {
@@ -742,10 +743,11 @@ impl VulkanRenderContext {
         let old_index = self.frame_index;
         self.frame_index = (self.frame_index + 1) % MAX_FRAMES_IN_FLIGHT;
 
-        self.get_next_swapchain_image(None, Some(self.swapchain_semaphores[old_index as usize]), None);
+        let image = self.get_next_swapchain_image(None, Some(self.swapchain_semaphores[old_index as usize]), None);
         VulkanFrameObjects {
             graphics_command_buffer: self.graphics_command_buffers[old_index as usize],
-            swapchain_image: None,
+            swapchain_image: image,
+            frame_index: old_index
         }
     }
 
