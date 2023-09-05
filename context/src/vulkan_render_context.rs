@@ -143,7 +143,7 @@ fn get_queue_family_indices(
 pub fn are_extensions_supported(
     instance: &InstanceWrapper,
     physical_device: vk::PhysicalDevice,
-    required_extensions: &[&str]
+    required_extensions: &[&CStr]
 ) -> bool {
     // let available_extensions: Vec<&CStr> = unsafe {
     let extension_properties;
@@ -154,8 +154,7 @@ pub fn are_extensions_supported(
         extension_properties
         .iter()
         .map(|extension| {
-            let raw_string = CStr::from_ptr(extension.extension_name.as_ptr());
-            raw_string.to_str().expect("Failed to retrieve extension name")
+            CStr::from_ptr(extension.extension_name.as_ptr())
         })
         // .collect()
     };
@@ -178,7 +177,7 @@ fn is_physical_device_suitable(
     physical_device: vk::PhysicalDevice,
     instance: &InstanceWrapper,
     surface: &Option<SurfaceWrapper>,
-    required_extensions: &[&str] ) -> bool {
+    required_extensions: &[&CStr] ) -> bool {
 
     let queue_families = get_queue_family_indices(instance, physical_device, surface);
     let extensions_supported = are_extensions_supported(
@@ -201,7 +200,7 @@ fn is_physical_device_suitable(
 fn pick_physical_device(
     instance: &InstanceWrapper,
     surface: &Option<SurfaceWrapper>,
-    required_extensions: &[&str]) -> Result<PhysicalDeviceWrapper, &'static str> {
+    required_extensions: &[&CStr]) -> Result<PhysicalDeviceWrapper, &'static str> {
 
     let devices = unsafe {
         instance.get()
@@ -232,8 +231,8 @@ fn create_logical_device(
     debug_utils: DebugUtils,
     physical_device: &PhysicalDeviceWrapper,
     surface: &Option<SurfaceWrapper>,
-    layers: Vec<&str>,
-    extensions: Vec<&str>
+    layers: &[&CStr],
+    extensions: &[&CStr]
 ) -> DeviceWrapper {
     let queue_family_indices = get_queue_family_indices(
         instance,
@@ -254,14 +253,10 @@ fn create_logical_device(
     let priorities = [1.0_f32];
     let mut queue_create_infos = vec![];
     for &family_index in unique_family_indices.iter() {
-        let queue_create_info = vk::DeviceQueueCreateInfo {
-            s_type: vk::StructureType::DEVICE_QUEUE_CREATE_INFO,
-            p_next: std::ptr::null(),
-            flags: vk::DeviceQueueCreateFlags::empty(),
-            queue_family_index: family_index,
-            p_queue_priorities: priorities.as_ptr(),
-            queue_count: priorities.len() as u32
-        };
+        let queue_create_info = vk::DeviceQueueCreateInfo::builder()
+            .queue_family_index(family_index)
+            .queue_priorities(&priorities)
+            .build();
         queue_create_infos.push(queue_create_info);
     }
 
@@ -270,37 +265,21 @@ fn create_logical_device(
     };
 
     // convert layer names to const char*
-    let c_layers : Vec<CString> = layers.iter().map(|layer| {
-        CString::new(*layer).expect("Failed to translate layer name to C String")
-    }).collect();
-    let p_layers: Vec<*const c_char> = c_layers.iter().map(|c_layer| {
+    let p_layers: Vec<*const c_char> = layers.iter().map(|c_layer| {
         c_layer.as_ptr()
     }).collect();
 
     // do the same for extensions
-    let c_extensions : Vec<CString> = extensions.iter().map(|extension| {
-        CString::new(*extension).expect("Failed to translate extension name to C String")
-    }).collect();
-    let p_extensions: Vec<*const c_char> = c_extensions.iter().map(|c_extension| {
+    let p_extensions: Vec<*const c_char> = extensions.iter().map(|c_extension| {
         c_extension.as_ptr()
     }).collect();
 
-
-    // TODO: implement layers and extensions
-    let device_create_info = vk::DeviceCreateInfo {
-        s_type: vk::StructureType::DEVICE_CREATE_INFO,
-        p_next: std::ptr::null(),
-        flags: vk::DeviceCreateFlags::empty(),
-        queue_create_info_count: queue_create_infos.len() as u32,
-        p_queue_create_infos: queue_create_infos.as_ptr(),
-
-        enabled_layer_count: layers.len() as u32,
-        pp_enabled_layer_names: p_layers.as_ptr(),
-        enabled_extension_count: extensions.len() as u32,
-        pp_enabled_extension_names: p_extensions.as_ptr(),
-
-        p_enabled_features: &physical_device_features
-    };
+    let device_create_info = vk::DeviceCreateInfo::builder()
+        .queue_create_infos(&queue_create_infos)
+        .enabled_layer_names(&p_layers)
+        .enabled_extension_names(&p_extensions)
+        .enabled_features(&physical_device_features)
+        .build();
 
     let device = unsafe {
         instance.get().create_device(physical_device.get(), &device_create_info, None)
@@ -520,12 +499,27 @@ impl VulkanRenderContext {
         debug_enabled: bool,
         window: Option<&winit::window::Window>
     ) -> VulkanRenderContext {
-        let layers = vec!("VK_LAYER_KHRONOS_validation");
-        let extensions = vec!("VK_KHR_swapchain");
         // let extensions = vec!(ash::extensions::khr::Swapchain::name().as_ptr());
 
+        let layers = [
+            unsafe { ::std::ffi::CStr::from_bytes_with_nul_unchecked(b"VK_LAYER_KHRONOS_validation\0") }
+        ];
+
+        let instance_extensions = [
+            ash::extensions::ext::DebugUtils::name(),
+            ash::extensions::khr::Win32Surface::name(),
+            ash::extensions::khr::Surface::name()];
+
+        let device_extensions = [
+            ash::extensions::khr::Swapchain::name()
+        ];
+
         let entry = ash::Entry::linked();
-        let instance = create_vulkan_instance(&entry, application_info, &[], &[]);
+        let instance = create_vulkan_instance(
+            &entry,
+            application_info,
+            &layers,
+            &instance_extensions);
 
         let (debug_utils, debug_utils_messenger) = {
             let debug_utils_loader = ash::extensions::ext::DebugUtils::new(&entry, &instance);
@@ -568,16 +562,15 @@ impl VulkanRenderContext {
         let physical_device = pick_physical_device(
     &instance_wrapper,
             &surface_wrapper,
-            // &extensions).expect("Failed to select a suitable physical device.");
-        &[]).expect("Failed to select a suitable physical device.");
+        &device_extensions).expect("Failed to select a suitable physical device.");
 
         let logical_device = Rc::new(RefCell::new(create_logical_device(
             &instance_wrapper,
             debug_utils,
             &physical_device,
             &surface_wrapper,
-            layers,
-            extensions
+            &layers,
+            &device_extensions
         )));
 
         let graphics_queue = unsafe {
