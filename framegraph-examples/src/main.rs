@@ -8,12 +8,22 @@ use winit::event::{Event, WindowEvent};
 use winit::event_loop::{EventLoop, ControlFlow};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use imgui;
+use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
+use framegraph::pipeline::VulkanPipelineManager;
+use framegraph::renderpass_manager::VulkanRenderpassManager;
+use framegraph::vulkan_frame_graph::VulkanFrameGraph;
+use passes::imgui_draw::ImguiRender;
 
 struct WindowedVulkanApp {
     window: Window,
     platform: WinitPlatform,
-    imgui: imgui::Context
+    imgui: imgui::Context,
+
+    render_context: VulkanRenderContext,
+    frame_graph: VulkanFrameGraph,
+
+    imgui_renderer: ImguiRender
 }
 
 impl WindowedVulkanApp {
@@ -41,10 +51,29 @@ impl WindowedVulkanApp {
                 Some(&window))
         };
 
+        let frame_graph = VulkanFrameGraph::new(
+            VulkanRenderpassManager::new(),
+            VulkanPipelineManager::new());
+
+        let imgui_renderer = {
+            let font_texture = {
+                let fonts = imgui.fonts();
+                fonts.build_rgba32_texture()
+            };
+
+            ImguiRender::new(
+                render_context.get_device().clone(),
+                &render_context,
+                font_texture)
+        };
+
         WindowedVulkanApp {
             window,
             platform,
-            imgui
+            imgui,
+            render_context,
+            frame_graph,
+            imgui_renderer
         }
     }
 
