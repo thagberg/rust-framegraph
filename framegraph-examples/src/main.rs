@@ -15,6 +15,8 @@ use framegraph::renderpass_manager::VulkanRenderpassManager;
 use framegraph::vulkan_frame_graph::VulkanFrameGraph;
 use passes::imgui_draw::ImguiRender;
 
+const MAX_FRAMES_IN_FLIGHT: usize = 2;
+
 struct WindowedVulkanApp {
     window: Window,
     platform: WinitPlatform,
@@ -23,7 +25,9 @@ struct WindowedVulkanApp {
     render_context: VulkanRenderContext,
     frame_graph: VulkanFrameGraph,
 
-    imgui_renderer: ImguiRender
+    imgui_renderer: ImguiRender,
+
+    current_frame: usize
 }
 
 impl WindowedVulkanApp {
@@ -73,7 +77,8 @@ impl WindowedVulkanApp {
             imgui,
             render_context,
             frame_graph,
-            imgui_renderer
+            imgui_renderer,
+            current_frame: 0
         }
     }
 
@@ -82,8 +87,8 @@ impl WindowedVulkanApp {
 
         // get swapchain image for this frame
         // TODO: add semaphore to this
-        let (swapchain_image, image_index) = self.render_context.get_swapchain().as_ref().unwrap()
-            .acquire_next_image(None, None, None);
+        let (swapchain_image, image_index) = self.render_context.get_swapchain().as_mut().unwrap()
+            .acquire_next_image(None, None);
 
         // begin commandbuffer
         let command_buffer = self.render_context.get_graphics_command_buffer(image_index as usize);
@@ -93,7 +98,7 @@ impl WindowedVulkanApp {
                 vk::CommandBufferResetFlags::empty())
                 .expect("Failed to reset command buffer");
             let begin_info = vk::CommandBufferBeginInfo::builder()
-                .flags(vk::CommandBuferUsageFlags::SIMULTANEOUS_USE)
+                .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)
                 .build();
             self.render_context.get_device().borrow().get().begin_command_buffer(command_buffer, &begin_info)
                 .expect("Failed to begin recording command buffer");
@@ -114,6 +119,9 @@ impl WindowedVulkanApp {
         // prepare present
 
         // queue present (wait on semaphores)
+
+        // update frame index
+        self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT; // TODO: parameterize double-buffering
     }
 
     pub fn run(mut self, event_loop: EventLoop<()>) -> Result<u32, &'static str>{

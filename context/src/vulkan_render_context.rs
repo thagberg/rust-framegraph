@@ -11,7 +11,7 @@ use winit::window::Window;
 use ash::vk::DebugUtilsMessageSeverityFlagsEXT as severity_flags;
 use ash::vk::DebugUtilsMessageTypeFlagsEXT as type_flags;
 
-use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper, DeviceWrapper, DeviceFramebuffer};
+use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper, DeviceWrapper, DeviceFramebuffer, DeviceResource};
 use crate::api_types::swapchain::SwapchainWrapper;
 use crate::api_types::image::ImageWrapper;
 use crate::api_types::surface::SurfaceWrapper;
@@ -421,7 +421,7 @@ fn create_swapchain(
             .expect("Failed to create swapchain.")
     };
 
-    let swapchain_images = unsafe {
+    let swapchain_images : Vec<Rc<RefCell<DeviceResource>>> = unsafe {
         swapchain_loader
             .get_swapchain_images(swapchain)
             .expect("Failed to get swapchain images.")
@@ -465,6 +465,7 @@ pub struct VulkanRenderContext {
     immediate_command_buffer: vk::CommandBuffer,
     descriptor_pool: vk::DescriptorPool,
     swapchain: Option<SwapchainWrapper>,
+    swapchain_semaphores: Vec<vk::Semaphore>,
     device: Rc<RefCell<DeviceWrapper>>,
     physical_device: PhysicalDeviceWrapper,
     surface: Option<SurfaceWrapper>,
@@ -616,6 +617,25 @@ impl VulkanRenderContext {
             }
         };
 
+        let swapchain_semaphores = {
+            let mut semaphores: Vec<vk::Semaphore> = Vec::new();
+            if let Some(swapchain) = &swapchain {
+                semaphores.reserve(swapchain.get_images.len());
+                for i in 0..swapchain.get_images.len() {
+                    let create_info = vk::SemaphoreCreateInfo::builder()
+                        .build();
+
+                    semaphores.push(unsafe {
+                        device.borrow().get().create_semaphore(&create_info, None)
+                            .expect("Failed to create semaphore for swapchain image")
+                    });
+                }
+            }
+
+            semaphores
+        };
+
+
         let ubo_pool_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::UNIFORM_BUFFER,
             descriptor_count: 8
@@ -655,6 +675,7 @@ impl VulkanRenderContext {
             graphics_command_pool,
             surface: surface_wrapper,
             swapchain,
+            swapchain_semaphores,
             descriptor_pool,
             graphics_command_buffers,
             immediate_command_buffer: immediate_command_buffer[0],
@@ -688,6 +709,17 @@ impl VulkanRenderContext {
     pub fn get_immediate_command_buffer(&self) -> vk::CommandBuffer { self.immediate_command_buffer }
 
     pub fn get_swapchain(&self) -> &Option<SwapchainWrapper> { &self.swapchain }
+
+    pub fn get_next_swapchain_image(&mut self, timeout: Option<u64>, fence: Option<vk::Fence>) -> Option<(Rc<RefCell<DeviceResource>>, u32)> {
+        match &mut self.swapchain {
+            Some(swapchain) => {
+                Some(swapchain.acquire_next_image(timeout, None, fence))
+            }
+            None => {
+                None
+            }
+        }
+    }
 
     pub fn create_descriptor_sets(
         &self,
