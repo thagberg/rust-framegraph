@@ -125,8 +125,12 @@ impl WindowedVulkanApp {
                 swapchain_image.unwrap(),
                 self.render_context.get_device());
 
-            for imgui_node in imgui_nodes {
-                current_frame.start(imgui_node);
+            for (i, imgui_node) in imgui_nodes.into_iter().enumerate() {
+                if i == 0 {
+                    current_frame.start(imgui_node);
+                } else {
+                    current_frame.add_node(imgui_node);
+                }
             }
         }
         self.frame_graph.end(
