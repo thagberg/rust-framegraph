@@ -392,6 +392,7 @@ impl DeviceWrapper {
                 create_info.initial_layout,
                 create_info.extent,
                 false, // Swapchain images only go through wrap_image
+                create_info.format,
                 None);
 
             device.borrow().set_image_name(&image_wrapper, image_desc.get_name());
@@ -430,6 +431,7 @@ impl DeviceWrapper {
             vk::ImageLayout::UNDEFINED,
             extent,
             is_swapchain_image,
+            format,
             None);
 
         DeviceResource {
