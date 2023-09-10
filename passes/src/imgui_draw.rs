@@ -368,7 +368,7 @@ impl ImguiRender {
 
             let rt_ref = AttachmentReference::new(
                 render_target.clone(),
-                vk::Format::R8G8B8A8_UNORM, // TODO: this should be parameterized
+                render_target.borrow().get_image().format,
                 vk::SampleCountFlags::TYPE_1,
                 vk::AttachmentLoadOp::LOAD,
                 vk::AttachmentStoreOp::STORE);
