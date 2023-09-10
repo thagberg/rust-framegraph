@@ -1512,30 +1512,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "test-renderer"
-version = "0.1.0"
-dependencies = [
- "ash",
- "ash-window",
- "cgmath",
- "context",
- "framegraph",
- "glam",
- "glob",
- "gpu-allocator",
- "image",
- "imgui",
- "imgui-winit-support",
- "libc",
- "memoffset 0.6.5",
- "num",
- "passes",
- "tobj",
- "winapi",
- "winit",
-]
-
-[[package]]
 name = "thiserror"
 version = "1.0.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
