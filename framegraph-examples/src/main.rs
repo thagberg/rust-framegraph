@@ -1,3 +1,6 @@
+extern crate alloc;
+
+//use alloc::ffi::CString;
 use std::ffi::CString;
 use std::time::Instant;
 use ash::vk;
@@ -17,7 +20,7 @@ use framegraph::renderpass_manager::VulkanRenderpassManager;
 use framegraph::vulkan_frame_graph::VulkanFrameGraph;
 use passes::imgui_draw::ImguiRender;
 
-const MAX_FRAMES_IN_FLIGHT: usize = 2;
+const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 
 struct WindowedVulkanApp {
     window: Window,
@@ -29,7 +32,9 @@ struct WindowedVulkanApp {
 
     imgui_renderer: ImguiRender,
 
-    frames: [Option<Box<Frame>>; MAX_FRAMES_IN_FLIGHT]
+    frames: [Option<Box<Frame>>; MAX_FRAMES_IN_FLIGHT as usize],
+    frame_fences: Vec<vk::Fence>,
+    frame_index: u32
 }
 
 impl WindowedVulkanApp {
@@ -73,6 +78,25 @@ impl WindowedVulkanApp {
                 font_texture)
         };
 
+        let mut frame_fences: Vec<vk::Fence> = Vec::new();
+        {
+            // frame fences start as signaled so we don't wait the first time
+            // we execute that frame
+            let fence_create = vk::FenceCreateInfo::builder()
+                .flags(vk::FenceCreateFlags::SIGNALED)
+                .build();
+            unsafe {
+                for _ in 0..MAX_FRAMES_IN_FLIGHT {
+                    frame_fences.push(
+                        render_context.get_device().borrow().get().create_fence(
+                            &fence_create,
+                            None)
+                            .expect("Failed to create Frame fence")
+                    )
+                }
+            }
+        }
+
         WindowedVulkanApp {
             window,
             platform,
@@ -81,17 +105,29 @@ impl WindowedVulkanApp {
             frame_graph,
             imgui_renderer,
             frames: Default::default(),
+            frame_fences,
+            frame_index: 0
         }
     }
 
     pub fn draw_frame(&mut self) {
         // wait for fence if necessary (can we avoid this using just semaphores?)
+        let wait_fence = self.frame_fences[self.frame_index as usize];
+        unsafe {
+            self.render_context.get_device().borrow().get()
+                .wait_for_fences(
+                    std::slice::from_ref(&wait_fence),
+                    true,
+                    u64::MAX)
+                .expect("Failed to wait for Frame Fence");
+        }
 
         // get swapchain image for this frame
         let VulkanFrameObjects {
             graphics_command_buffer: command_buffer,
             swapchain_image: swapchain_image,
-            frame_index: frame_index
+            swapchain_semaphore: swapchain_semaphore,
+            frame_index: swaphchain_index,
         } = self.render_context.get_next_frame_objects();
 
         // begin commandbuffer
@@ -116,8 +152,8 @@ impl WindowedVulkanApp {
         };
 
         // prepare framegraph
-        self.frames[frame_index as usize] = Some(self.frame_graph.start());
-        let current_frame = self.frames[frame_index as usize].as_mut().unwrap();
+        self.frames[self.frame_index as usize] = Some(self.frame_graph.start());
+        let current_frame = self.frames[self.frame_index as usize].as_mut().unwrap();
 
         {
             let imgui_nodes = self.imgui_renderer.generate_passes(
@@ -139,10 +175,32 @@ impl WindowedVulkanApp {
             &command_buffer);
 
         // queue submit
+        {
+            let submit_info = vk::SubmitInfo::builder()
+                .wait_semaphores(std::slice::from_ref(&swapchain_semaphore))
+                .wait_dst_stage_mask(std::slice::from_ref(&vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT))
+                .command_buffers(std::slice::from_ref(&command_buffer))
+                .build();
+
+            unsafe {
+                self.render_context.get_device().borrow().get()
+                    .reset_fences(std::slice::from_ref(&wait_fence))
+                    .expect("Failed to reset Frame Fence");
+
+                self.render_context.get_device().borrow().get()
+                    .queue_submit(
+                        self.render_context.get_graphics_queue(),
+                        std::slice::from_ref(&submit_info),
+                        wait_fence)
+                    .expect("Failed to execute queue submit");
+            }
+        }
 
         // prepare present
 
         // queue present (wait on semaphores)
+
+        self.frame_index = (self.frame_index + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
     pub fn run(mut self, event_loop: EventLoop<()>) -> Result<u32, &'static str>{
