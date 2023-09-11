@@ -690,6 +690,24 @@ impl VulkanFrameGraph {
             }
         }
 
+        if let Some(viewport) = &node.viewport {
+            unsafe {
+                render_context.get_device().borrow().get().cmd_set_viewport(
+                    *command_buffer,
+                    0,
+                    std::slice::from_ref(viewport));
+            }
+        }
+
+        if let Some(scissor) = &node.scissor {
+            unsafe {
+                render_context.get_device().borrow().get().cmd_set_scissor(
+                    *command_buffer,
+                    0,
+                    std::slice::from_ref(scissor));
+            }
+        }
+
         // execute this node
         node.execute(
             render_context,

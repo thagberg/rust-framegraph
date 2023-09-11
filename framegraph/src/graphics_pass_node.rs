@@ -16,6 +16,8 @@ pub struct GraphicsPassNode {
     pub outputs: Vec<ResourceBinding>,
     pub tagged_resources: Vec<Rc<RefCell<DeviceResource>>>,
     pub framebuffer: Option<DeviceFramebuffer>,
+    pub viewport: Option<vk::Viewport>,
+    pub scissor: Option<vk::Rect2D>,
     pub fill_callback: Box<FillCallback>,
     name: String
 }
@@ -28,6 +30,8 @@ pub struct PassNodeBuilder {
     outputs: Vec<ResourceBinding>,
     tagged_resources: Vec<Rc<RefCell<DeviceResource>>>,
     fill_callback: Option<Box<FillCallback>>,
+    viewport: Option<vk::Viewport>,
+    scissor: Option<vk::Rect2D>,
     name: String
 }
 
@@ -155,6 +159,18 @@ impl PassNodeBuilder {
         self
     }
 
+    pub fn viewport(mut self, viewport: vk::Viewport) -> Self
+    {
+        self.viewport = Some(viewport);
+        self
+    }
+
+    pub fn scissor(mut self, scissor: vk::Rect2D) -> Self
+    {
+        self.scissor = Some(scissor);
+        self
+    }
+
     pub fn build(mut self) -> Result<GraphicsPassNode, &'static str> {
         assert!(self.fill_callback.is_some(), "No fill callback set");
 
@@ -171,6 +187,8 @@ impl PassNodeBuilder {
                 outputs: self.outputs.into_iter().take(outputs_len).collect(),
                 tagged_resources: self.tagged_resources.into_iter().take(tagged_resources_len).collect(),
                 framebuffer: None,
+                viewport: self.viewport,
+                scissor: self.scissor,
                 fill_callback: self.fill_callback.take().unwrap()
             })
         } else {

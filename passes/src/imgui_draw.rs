@@ -415,6 +415,25 @@ impl ImguiRender {
                 },
             };
 
+            let (viewport, scissor) = {
+                let extent = render_target.borrow().get_image().extent;
+                let v = vk::Viewport::builder()
+                    .x(0.0)
+                    .y(0.0)
+                    .width(extent.width as f32)
+                    .height(extent.height as f32)
+                    .min_depth(0.0)
+                    .max_depth(1.0)
+                    .build();
+
+                let s = vk::Rect2D::builder()
+                    .offset(vk::Offset2D{x: 0, y: 0})
+                    .extent(vk::Extent2D{width: extent.width, height: extent.height})
+                    .build();
+
+                (v, s)
+            };
+
             let pass_node = GraphicsPassNode::builder("imgui".to_string())
                 .pipeline_description(pipeline_description)
                 .render_target(rt_ref)
@@ -422,6 +441,8 @@ impl ImguiRender {
                 .read(display_binding)
                 .tag(idx_buffer.clone())
                 .tag(vtx_buffer.clone())
+                .viewport(viewport)
+                .scissor(scissor)
                 .fill_commands(Box::new(
                     move |render_ctx: &VulkanRenderContext,
                           command_buffer: &vk::CommandBuffer | {
