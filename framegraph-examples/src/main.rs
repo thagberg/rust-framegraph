@@ -32,6 +32,7 @@ struct WindowedVulkanApp {
 
     imgui_renderer: ImguiRender,
 
+    render_semaphores: Vec<vk::Semaphore>,
     frames: [Option<Box<Frame>>; MAX_FRAMES_IN_FLIGHT as usize],
     frame_fences: Vec<vk::Fence>,
     frame_index: u32
@@ -79,12 +80,17 @@ impl WindowedVulkanApp {
         };
 
         let mut frame_fences: Vec<vk::Fence> = Vec::new();
+        let mut render_semaphores: Vec<vk::Semaphore> = Vec::new();
         {
             // frame fences start as signaled so we don't wait the first time
             // we execute that frame
             let fence_create = vk::FenceCreateInfo::builder()
                 .flags(vk::FenceCreateFlags::SIGNALED)
                 .build();
+
+            let semaphore_create = vk::SemaphoreCreateInfo::builder()
+                .build();
+
             unsafe {
                 for _ in 0..MAX_FRAMES_IN_FLIGHT {
                     frame_fences.push(
@@ -92,7 +98,13 @@ impl WindowedVulkanApp {
                             &fence_create,
                             None)
                             .expect("Failed to create Frame fence")
-                    )
+                    );
+
+                    render_semaphores.push(
+                        render_context.get_device().borrow().get().create_semaphore(
+                            &semaphore_create, None)
+                            .expect("Failed to create Render semaphore")
+                    );
                 }
             }
         }
@@ -104,6 +116,7 @@ impl WindowedVulkanApp {
             render_context,
             frame_graph,
             imgui_renderer,
+            render_semaphores: render_semaphores,
             frames: Default::default(),
             frame_fences,
             frame_index: 0
@@ -127,7 +140,7 @@ impl WindowedVulkanApp {
             graphics_command_buffer: command_buffer,
             swapchain_image: swapchain_image,
             swapchain_semaphore: swapchain_semaphore,
-            frame_index: swaphchain_index,
+            frame_index: swapchain_index,
         } = self.render_context.get_next_frame_objects();
 
         // begin commandbuffer
@@ -174,29 +187,40 @@ impl WindowedVulkanApp {
             &mut self.render_context,
             &command_buffer);
 
+        // end command buffer
+        // TODO: support multiple command buffers
+        unsafe {
+            self.render_context.get_device().borrow().get().end_command_buffer(command_buffer)
+                .expect("Failed to finish recording command buffer");
+        }
+
         // queue submit
         {
-            let submit_info = vk::SubmitInfo::builder()
-                .wait_semaphores(std::slice::from_ref(&swapchain_semaphore))
-                .wait_dst_stage_mask(std::slice::from_ref(&vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT))
-                .command_buffers(std::slice::from_ref(&command_buffer))
-                .build();
-
             unsafe {
                 self.render_context.get_device().borrow().get()
                     .reset_fences(std::slice::from_ref(&wait_fence))
                     .expect("Failed to reset Frame Fence");
-
-                self.render_context.get_device().borrow().get()
-                    .queue_submit(
-                        self.render_context.get_graphics_queue(),
-                        std::slice::from_ref(&submit_info),
-                        wait_fence)
-                    .expect("Failed to execute queue submit");
             }
+
+            self.render_context.submit_graphics(
+                &[command_buffer],
+                wait_fence,
+                &[swapchain_semaphore],
+                &[self.render_semaphores[self.frame_index as usize]]);
         }
 
         // prepare present
+        // flip
+        {
+            self.render_context.flip(
+                &[self.render_semaphores[self.frame_index as usize]],
+                swapchain_index);
+
+            let swapchain = self.render_context.get_swapchain().as_ref().unwrap().get();
+
+            // let present = vk::PresentInfoKHR::builder()
+            //     .wait_semaphores()
+        }
 
         // queue present (wait on semaphores)
 
