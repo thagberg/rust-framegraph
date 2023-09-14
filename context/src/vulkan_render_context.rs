@@ -799,4 +799,51 @@ impl VulkanRenderContext {
             DeviceFramebuffer::new(framebuffer, self.device.clone())
         }
     }
+
+    pub fn submit_graphics(
+        &self,
+        command_buffers: &[vk::CommandBuffer],
+        fence: vk::Fence,
+        wait_semaphores: &[vk::Semaphore],
+        signal_semaphores: &[vk::Semaphore]) {
+
+        let submit_info = vk::SubmitInfo::builder()
+            .wait_semaphores(wait_semaphores)
+            .wait_dst_stage_mask(std::slice::from_ref(&vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT))
+            .command_buffers(command_buffers)
+            .signal_semaphores(signal_semaphores)
+            .build();
+
+        unsafe {
+            self.device.borrow().get()
+                .queue_submit(
+                    self.get_graphics_queue(),
+                    std::slice::from_ref(&submit_info),
+                    fence)
+                .expect("Failed to execute Graphics submit");
+        }
+    }
+
+    pub fn flip(
+        &self,
+        wait_semaphores: &[vk::Semaphore],
+        image_index: u32) {
+
+        if let Some(swapchain) = &self.swapchain {
+            let present_info = vk::PresentInfoKHR::builder()
+                .wait_semaphores(wait_semaphores)
+                .swapchains(&[swapchain.get()])
+                .image_indices(&[image_index])
+                .build();
+
+            unsafe {
+                swapchain.get_loader().queue_present(
+                    self.get_present_queue(),
+                    &present_info)
+                    .expect("Failed to execute queue present");
+            }
+        } else {
+            panic!("Attempted to flip without a swapchain");
+        }
+    }
 }
