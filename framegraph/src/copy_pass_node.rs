@@ -20,6 +20,10 @@ impl CopyPassNode {
             ..Default::default()
         }
     }
+
+    pub fn execute(&self, render_context: &mut VulkanRenderContext, command_buffer: &CommandBuffer) {
+        (self.fill_callback)(render_context, command_buffer);
+    }
 }
 
 impl PassNode for CopyPassNode {
@@ -45,10 +49,6 @@ impl PassNode for CopyPassNode {
         }
 
         writes
-    }
-
-    fn execute(&self, render_context: &mut VulkanRenderContext, command_buffer: &CommandBuffer) {
-        (self.fill_callback)(render_context, command_buffer);
     }
 }
 
