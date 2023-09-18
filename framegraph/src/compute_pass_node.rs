@@ -22,6 +22,12 @@ impl ComputePassNode {
             ..Default::default()
         }
     }
+
+    pub fn execute(&self, render_context: &mut VulkanRenderContext, command_buffer: &CommandBuffer) {
+        (self.fill_callback)(
+            render_context,
+            command_buffer);
+    }
 }
 
 impl PassNode for ComputePassNode {
@@ -45,12 +51,6 @@ impl PassNode for ComputePassNode {
             writes.push(output.resource.borrow().get_handle());
         }
         writes
-    }
-
-    fn execute(&self, render_context: &mut VulkanRenderContext, command_buffer: &CommandBuffer) {
-        (self.fill_callback)(
-            render_context,
-            command_buffer);
     }
 }
 

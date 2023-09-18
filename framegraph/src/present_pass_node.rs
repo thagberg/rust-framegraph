@@ -56,8 +56,4 @@ impl PassNode for PresentPassNode {
     fn get_writes(&self) -> Vec<u64> {
         vec![]
     }
-
-    fn execute(&self, render_context: &mut VulkanRenderContext, command_buffer: &CommandBuffer) {
-        todo!()
-    }
 }

@@ -63,16 +63,6 @@ impl PassNode for GraphicsPassNode  {
         writes
     }
 
-    fn execute(
-        &self,
-        render_context: &mut VulkanRenderContext,
-        command_buffer: &vk::CommandBuffer)
-    {
-        (self.fill_callback)(
-            render_context,
-            command_buffer);
-    }
-
 }
 
 impl Debug for GraphicsPassNode  {
@@ -125,6 +115,17 @@ impl GraphicsPassNode  {
     pub fn get_rendertargets_mut(&mut self) -> &mut [AttachmentReference] {
         &mut self.render_targets
     }
+
+    pub fn execute(
+        &self,
+        render_context: &mut VulkanRenderContext,
+        command_buffer: &vk::CommandBuffer)
+    {
+        (self.fill_callback)(
+            render_context,
+            command_buffer);
+    }
+
 }
 
 impl PassNodeBuilder {

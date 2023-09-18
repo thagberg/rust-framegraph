@@ -20,9 +20,4 @@ pub trait PassNode {
     fn get_reads(&self) -> Vec<u64>;
 
     fn get_writes(&self) -> Vec<u64>;
-
-    fn execute(
-        &self,
-        render_context: &mut VulkanRenderContext,
-        command_buffer: &vk::CommandBuffer);
 }
