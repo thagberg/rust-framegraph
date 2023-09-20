@@ -15,7 +15,9 @@ use context::render_context::RenderContext;
 use context::vulkan_render_context::{VulkanFrameObjects, VulkanRenderContext};
 use framegraph::frame::Frame;
 use framegraph::frame_graph::FrameGraph;
+use framegraph::pass_type::PassType;
 use framegraph::pipeline::VulkanPipelineManager;
+use framegraph::present_pass_node::PresentPassNode;
 use framegraph::renderpass_manager::VulkanRenderpassManager;
 use framegraph::vulkan_frame_graph::VulkanFrameGraph;
 use passes::imgui_draw::ImguiRender;
@@ -168,6 +170,16 @@ impl WindowedVulkanApp {
         self.frames[self.frame_index as usize] = Some(self.frame_graph.start());
         let current_frame = self.frames[self.frame_index as usize].as_mut().unwrap();
 
+        if let Some(swapchain_image) = swapchain_image.clone() {
+            let present_node = PresentPassNode::builder("present".to_string())
+                .swapchain_image(swapchain_image)
+                .build()
+                .expect("Failed to create Present Node");
+
+            current_frame.start(PassType::Present(present_node));
+        }
+
+
         {
             let imgui_nodes = self.imgui_renderer.generate_passes(
                 imgui_draw_data,
@@ -175,11 +187,7 @@ impl WindowedVulkanApp {
                 self.render_context.get_device());
 
             for (i, imgui_node) in imgui_nodes.into_iter().enumerate() {
-                if i == 0 {
-                    current_frame.start(imgui_node);
-                } else {
-                    current_frame.add_node(imgui_node);
-                }
+                current_frame.add_node(imgui_node);
             }
         }
         self.frame_graph.end(

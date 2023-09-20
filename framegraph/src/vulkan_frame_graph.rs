@@ -470,6 +470,33 @@ impl VulkanFrameGraph {
                         link_inputs(&cn.inputs, &mut node_barrier, &mut usage_cache);
                         link_inputs(&cn.outputs, &mut node_barrier, &mut usage_cache);
                     }
+                    PassType::Present(pn) => {
+                        let handle = pn.swapchain_image.borrow().get_handle();
+                        let last_usage = {
+                            let usage = usage_cache.get(&handle);
+                            match usage {
+                                Some(found_usage) => {found_usage.clone()},
+                                _ => {
+                                    ResourceUsage {
+                                        access: vk::AccessFlags::NONE,
+                                        stage: vk::PipelineStageFlags::TOP_OF_PIPE,
+                                        layout: Some(vk::ImageLayout::UNDEFINED)
+                                    }
+                                }
+                            }
+                        };
+
+                        let present_barrier = ImageBarrier {
+                            resource: pn.swapchain_image.clone(),
+                            source_stage: last_usage.stage,
+                            dest_stage: vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                            source_access: last_usage.access,
+                            dest_access: vk::AccessFlags::NONE,
+                            old_layout: last_usage.layout.expect("Using a non-image for an image transition"),
+                            new_layout: vk::ImageLayout::PRESENT_SRC_KHR,
+                        };
+                        node_barrier.image_barriers.push(present_barrier);
+                    }
                 }
 
                 self.node_barriers.insert(*node_index, node_barrier);

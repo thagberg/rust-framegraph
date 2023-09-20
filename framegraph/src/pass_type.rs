@@ -11,11 +11,13 @@ use crate::copy_pass_node::CopyPassNode;
 use crate::graphics_pass_node::GraphicsPassNode;
 use crate::pass_node::PassNode;
 use crate::pipeline::PipelineDescription;
+use crate::present_pass_node::PresentPassNode;
 
 pub enum PassType {
     Graphics(GraphicsPassNode),
     Copy(CopyPassNode),
-    Compute(ComputePassNode)
+    Compute(ComputePassNode),
+    Present(PresentPassNode)
 }
 
 // TODO: this could definitely be handled as a macro
@@ -32,6 +34,9 @@ impl Deref for PassType {
             },
             PassType::Compute(cn) => {
                 cn as &dyn PassNode
+            },
+            PassType::Present(pn) => {
+                pn as &dyn PassNode
             }
         }
     }
