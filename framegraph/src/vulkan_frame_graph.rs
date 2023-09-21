@@ -31,6 +31,7 @@ use crate::command_list::CommandList;
 use crate::compute_pass_node::ComputePassNode;
 use crate::copy_pass_node::CopyPassNode;
 use crate::pass_type::PassType;
+use crate::linked_node::{LinkedNode, QueueWait};
 
 #[derive(Clone)]
 struct ResourceUsage {
@@ -347,7 +348,9 @@ impl VulkanFrameGraph {
     fn link(
         &mut self,
         nodes: &mut StableDiGraph<PassType, u32>,
-        sorted_nodes: &Vec<NodeIndex>) {
+        sorted_nodes: &[NodeIndex]) -> Vec<LinkedNode>{
+
+        let mut linked_nodes: Vec<LinkedNode> = Vec::new();
 
         // All image bindings and attachments require the most recent usage for that resource
         // in case layout transitions are necessary. Since the graph has already been sorted,
@@ -394,6 +397,11 @@ impl VulkanFrameGraph {
 
                             usage_cache.insert(handle, new_usage);
                         }
+                        
+                        linked_nodes.push(LinkedNode{
+                            index: *node_index,
+                            wait: None,
+                        });
                     }
                     PassType::Copy(cn) => {
                         for resource in &cn.copy_sources {
@@ -465,10 +473,20 @@ impl VulkanFrameGraph {
                             };
                             node_barrier.image_barriers.push(image_barrier);
                         }
+
+                        linked_nodes.push(LinkedNode{
+                            index: *node_index,
+                            wait: None
+                        });
                     },
                     PassType::Compute(cn) => {
                         link_inputs(&cn.inputs, &mut node_barrier, &mut usage_cache);
                         link_inputs(&cn.outputs, &mut node_barrier, &mut usage_cache);
+                        
+                        linked_nodes.push(LinkedNode{
+                            index: *node_index,
+                            wait: None,
+                        });
                     }
                     PassType::Present(pn) => {
                         let handle = pn.swapchain_image.borrow().get_handle();
@@ -496,6 +514,13 @@ impl VulkanFrameGraph {
                             new_layout: vk::ImageLayout::PRESENT_SRC_KHR,
                         };
                         node_barrier.image_barriers.push(present_barrier);
+
+                        linked_nodes.push(LinkedNode{
+                            index: *node_index,
+                            wait: Some(QueueWait {
+                                wait_stage_mask: vk::PipelineStageFlags::NONE,
+                            }),
+                        });
                     }
                 }
 
@@ -503,7 +528,7 @@ impl VulkanFrameGraph {
             }
         }
 
-        //usage_cache
+        linked_nodes
     }
 
     /// The purpose of finalize is to either generate new "finalized" nodes or mutate the existing
