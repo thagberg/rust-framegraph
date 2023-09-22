@@ -27,11 +27,10 @@ use context::api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::attachment::AttachmentReference;
 use crate::barrier::{BufferBarrier, ImageBarrier};
-use crate::command_list::CommandList;
+use crate::command_list::{CommandList, QueueWait};
 use crate::compute_pass_node::ComputePassNode;
 use crate::copy_pass_node::CopyPassNode;
 use crate::pass_type::PassType;
-use crate::linked_node::{LinkedNode, QueueWait};
 
 #[derive(Clone)]
 struct ResourceUsage {
@@ -331,26 +330,16 @@ impl VulkanFrameGraph {
             }
         }
 
-        // with sorted execution order we now want to look for opportunities to break the full set
-        // of nodes into multiple command lists
-        // This is required when execution requires synchronization across queues (e.g. going from
-        // graphics to compute) or between CPU and GPU
-        let mut command_lists: Vec<CommandList<NodeIndex>> = Vec::new();
-        for i in &sorted_nodes {
-            if let Some(node) = nodes.node_weight(*i) {
-
-            }
-        }
-
         sorted_nodes
     }
 
     fn link(
         &mut self,
         nodes: &mut StableDiGraph<PassType, u32>,
-        sorted_nodes: &[NodeIndex]) -> Vec<LinkedNode>{
+        sorted_nodes: &[NodeIndex]) -> Vec<CommandList> {
 
-        let mut linked_nodes: Vec<LinkedNode> = Vec::new();
+        let mut command_lists: Vec<CommandList> = Vec::new();
+        let mut current_list = CommandList::new();
 
         // All image bindings and attachments require the most recent usage for that resource
         // in case layout transitions are necessary. Since the graph has already been sorted,
@@ -397,11 +386,6 @@ impl VulkanFrameGraph {
 
                             usage_cache.insert(handle, new_usage);
                         }
-                        
-                        linked_nodes.push(LinkedNode{
-                            index: *node_index,
-                            wait: None,
-                        });
                     }
                     PassType::Copy(cn) => {
                         for resource in &cn.copy_sources {
@@ -474,19 +458,10 @@ impl VulkanFrameGraph {
                             node_barrier.image_barriers.push(image_barrier);
                         }
 
-                        linked_nodes.push(LinkedNode{
-                            index: *node_index,
-                            wait: None
-                        });
                     },
                     PassType::Compute(cn) => {
                         link_inputs(&cn.inputs, &mut node_barrier, &mut usage_cache);
                         link_inputs(&cn.outputs, &mut node_barrier, &mut usage_cache);
-                        
-                        linked_nodes.push(LinkedNode{
-                            index: *node_index,
-                            wait: None,
-                        });
                     }
                     PassType::Present(pn) => {
                         let handle = pn.swapchain_image.borrow().get_handle();
@@ -515,20 +490,21 @@ impl VulkanFrameGraph {
                         };
                         node_barrier.image_barriers.push(present_barrier);
 
-                        linked_nodes.push(LinkedNode{
-                            index: *node_index,
-                            wait: Some(QueueWait {
-                                wait_stage_mask: vk::PipelineStageFlags::NONE,
-                            }),
+                        command_lists.push(current_list);
+                        current_list = CommandList::new();
+                        current_list.wait = Some(QueueWait{
+                            wait_stage_mask: vk::PipelineStageFlags::NONE,
                         });
                     }
                 }
+
+                current_list.nodes.push(*node_index);
 
                 self.node_barriers.insert(*node_index, node_barrier);
             }
         }
 
-        linked_nodes
+        command_lists
     }
 
     /// The purpose of finalize is to either generate new "finalized" nodes or mutate the existing
@@ -798,110 +774,111 @@ impl FrameGraph for VulkanFrameGraph {
         let root_index = frame.get_root_index();
 
         // compile and link frame
-        {
+        let command_lists = {
             let sorted_nodes = self.compile(&mut frame.nodes, root_index);
-            self.link(&mut frame.nodes, &sorted_nodes);
-            //frame.set_sorted_nodes(sorted_nodes);
-            frame.sorted_nodes = sorted_nodes;
-        }
+            self.link(&mut frame.nodes, &sorted_nodes)
+        };
 
         // excute nodes
-        let sorted_nodes = &frame.sorted_nodes;
-        for index in sorted_nodes {
-            let node = frame.nodes.node_weight_mut(*index).unwrap();
-            render_context.get_device().borrow().push_debug_label(*command_buffer, node.get_name());
+        // let sorted_nodes = &frame.sorted_nodes;
+        for command_list in command_lists {
+            for index in &command_list.nodes {
+                let node = frame.nodes.node_weight_mut(*index).unwrap();
+                render_context.get_device().borrow().push_debug_label(*command_buffer, node.get_name());
 
-            // Prepare and execute resource barriers
-            let barriers = self.node_barriers.get(index);
-            if let Some(barriers) = barriers {
-                // Create the source and dest stage masks
-                let mut source_stage = vk::PipelineStageFlags::NONE;
-                let mut dest_stage = vk::PipelineStageFlags::NONE;
-                for image_barrier in &barriers.image_barriers {
-                    source_stage |= image_barrier.source_stage;
-                    dest_stage |= image_barrier.dest_stage;
-                }
-                for buffer_barrier in &barriers.buffer_barriers {
-                    source_stage |= buffer_barrier.source_stage;
-                    dest_stage |= buffer_barrier.dest_stage;
-                }
-
-                // translate from our BufferBarrier to Vulkan
-                let transformed_buffer_barriers: Vec<vk::BufferMemoryBarrier> = barriers.buffer_barriers.iter().map(|bb| {
-                    let buffer = bb.resource.borrow();
-                    let resolved = buffer.resource_type.as_ref().expect("Invalid buffer in BufferBarrier");
-                    if let ResourceType::Buffer(resolved_buffer) = resolved {
-                        vk::BufferMemoryBarrier::builder()
-                            .buffer(resolved_buffer.buffer)
-                            .src_access_mask(bb.source_access)
-                            .dst_access_mask(bb.dest_access)
-                            .offset(bb.offset as DeviceSize)
-                            .size(bb.size as DeviceSize)
-                            .src_queue_family_index(render_context.get_graphics_queue_index())
-                            .dst_queue_family_index(render_context.get_graphics_queue_index())
-                            .build()
-                    } else {
-                        panic!("Non buffer resource in BufferBarrier")
+                // Prepare and execute resource barriers
+                let barriers = self.node_barriers.get(index);
+                if let Some(barriers) = barriers {
+                    // Create the source and dest stage masks
+                    let mut source_stage = vk::PipelineStageFlags::NONE;
+                    let mut dest_stage = vk::PipelineStageFlags::NONE;
+                    for image_barrier in &barriers.image_barriers {
+                        source_stage |= image_barrier.source_stage;
+                        dest_stage |= image_barrier.dest_stage;
                     }
-                }).collect();
-
-                // translate from our ImageBarrier to Vulkan
-                let transformed_image_barriers: Vec<vk::ImageMemoryBarrier> = barriers.image_barriers.iter().map(|ib| {
-                    let image = ib.resource.borrow();
-                    let resolved = image.resource_type.as_ref().expect("Invalid image in ImageBarrier");
-                    // TODO: the range needs to be parameterized
-                    let range = vk::ImageSubresourceRange::builder()
-                        .level_count(1)
-                        .base_mip_level(0)
-                        .layer_count(1)
-                        .base_array_layer(0)
-                        .aspect_mask(vk::ImageAspectFlags::COLOR)
-                        .build();
-                    if let ResourceType::Image(resolved_image) = resolved {
-                        vk::ImageMemoryBarrier::builder()
-                            .image(resolved_image.image)
-                            .src_access_mask(ib.source_access)
-                            .dst_access_mask(ib.dest_access)
-                            .old_layout(ib.old_layout)
-                            .new_layout(ib.new_layout)
-                            .src_queue_family_index(render_context.get_graphics_queue_index())
-                            .dst_queue_family_index(render_context.get_graphics_queue_index())
-                            .subresource_range(range)
-                            .build()
-                    } else {
-                        panic!("Non image resource in ImageBarrier")
+                    for buffer_barrier in &barriers.buffer_barriers {
+                        source_stage |= buffer_barrier.source_stage;
+                        dest_stage |= buffer_barrier.dest_stage;
                     }
-                }).collect();
 
-                if transformed_image_barriers.len() > 0 || transformed_buffer_barriers.len() > 0 {
-                    unsafe {
-                        render_context.get_device().borrow().get().cmd_pipeline_barrier(
-                            *command_buffer,
-                            source_stage,
-                            dest_stage,
-                            vk::DependencyFlags::empty(),
-                            &[],
-                            &transformed_buffer_barriers,
-                            &transformed_image_barriers);
+                    // translate from our BufferBarrier to Vulkan
+                    let transformed_buffer_barriers: Vec<vk::BufferMemoryBarrier> = barriers.buffer_barriers.iter().map(|bb| {
+                        let buffer = bb.resource.borrow();
+                        let resolved = buffer.resource_type.as_ref().expect("Invalid buffer in BufferBarrier");
+                        if let ResourceType::Buffer(resolved_buffer) = resolved {
+                            vk::BufferMemoryBarrier::builder()
+                                .buffer(resolved_buffer.buffer)
+                                .src_access_mask(bb.source_access)
+                                .dst_access_mask(bb.dest_access)
+                                .offset(bb.offset as DeviceSize)
+                                .size(bb.size as DeviceSize)
+                                .src_queue_family_index(render_context.get_graphics_queue_index())
+                                .dst_queue_family_index(render_context.get_graphics_queue_index())
+                                .build()
+                        } else {
+                            panic!("Non buffer resource in BufferBarrier")
+                        }
+                    }).collect();
+
+                    // translate from our ImageBarrier to Vulkan
+                    let transformed_image_barriers: Vec<vk::ImageMemoryBarrier> = barriers.image_barriers.iter().map(|ib| {
+                        let image = ib.resource.borrow();
+                        let resolved = image.resource_type.as_ref().expect("Invalid image in ImageBarrier");
+                        // TODO: the range needs to be parameterized
+                        let range = vk::ImageSubresourceRange::builder()
+                            .level_count(1)
+                            .base_mip_level(0)
+                            .layer_count(1)
+                            .base_array_layer(0)
+                            .aspect_mask(vk::ImageAspectFlags::COLOR)
+                            .build();
+                        if let ResourceType::Image(resolved_image) = resolved {
+                            vk::ImageMemoryBarrier::builder()
+                                .image(resolved_image.image)
+                                .src_access_mask(ib.source_access)
+                                .dst_access_mask(ib.dest_access)
+                                .old_layout(ib.old_layout)
+                                .new_layout(ib.new_layout)
+                                .src_queue_family_index(render_context.get_graphics_queue_index())
+                                .dst_queue_family_index(render_context.get_graphics_queue_index())
+                                .subresource_range(range)
+                                .build()
+                        } else {
+                            panic!("Non image resource in ImageBarrier")
+                        }
+                    }).collect();
+
+                    if transformed_image_barriers.len() > 0 || transformed_buffer_barriers.len() > 0 {
+                        unsafe {
+                            render_context.get_device().borrow().get().cmd_pipeline_barrier(
+                                *command_buffer,
+                                source_stage,
+                                dest_stage,
+                                vk::DependencyFlags::empty(),
+                                &[],
+                                &transformed_buffer_barriers,
+                                &transformed_image_barriers);
+                        }
                     }
                 }
+
+                // prepare pipeline for execution (node's fill callback)
+                match node {
+                    PassType::Graphics(graphics_node) => {
+                        self.execute_graphics_node(render_context, command_buffer, graphics_node);
+                    },
+                    PassType::Copy(copy_node) => {
+                        self.execute_copy_node(render_context, command_buffer, copy_node);
+                    },
+                    PassType::Compute(compute_node) => {
+                        self.execute_compute_node(render_context, command_buffer, compute_node);
+                    }
+                    _ => {}
+                }
+
+                render_context.get_device().borrow().pop_debug_label(*command_buffer);
             }
-
-            // prepare pipeline for execution (node's fill callback)
-            match node {
-                PassType::Graphics(graphics_node) => {
-                    self.execute_graphics_node(render_context, command_buffer, graphics_node);
-                },
-                PassType::Copy(copy_node) => {
-                    self.execute_copy_node(render_context, command_buffer, copy_node);
-                },
-                PassType::Compute(compute_node) => {
-                    self.execute_compute_node(render_context, command_buffer, compute_node);
-                }
-                _ => {}
-            }
-
-            render_context.get_device().borrow().pop_debug_label(*command_buffer);
         }
+
     }
 }

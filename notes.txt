@@ -354,3 +354,14 @@ When we create swapchain images we should use the new DeviceWrapper::create_imag
 
 28 August 2023
 
+
+21 September 2023
+framegraph::link --> output should provide how to separate work into different command lists, 
+synchronized via semaphores
+
+What can add a semaphore?
+* Present
+* Async... e.g. graphics -> compute
+
+What does a commandlist look like
+
