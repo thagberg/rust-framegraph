@@ -106,11 +106,17 @@ impl ComputePipelineDescription {
 #[derive(Clone)]
 pub struct Pipeline
 {
-    pub device_pipeline: DevicePipeline,
-    pub descriptor_sets: Vec<vk::DescriptorSet>,
+    pub device_pipeline: DevicePipeline
 }
 
 impl Pipeline {
+    pub fn new(device_pipeline: DevicePipeline) -> Pipeline
+    {
+        Pipeline {
+            device_pipeline
+        }
+    }
+
     pub fn get_pipeline(&self) -> vk::Pipeline {
         self.device_pipeline.pipeline
     }
@@ -279,36 +285,43 @@ fn generate_blend_state(blend_type: BlendType, attachments: &[vk::PipelineColorB
 fn create_descriptor_set_layouts(render_context: &VulkanRenderContext, full_bindings: &HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>>) -> Vec<vk::DescriptorSetLayout> {
 
     let mut descriptor_set_layouts: Vec<vk::DescriptorSetLayout> = Vec::new();
-    descriptor_set_layouts.resize(full_bindings.len(), vk::DescriptorSetLayout::null());
-    for (set, bindings) in full_bindings {
-        let layout_create_info = vk::DescriptorSetLayoutCreateInfo::builder()
-            .bindings(&bindings)
-            .build();
 
-        let layout = unsafe {
-            render_context.get_device().borrow().get().create_descriptor_set_layout(
-                &layout_create_info,
-                None)
-                .expect("Failed to create descriptor set layout")
-        };
-        descriptor_set_layouts[*set as usize] = layout;
+    // first find the highest set
+    let highest_set = {
+        let mut highest = 0;
+        for set in full_bindings.keys() {
+            if *set > highest {
+                highest = *set;
+            }
+        }
+        highest
+    };
+    descriptor_set_layouts.resize(highest_set as  usize, vk::DescriptorSetLayout::null());
+
+    // then fill the DescriptorSetLayout vector, using null layouts to fill the holes
+    // e.g. if a pipeline explicitly uses sets 0 and 2, set 1 will be a null handle
+    for set in (0..highest_set) {
+        if let Some(bindings) = full_bindings.get(&set) {
+            let layout_create_info = vk::DescriptorSetLayoutCreateInfo::builder()
+                .bindings(&bindings)
+                .build();
+
+            let layout = unsafe {
+                render_context.get_device().borrow().get().create_descriptor_set_layout(
+                    &layout_create_info,
+                    None)
+                    .expect("Failed to create descriptor set layout")
+            };
+            // assert!((*set as usize) <= descriptor_set_layouts.len(), "Holes in used descriptor sets not allowed");
+            descriptor_set_layouts[set as usize] = layout;
+        } else {
+            descriptor_set_layouts[set as  usize] = vk::DescriptorSetLayout::null();
+        }
     }
 
     descriptor_set_layouts
 }
 
-impl Pipeline
-{
-    pub fn new(
-        device_pipeline: DevicePipeline,
-        descriptor_sets: Vec<vk::DescriptorSet>) -> Pipeline
-    {
-        Pipeline {
-            device_pipeline,
-            descriptor_sets
-        }
-    }
-}
 
 impl VulkanPipelineManager {
     pub fn new() -> VulkanPipelineManager
@@ -346,7 +359,7 @@ impl VulkanPipelineManager {
 
                 let descriptor_set_layouts = create_descriptor_set_layouts(render_context, &full_bindings);
 
-                let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
+                // let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
 
                 let pipeline_layout = {
                     let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
@@ -376,7 +389,7 @@ impl VulkanPipelineManager {
                     &pipeline_description.compute_name);
                 let pipeline = Rc::new(RefCell::new(Pipeline::new(
                     device_pipeline,
-                    descriptor_sets)));
+                    descriptor_set_layouts)));
                 self.pipeline_cache.insert(pipeline_key, pipeline.clone());
                 pipeline
             }
@@ -437,7 +450,7 @@ impl VulkanPipelineManager {
 
                 let descriptor_set_layouts = create_descriptor_set_layouts(render_context, &full_bindings);
 
-                let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
+                // let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
 
                 let pipeline_layout = {
                         let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
@@ -535,8 +548,7 @@ impl VulkanPipelineManager {
                     descriptor_set_layouts,
                     pipeline_description.get_name());
                 let pipeline = Rc::new(RefCell::new(Pipeline::new(
-                    device_pipeline,
-                    descriptor_sets)));
+                    device_pipeline)));
                 self.pipeline_cache.insert(pipeline_key, pipeline.clone());
                 pipeline
             }

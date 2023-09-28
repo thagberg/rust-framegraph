@@ -504,6 +504,7 @@ impl VulkanFrameGraph {
             }
         }
 
+        command_lists.push(current_list);
         command_lists
     }
 
@@ -600,6 +601,7 @@ impl VulkanFrameGraph {
 
     fn execute_graphics_node(
         &mut self,
+        frame: &mut Frame,
         render_context: &mut VulkanRenderContext,
         command_buffer: &vk::CommandBuffer,
         node: &mut GraphicsPassNode) {
@@ -634,6 +636,9 @@ impl VulkanFrameGraph {
                 render_context.get_device());
 
             let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass.borrow().renderpass.clone(), pipeline_description);
+
+            // TODO: create descriptor sets (Frame should own these)
+            let descriptor_sets = render_context.create_descriptor_sets(&pipeline.borrow().device_pipeline.descriptor_set_layouts);
 
             // create framebuffer
             // TODO: should cache framebuffer objects to avoid creating the same ones each frame
