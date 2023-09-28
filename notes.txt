@@ -365,3 +365,13 @@ What can add a semaphore?
 
 What does a commandlist look like
 
+29 September 2023
+Need new descriptor sets per frame, or at least double/triple buffer them
+Current idea is to decouple descriptorsets from pipelines, then create descriptor sets
+and put them on the current Frame
+Frame cleanup should handle destroying descriptorsets
+Will need to add a DeviceDescriptorSet type to handle this via RAII
+
+Maybe should double-buffer the descriptor pool?
+
+Definitely shouldn't be allocating descriptor sets per node, can we do this once per frame instead?
