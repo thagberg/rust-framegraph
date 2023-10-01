@@ -388,8 +388,7 @@ impl VulkanPipelineManager {
                     descriptor_set_layouts,
                     &pipeline_description.compute_name);
                 let pipeline = Rc::new(RefCell::new(Pipeline::new(
-                    device_pipeline,
-                    descriptor_set_layouts)));
+                    device_pipeline)));
                 self.pipeline_cache.insert(pipeline_key, pipeline.clone());
                 pipeline
             }

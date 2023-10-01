@@ -205,12 +205,14 @@ impl DescriptorUpdate {
 fn resolve_descriptors<'a, 'b>(
     bindings: &[ResourceBinding],
     pipeline: &Pipeline,
+    descriptor_sets: Vec<vk::DescriptorSet>,
     descriptor_updates: &mut DescriptorUpdate) {
 
     for binding in bindings {
         let binding_ref = binding.resource.borrow();
         let resolved_binding = binding_ref.resource_type.as_ref().expect("Invalid resource in binding");
-        let descriptor_set = pipeline.descriptor_sets[binding.binding_info.set as usize];
+        // let descriptor_set = pipeline.descriptor_sets[binding.binding_info.set as usize];
+        let descriptor_set = descriptor_sets[binding.binding_info.set as usize];
 
         let mut descriptor_write_builder = vk::WriteDescriptorSet::builder()
             .dst_set(descriptor_set)
@@ -570,10 +572,12 @@ impl VulkanFrameGraph {
             resolve_descriptors(
                 inputs,
                 pipeline.borrow().deref(),
+                vec![],
                 &mut descriptor_updates);
             resolve_descriptors(
                 outputs,
                 pipeline.borrow().deref(),
+                vec![],
                 &mut descriptor_updates);
 
             unsafe {
@@ -588,7 +592,7 @@ impl VulkanFrameGraph {
                     vk::PipelineBindPoint::COMPUTE,
                     pipeline.borrow().get_pipeline_layout(),
                     0,
-                    &pipeline.borrow().descriptor_sets,
+                    &vec![],
                     &[]);
             }
         };
@@ -601,7 +605,6 @@ impl VulkanFrameGraph {
 
     fn execute_graphics_node(
         &mut self,
-        frame: &mut Frame,
         render_context: &mut VulkanRenderContext,
         command_buffer: &vk::CommandBuffer,
         node: &mut GraphicsPassNode) {
@@ -672,10 +675,12 @@ impl VulkanFrameGraph {
                 resolve_descriptors(
                     inputs,
                     pipeline.borrow().deref(),
+                    vec![],
                     &mut descriptor_updates);
                 resolve_descriptors(
                     outputs,
                     pipeline.borrow().deref(),
+                    vec![],
                     &mut descriptor_updates);
 
                 unsafe {
@@ -690,7 +695,7 @@ impl VulkanFrameGraph {
                         vk::PipelineBindPoint::GRAPHICS,
                         pipeline.borrow().get_pipeline_layout(),
                         0,
-                        &pipeline.borrow().descriptor_sets,
+                        &vec![],
                         &[]);
                 }
             };
