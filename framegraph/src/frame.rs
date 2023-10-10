@@ -1,4 +1,8 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+use ash::vk;
 use petgraph::stable_graph::{StableDiGraph, NodeIndex};
+use context::api_types::device::DeviceWrapper;
 use crate::graphics_pass_node::GraphicsPassNode;
 use crate::pass_type::PassType;
 
@@ -13,16 +17,33 @@ pub struct Frame {
     pub nodes: StableDiGraph<PassType, u32>,
     root_index: Option<NodeIndex>,
     state: FrameState,
-    pub sorted_nodes: Vec<NodeIndex>
+    pub sorted_nodes: Vec<NodeIndex>,
+    device: Rc<RefCell<DeviceWrapper>>,
+    descriptor_pool: vk::DescriptorPool,
+    pub descriptor_sets: Vec<vk::DescriptorSet>
+}
+
+impl Drop for Frame {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.borrow().get().free_descriptor_sets(
+                self.descriptor_pool,
+                &self.descriptor_sets)
+                .expect("Failed to free Descriptor Sets for Frame");
+        }
+    }
 }
 
 impl Frame {
-    pub fn new() -> Self {
+    pub fn new(device: Rc<RefCell<DeviceWrapper>>, descriptor_pool: vk::DescriptorPool) -> Self {
         Frame {
             nodes: StableDiGraph::new(),
             root_index: None,
             state: FrameState::New,
-            sorted_nodes: Vec::new()
+            sorted_nodes: Vec::new(),
+            device,
+            descriptor_pool,
+            descriptor_sets: Vec::new()
         }
     }
 

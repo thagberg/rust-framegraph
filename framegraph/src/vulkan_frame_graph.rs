@@ -1,5 +1,6 @@
 extern crate petgraph;
 
+use std::cell::RefCell;
 use petgraph::stable_graph::{NodeIndex, StableDiGraph};
 extern crate multimap;
 use multimap::MultiMap;
@@ -18,11 +19,12 @@ use crate::renderpass_manager::VulkanRenderpassManager;
 
 use std::collections::HashMap;
 use std::ops::Deref;
+use std::rc::Rc;
 use ash::vk::DeviceSize;
 use petgraph::data::DataMap;
 use petgraph::visit::Dfs;
 use context::api_types::buffer::BufferWrapper;
-use context::api_types::device::ResourceType;
+use context::api_types::device::{DeviceWrapper, ResourceType};
 use context::api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::attachment::AttachmentReference;
@@ -205,13 +207,12 @@ impl DescriptorUpdate {
 fn resolve_descriptors<'a, 'b>(
     bindings: &[ResourceBinding],
     pipeline: &Pipeline,
-    descriptor_sets: Vec<vk::DescriptorSet>,
+    descriptor_sets: &[vk::DescriptorSet],
     descriptor_updates: &mut DescriptorUpdate) {
 
     for binding in bindings {
         let binding_ref = binding.resource.borrow();
         let resolved_binding = binding_ref.resource_type.as_ref().expect("Invalid resource in binding");
-        // let descriptor_set = pipeline.descriptor_sets[binding.binding_info.set as usize];
         let descriptor_set = descriptor_sets[binding.binding_info.set as usize];
 
         let mut descriptor_write_builder = vk::WriteDescriptorSet::builder()
@@ -531,6 +532,7 @@ impl VulkanFrameGraph {
 
     fn execute_copy_node(
         &mut self,
+        descriptor_sets: &mut Vec<vk::DescriptorSet>,
         render_context: &mut VulkanRenderContext,
         command_buffer: &vk::CommandBuffer,
         node: &mut CopyPassNode) {
@@ -543,6 +545,7 @@ impl VulkanFrameGraph {
 
     fn execute_compute_node(
         &mut self,
+        descriptor_sets: &mut Vec<vk::DescriptorSet>,
         render_context: &mut VulkanRenderContext,
         command_buffer: &vk::CommandBuffer,
         node: &mut ComputePassNode) {
@@ -572,12 +575,12 @@ impl VulkanFrameGraph {
             resolve_descriptors(
                 inputs,
                 pipeline.borrow().deref(),
-                vec![],
+                &[],
                 &mut descriptor_updates);
             resolve_descriptors(
                 outputs,
                 pipeline.borrow().deref(),
-                vec![],
+                &[],
                 &mut descriptor_updates);
 
             unsafe {
@@ -605,6 +608,7 @@ impl VulkanFrameGraph {
 
     fn execute_graphics_node(
         &mut self,
+        descriptor_sets: &mut Vec<vk::DescriptorSet>,
         render_context: &mut VulkanRenderContext,
         command_buffer: &vk::CommandBuffer,
         node: &mut GraphicsPassNode) {
@@ -640,8 +644,7 @@ impl VulkanFrameGraph {
 
             let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass.borrow().renderpass.clone(), pipeline_description);
 
-            // TODO: create descriptor sets (Frame should own these)
-            let descriptor_sets = render_context.create_descriptor_sets(&pipeline.borrow().device_pipeline.descriptor_set_layouts);
+            *descriptor_sets = render_context.create_descriptor_sets(&pipeline.borrow().device_pipeline.descriptor_set_layouts);
 
             // create framebuffer
             // TODO: should cache framebuffer objects to avoid creating the same ones each frame
@@ -675,12 +678,12 @@ impl VulkanFrameGraph {
                 resolve_descriptors(
                     inputs,
                     pipeline.borrow().deref(),
-                    vec![],
+                    &descriptor_sets,
                     &mut descriptor_updates);
                 resolve_descriptors(
                     outputs,
                     pipeline.borrow().deref(),
-                    vec![],
+                    &descriptor_sets,
                     &mut descriptor_updates);
 
                 unsafe {
@@ -769,8 +772,11 @@ impl FrameGraph for VulkanFrameGraph {
     type RC = VulkanRenderContext;
     type Index = NodeIndex;
 
-    fn start(&mut self) -> Box<Frame> {
-        Box::new(Frame::new())
+    fn start(
+        &mut self,
+        device: Rc<RefCell<DeviceWrapper>>,
+        descriptor_pool: vk::DescriptorPool) -> Box<Frame> {
+        Box::new(Frame::new(device, descriptor_pool))
     }
 
     fn end(
@@ -793,7 +799,8 @@ impl FrameGraph for VulkanFrameGraph {
         // let sorted_nodes = &frame.sorted_nodes;
         for command_list in command_lists {
             for index in &command_list.nodes {
-                let node = frame.nodes.node_weight_mut(*index).unwrap();
+                let nodes = &mut frame.nodes;
+                let node = nodes.node_weight_mut(*index).unwrap();
                 render_context.get_device().borrow().push_debug_label(*command_buffer, node.get_name());
 
                 // Prepare and execute resource barriers
@@ -875,13 +882,13 @@ impl FrameGraph for VulkanFrameGraph {
                 // prepare pipeline for execution (node's fill callback)
                 match node {
                     PassType::Graphics(graphics_node) => {
-                        self.execute_graphics_node(render_context, command_buffer, graphics_node);
+                        self.execute_graphics_node(&mut frame.descriptor_sets, render_context, command_buffer, graphics_node);
                     },
                     PassType::Copy(copy_node) => {
-                        self.execute_copy_node(render_context, command_buffer, copy_node);
+                        self.execute_copy_node(&mut frame.descriptor_sets, render_context, command_buffer, copy_node);
                     },
                     PassType::Compute(compute_node) => {
-                        self.execute_compute_node(render_context, command_buffer, compute_node);
+                        self.execute_compute_node(&mut frame.descriptor_sets,render_context, command_buffer, compute_node);
                     }
                     _ => {}
                 }

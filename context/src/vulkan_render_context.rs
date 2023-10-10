@@ -463,6 +463,7 @@ pub struct VulkanFrameObjects {
     pub graphics_command_buffer: vk::CommandBuffer,
     pub swapchain_image: Option<Rc<RefCell<DeviceResource>>>,
     pub swapchain_semaphore: vk::Semaphore,
+    pub descriptor_pool: vk::DescriptorPool,
     pub frame_index: u32
 }
 
@@ -750,6 +751,7 @@ impl VulkanRenderContext {
             graphics_command_buffer: self.graphics_command_buffers[old_index as usize],
             swapchain_image: image,
             swapchain_semaphore: semaphore,
+            descriptor_pool: self.descriptor_pool, // TODO: this should be per-frame
             frame_index: old_index
         }
     }
