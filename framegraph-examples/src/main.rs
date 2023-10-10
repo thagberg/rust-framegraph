@@ -142,6 +142,7 @@ impl WindowedVulkanApp {
             graphics_command_buffer: command_buffer,
             swapchain_image: swapchain_image,
             swapchain_semaphore: swapchain_semaphore,
+            descriptor_pool: descriptor_pool,
             frame_index: swapchain_index,
         } = self.render_context.get_next_frame_objects();
 
@@ -167,7 +168,7 @@ impl WindowedVulkanApp {
         };
 
         // prepare framegraph
-        self.frames[self.frame_index as usize] = Some(self.frame_graph.start());
+        self.frames[self.frame_index as usize] = Some(self.frame_graph.start(self.render_context.get_device(), descriptor_pool));
         let current_frame = self.frames[self.frame_index as usize].as_mut().unwrap();
 
         if let Some(swapchain_image) = swapchain_image.clone() {

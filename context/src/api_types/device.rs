@@ -182,6 +182,23 @@ impl DeviceResource {
     }
 }
 
+// pub struct DeviceDescriptorSet {
+//     descriptor_set: vk::DescriptorSet,
+//     descriptor_pool: vk::DescriptorPool,
+//     device: Rc<RefCell<DeviceWrapper>>
+// }
+//
+// impl Drop for DeviceDescriptorSet {
+//     fn drop(&mut self) {
+//         unsafe {
+//             self.device.borrow().get().free_descriptor_sets(
+//                 self.descriptor_pool,
+//                 std::slice::from_ref(&self.descriptor_set))
+//                 .expect("Failed to free descriptor set")
+//         }
+//     }
+// }
+
 pub struct DeviceFramebuffer {
     framebuffer: vk::Framebuffer,
     device: Rc<RefCell<DeviceWrapper>>
