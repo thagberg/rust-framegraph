@@ -296,11 +296,11 @@ fn create_descriptor_set_layouts(render_context: &VulkanRenderContext, full_bind
         }
         highest
     };
-    descriptor_set_layouts.resize(highest_set as  usize, vk::DescriptorSetLayout::null());
+    descriptor_set_layouts.resize((highest_set + 1) as  usize, vk::DescriptorSetLayout::null());
 
     // then fill the DescriptorSetLayout vector, using null layouts to fill the holes
     // e.g. if a pipeline explicitly uses sets 0 and 2, set 1 will be a null handle
-    for set in (0..highest_set) {
+    for set in (0..=highest_set) {
         if let Some(bindings) = full_bindings.get(&set) {
             let layout_create_info = vk::DescriptorSetLayoutCreateInfo::builder()
                 .bindings(&bindings)
