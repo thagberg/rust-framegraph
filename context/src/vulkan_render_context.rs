@@ -661,14 +661,10 @@ impl VulkanRenderContext {
             .descriptor_count(8)
             .build();
         let descriptor_pool_sizes = [ubo_pool_size, image_pool_size, combined_sampler_pool_size];
-        let descriptor_pool_create = vk::DescriptorPoolCreateInfo {
-            s_type: vk::StructureType::DESCRIPTOR_POOL_CREATE_INFO,
-            p_next: std::ptr::null(),
-            flags: vk::DescriptorPoolCreateFlags::empty(),
-            max_sets: 8,
-            pool_size_count: descriptor_pool_sizes.len() as u32,
-            p_pool_sizes: descriptor_pool_sizes.as_ptr()
-        };
+        let descriptor_pool_create = vk::DescriptorPoolCreateInfo::builder()
+            .flags(vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET)
+            .max_sets(8)
+            .pool_sizes(&descriptor_pool_sizes);
         let descriptor_pool = unsafe {
             logical_device.borrow().get().create_descriptor_pool(
                 &descriptor_pool_create,
@@ -746,7 +742,10 @@ impl VulkanRenderContext {
         self.frame_index = (self.frame_index + 1) % MAX_FRAMES_IN_FLIGHT;
 
         let semaphore = self.swapchain_semaphores[old_index as usize];
-        let image = self.get_next_swapchain_image(Some(0), Some(semaphore), None);
+        let image = self.get_next_swapchain_image(
+            Some(std::time::Duration::new(1, 0).as_nanos() as u64),
+            Some(semaphore),
+            None);
         VulkanFrameObjects {
             graphics_command_buffer: self.graphics_command_buffers[old_index as usize],
             swapchain_image: image,

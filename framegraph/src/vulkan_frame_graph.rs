@@ -698,7 +698,7 @@ impl VulkanFrameGraph {
                         vk::PipelineBindPoint::GRAPHICS,
                         pipeline.borrow().get_pipeline_layout(),
                         0,
-                        &vec![],
+                        &descriptor_sets,
                         &[]);
                 }
             };

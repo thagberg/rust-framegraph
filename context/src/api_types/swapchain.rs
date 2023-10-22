@@ -52,7 +52,7 @@ impl SwapchainWrapper {
                 timeout,
                 semaphore,
                 fence)
-            .expect("Failed to acquire next swpachain image")
+            .expect("Failed to acquire next swapchain image")
         };
         self.images[image_index as usize].clone()
     }
