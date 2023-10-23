@@ -21,6 +21,7 @@ use framegraph::present_pass_node::PresentPassNode;
 use framegraph::renderpass_manager::VulkanRenderpassManager;
 use framegraph::vulkan_frame_graph::VulkanFrameGraph;
 use passes::imgui_draw::ImguiRender;
+use passes::clear;
 
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 
@@ -178,6 +179,11 @@ impl WindowedVulkanApp {
                 .expect("Failed to create Present Node");
 
             current_frame.start(PassType::Present(present_node));
+        }
+
+        {
+            let clear_node = clear::clear_color(swapchain_image.as_ref().unwrap().clone());
+            current_frame.add_node(clear_node);
         }
 
 

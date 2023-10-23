@@ -6,9 +6,10 @@ use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::binding::{BindingInfo, BindingType, ImageBindingInfo, ResourceBinding};
 use framegraph::graphics_pass_node::GraphicsPassNode;
+use framegraph::pass_type::PassType;
 
-fn clear_color(
-    target: Rc<RefCell<DeviceResource>>) {
+pub fn clear_color(
+    target: Rc<RefCell<DeviceResource>>) -> PassType{
 
     let target_binding = ResourceBinding {
         resource: target.clone(),
@@ -47,5 +48,8 @@ fn clear_color(
                 };
             }
         ))
-        .build();
+        .build()
+        .expect("Failed to create color clear pass node");
+
+    PassType::Graphics(pass_node)
 }
