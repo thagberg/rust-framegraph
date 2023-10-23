@@ -1,6 +1,7 @@
 pub mod blit;
 pub mod imgui_draw;
 pub mod blur;
+pub mod clear;
 
 extern crate imgui;
 
