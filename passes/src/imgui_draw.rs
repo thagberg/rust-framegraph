@@ -263,6 +263,13 @@ impl ImguiRender {
             panic!("Font texture somehow not valid");
         }
 
+        unsafe {
+            // ensure we've waited for the font buffer -> image copy to be complete
+            // so that we don't attempt to destroy the buffer while it's still in-use by
+            // a command buffer
+            device.borrow().get().device_wait_idle()
+                .expect("Error while waiting for font buffer -> image copy operation to complete");
+        }
 
         ImguiRender {
             font_texture: Rc::new(RefCell::new(font_texture)),
