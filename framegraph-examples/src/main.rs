@@ -127,7 +127,17 @@ impl WindowedVulkanApp {
         }
     }
 
+    pub fn shutdown(&mut self) {
+        println!("Shutting down");
+        unsafe {
+            self.render_context.get_device().borrow().get()
+                .device_wait_idle()
+                .expect("Failed to wait for GPU to be idle");
+        }
+    }
+
     pub fn draw_frame(&mut self) {
+        println!("New frame");
         // wait for fence if necessary (can we avoid this using just semaphores?)
         let wait_fence = self.frame_fences[self.frame_index as usize];
         unsafe {
@@ -270,6 +280,9 @@ impl WindowedVulkanApp {
                 },
                 Event::RedrawRequested(_) => {
                     self.draw_frame();
+                },
+                Event::LoopDestroyed => {
+                    self.shutdown();
                 },
                 event => {
                     self.platform.handle_event(self.imgui.io_mut(), &self.window, &event);
