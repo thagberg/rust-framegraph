@@ -24,7 +24,7 @@ use ash::vk::DeviceSize;
 use petgraph::data::DataMap;
 use petgraph::visit::Dfs;
 use context::api_types::buffer::BufferWrapper;
-use context::api_types::device::{DeviceWrapper, ResourceType};
+use context::api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
 use context::api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::attachment::AttachmentReference;
@@ -468,7 +468,10 @@ impl VulkanFrameGraph {
                         link_inputs(&cn.outputs, &mut node_barrier, &mut usage_cache);
                     }
                     PassType::Present(pn) => {
-                        let handle = pn.swapchain_image.borrow().get_handle();
+                        // link_inputs(gn.get_inputs(), &mut node_barrier, &mut usage_cache);
+                        let mut swapchain = pn.swapchain_image.borrow_mut();
+                        let handle = swapchain.get_handle();
+                        let mut swapchain_image = swapchain.get_image_mut();
                         let last_usage = {
                             let usage = usage_cache.get(&handle);
                             match usage {
@@ -477,22 +480,31 @@ impl VulkanFrameGraph {
                                     ResourceUsage {
                                         access: vk::AccessFlags::NONE,
                                         stage: vk::PipelineStageFlags::TOP_OF_PIPE,
-                                        layout: Some(vk::ImageLayout::UNDEFINED)
+                                        layout: Some(swapchain_image.layout)
                                     }
                                 }
                             }
                         };
 
+                        let new_usage = ResourceUsage {
+                            access: vk::AccessFlags::NONE,
+                            stage: vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                            layout: Some(vk::ImageLayout::PRESENT_SRC_KHR),
+                        };
+
                         let present_barrier = ImageBarrier {
                             resource: pn.swapchain_image.clone(),
                             source_stage: last_usage.stage,
-                            dest_stage: vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                            dest_stage: new_usage.stage,
                             source_access: last_usage.access,
-                            dest_access: vk::AccessFlags::NONE,
+                            dest_access: new_usage.access,
                             old_layout: last_usage.layout.expect("Using a non-image for an image transition"),
-                            new_layout: vk::ImageLayout::PRESENT_SRC_KHR,
+                            new_layout: new_usage.layout.unwrap()
                         };
                         node_barrier.image_barriers.push(present_barrier);
+
+                        swapchain_image.layout = new_usage.layout.unwrap();
+                        usage_cache.insert(handle, new_usage);
 
                         command_lists.push(current_list);
                         current_list = CommandList::new();
