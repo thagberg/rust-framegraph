@@ -18,7 +18,7 @@ pub fn clear_color(
             set: 0,
             slot: 0,
             stage: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-            access: vk::AccessFlags::SHADER_READ,
+            access: vk::AccessFlags::COLOR_ATTACHMENT_WRITE
         }
     };
 
