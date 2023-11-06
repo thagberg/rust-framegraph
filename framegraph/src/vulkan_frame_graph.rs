@@ -358,6 +358,7 @@ impl VulkanFrameGraph {
                 match node {
                     PassType::Graphics(gn) => {
                         link_inputs(gn.get_inputs(), &mut node_barrier, &mut usage_cache);
+                        link_inputs(&gn.outputs, &mut node_barrier, &mut usage_cache);
 
                         for rt in gn.get_rendertargets_mut() {
                             // rendertargets always write, so if this isn't the first usage of this resource

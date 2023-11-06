@@ -279,7 +279,7 @@ impl ImguiRender {
     pub fn generate_passes(
         &self,
         draw_data: &DrawData,
-        render_target: Rc<RefCell<DeviceResource>>,
+        render_target: AttachmentReference,
         device: Rc<RefCell<DeviceWrapper>>) -> Vec<PassType> {
 
         let mut pass_nodes: Vec<PassType> = Vec::new();
@@ -373,13 +373,6 @@ impl ImguiRender {
 
             let idx_length = idx_data.len() as u32;
 
-            let rt_ref = AttachmentReference::new(
-                render_target.clone(),
-                render_target.borrow().get_image().format,
-                vk::SampleCountFlags::TYPE_1,
-                vk::AttachmentLoadOp::LOAD,
-                vk::AttachmentStoreOp::STORE);
-
             let font_binding = ResourceBinding {
                 resource: self.font_texture.clone(),
                 binding_info: BindingInfo {
@@ -423,7 +416,7 @@ impl ImguiRender {
             };
 
             let (viewport, scissor) = {
-                let extent = render_target.borrow().get_image().extent;
+                let extent = render_target.resource_image.borrow().get_image().extent;
                 let v = vk::Viewport::builder()
                     .x(0.0)
                     .y(0.0)
@@ -443,7 +436,7 @@ impl ImguiRender {
 
             let pass_node = GraphicsPassNode::builder("imgui".to_string())
                 .pipeline_description(pipeline_description)
-                .render_target(rt_ref)
+                .render_target(render_target.clone())
                 .read(font_binding)
                 .read(display_binding)
                 .tag(idx_buffer.clone())

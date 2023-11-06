@@ -3,12 +3,11 @@ use std::rc::Rc;
 use ash::vk;
 use context::api_types::device::{DeviceResource, ResourceType};
 
+#[derive(Clone)]
 pub struct AttachmentReference {
     pub resource_image: Rc<RefCell<DeviceResource>>,
     pub format: vk::Format,
     pub samples: vk::SampleCountFlags,
-    pub load_op: vk::AttachmentLoadOp,
-    pub store_op: vk::AttachmentStoreOp,
     pub layout: vk::ImageLayout
 }
 
@@ -16,9 +15,7 @@ impl AttachmentReference {
     pub fn new(
         resource_image: Rc<RefCell<DeviceResource>>,
         format: vk::Format,
-        samples: vk::SampleCountFlags,
-        load_op: vk::AttachmentLoadOp,
-        store_op: vk::AttachmentStoreOp) -> AttachmentReference {
+        samples: vk::SampleCountFlags) -> AttachmentReference {
 
         assert!(resource_image.borrow().resource_type.is_some(), "AttachmentResource: resource_image must be valid DeviceResource");
         let resource_ref = resource_image.borrow();
@@ -31,8 +28,6 @@ impl AttachmentReference {
             resource_image: resource_image.clone(),
             format,
             samples,
-            load_op,
-            store_op,
             layout: vk::ImageLayout::UNDEFINED
         }
     }
