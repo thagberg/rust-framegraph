@@ -490,10 +490,13 @@ impl Drop for VulkanRenderContext {
     fn drop(&mut self) {
         unsafe {
             let device = self.device.borrow();
-            device.get().destroy_descriptor_pool(self.descriptor_pool, None);
             device.get().free_command_buffers(self.graphics_command_pool, &[self.immediate_command_buffer]);
+            // for cb in &self.graphics_command_buffers {
+            //     device.get().reset_command_buffer(*cb, vk::CommandBufferResetFlags::RELEASE_RESOURCES);
+            // }
             device.get().free_command_buffers(self.graphics_command_pool, &self.graphics_command_buffers);
             device.get().destroy_command_pool(self.graphics_command_pool, None);
+            device.get().destroy_descriptor_pool(self.descriptor_pool, None);
         }
     }
 }
