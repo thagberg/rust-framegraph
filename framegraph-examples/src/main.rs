@@ -13,6 +13,7 @@ use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use imgui;
 use context::render_context::RenderContext;
 use context::vulkan_render_context::{VulkanFrameObjects, VulkanRenderContext};
+use framegraph::attachment::AttachmentReference;
 use framegraph::frame::Frame;
 use framegraph::frame_graph::FrameGraph;
 use framegraph::pass_type::PassType;
@@ -188,9 +189,15 @@ impl WindowedVulkanApp {
 
 
         {
+            let image = swapchain_image.unwrap();
+            let rt_ref = AttachmentReference::new(
+                image.clone(),
+                image.borrow().get_image().format,
+                vk::SampleCountFlags::TYPE_1);
+
             let imgui_nodes = self.imgui_renderer.generate_passes(
                 imgui_draw_data,
-                swapchain_image.unwrap(),
+                rt_ref.clone(),
                 self.render_context.get_device());
 
             for (i, imgui_node) in imgui_nodes.into_iter().enumerate() {

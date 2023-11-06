@@ -48,11 +48,15 @@ impl VulkanRenderpassManager {
 
             let mut attachment_index = 0;
             for color_attachment in color_attachments {
+                let mut load_op = vk::AttachmentLoadOp::LOAD;
+                if (color_attachment.layout == vk::ImageLayout::UNDEFINED) {
+                    load_op = vk::AttachmentLoadOp::DONT_CARE;
+                }
                 color_attachment_descs.push(vk::AttachmentDescription::builder()
                     .format(color_attachment.format)
                     .samples(color_attachment.samples)
-                    .load_op(color_attachment.load_op)
-                    .store_op(color_attachment.store_op)
+                    .load_op(load_op)
+                    .store_op(vk::AttachmentStoreOp::STORE)
                     .initial_layout(color_attachment.layout)
                     .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
                     .build());
