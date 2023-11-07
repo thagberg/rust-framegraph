@@ -255,6 +255,12 @@ pub struct VulkanFrameGraph {
     node_barriers: HashMap<NodeIndex, NodeBarriers>
 }
 
+impl Drop for VulkanFrameGraph {
+    fn drop(&mut self) {
+        println!("Dropping VulkanFrameGraph");
+    }
+}
+
 impl VulkanFrameGraph {
     pub fn new(
         renderpass_manager: VulkanRenderpassManager,

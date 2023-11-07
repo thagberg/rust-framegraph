@@ -31,15 +31,15 @@ struct WindowedVulkanApp {
     platform: WinitPlatform,
     imgui: imgui::Context,
 
-    render_context: VulkanRenderContext,
-    frame_graph: VulkanFrameGraph,
+    frame_index: u32,
+    render_semaphores: Vec<vk::Semaphore>,
+    frame_fences: Vec<vk::Fence>,
+    frames: [Option<Box<Frame>>; MAX_FRAMES_IN_FLIGHT as usize],
 
     imgui_renderer: ImguiRender,
+    frame_graph: VulkanFrameGraph,
 
-    render_semaphores: Vec<vk::Semaphore>,
-    frames: [Option<Box<Frame>>; MAX_FRAMES_IN_FLIGHT as usize],
-    frame_fences: Vec<vk::Fence>,
-    frame_index: u32
+    render_context: VulkanRenderContext
 }
 
 impl WindowedVulkanApp {
@@ -117,13 +117,13 @@ impl WindowedVulkanApp {
             window,
             platform,
             imgui,
-            render_context,
             frame_graph,
             imgui_renderer,
-            render_semaphores: render_semaphores,
+            render_semaphores,
             frames: Default::default(),
             frame_fences,
-            frame_index: 0
+            frame_index: 0,
+            render_context,
         }
     }
 
@@ -259,45 +259,78 @@ impl WindowedVulkanApp {
         self.frame_index = (self.frame_index + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
-    pub fn run(mut self, event_loop: EventLoop<()>) -> Result<u32, &'static str>{
-        let mut last_frame = Instant::now();
+    // pub fn run(mut self, event_loop: EventLoop<()>) -> Result<u32, &'static str>{
+    //     let mut last_frame = Instant::now();
+    //
+    //     // &self.event_loop.run(move |event, _, control_flow| {
+    //     event_loop.run(move |event, _, control_flow| {
+    //         match event {
+    //             Event::NewEvents(_) => {
+    //                 let now = Instant::now();
+    //                 self.imgui.io_mut().update_delta_time(now - last_frame);
+    //                 last_frame = now;
+    //             },
+    //             Event::MainEventsCleared => {
+    //                 self.platform.prepare_frame(self.imgui.io_mut(), &self.window)
+    //                     .expect("Failed to prepare frame");
+    //                 self.window.request_redraw();
+    //             },
+    //             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
+    //                 *control_flow = ControlFlow::Exit;
+    //             },
+    //             Event::RedrawRequested(_) => {
+    //                 self.draw_frame();
+    //             },
+    //             Event::LoopDestroyed => {
+    //                 self.shutdown();
+    //             },
+    //             event => {
+    //                 self.platform.handle_event(self.imgui.io_mut(), &self.window, &event);
+    //             }
+    //         }
+    //     });
+    //
+    //     Ok(0)
+    // }
+}
 
-        // &self.event_loop.run(move |event, _, control_flow| {
-        event_loop.run(move |event, _, control_flow| {
-            match event {
-                Event::NewEvents(_) => {
-                    let now = Instant::now();
-                    self.imgui.io_mut().update_delta_time(now - last_frame);
-                    last_frame = now;
-                },
-                Event::MainEventsCleared => {
-                    self.platform.prepare_frame(self.imgui.io_mut(), &self.window)
-                        .expect("Failed to prepare frame");
-                    self.window.request_redraw();
-                },
-                Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
-                    *control_flow = ControlFlow::Exit;
-                },
-                Event::RedrawRequested(_) => {
-                    self.draw_frame();
-                },
-                Event::LoopDestroyed => {
-                    self.shutdown();
-                },
-                event => {
-                    self.platform.handle_event(self.imgui.io_mut(), &self.window, &event);
-                }
+fn run(mut app: WindowedVulkanApp, event_loop: EventLoop<()>) {
+    let mut last_frame = Instant::now();
+
+    // &self.event_loop.run(move |event, _, control_flow| {
+    event_loop.run(move |event, _, control_flow| {
+        match event {
+            Event::NewEvents(_) => {
+                let now = Instant::now();
+                app.imgui.io_mut().update_delta_time(now - last_frame);
+                last_frame = now;
+            },
+            Event::MainEventsCleared => {
+                app.platform.prepare_frame(app.imgui.io_mut(), &app.window)
+                    .expect("Failed to prepare frame");
+                app.window.request_redraw();
+            },
+            Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
+                *control_flow = ControlFlow::Exit;
+            },
+            Event::RedrawRequested(_) => {
+                app.draw_frame();
+            },
+            Event::LoopDestroyed => {
+                app.shutdown();
+            },
+            event => {
+                app.platform.handle_event(app.imgui.io_mut(), &app.window, &event);
             }
-        });
-
-        Ok(0)
-    }
+        }
+    });
 }
 
 fn main() {
     // create app
     let event_loop: EventLoop<()> = EventLoop::new();
     let app = WindowedVulkanApp::new(&event_loop, "Examples", 1200, 800);
-    let exit = app.run(event_loop);
+    // let exit = app.run(event_loop);
+    run(app, event_loop);
 
 }
