@@ -77,6 +77,7 @@ impl Drop for DeviceWrapper {
     fn drop(&mut self) {
         unsafe {
             self.allocator.report_memory_leaks(log::Level::Warn);
+
         }
     }
 }
