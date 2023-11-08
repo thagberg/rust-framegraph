@@ -470,7 +470,7 @@ pub struct VulkanRenderContext {
     graphics_command_pool: vk::CommandPool,
     graphics_command_buffers: Vec<vk::CommandBuffer>,
     immediate_command_buffer: vk::CommandBuffer,
-    descriptor_pool: vk::DescriptorPool,
+    descriptor_pools: Vec<vk::DescriptorPool>,
     swapchain: Option<SwapchainWrapper>,
     swapchain_semaphores: Vec<vk::Semaphore>,
     device: Rc<RefCell<DeviceWrapper>>,
@@ -490,7 +490,9 @@ impl Drop for VulkanRenderContext {
             device.get().free_command_buffers(self.graphics_command_pool, &[self.immediate_command_buffer]);
             device.get().free_command_buffers(self.graphics_command_pool, &self.graphics_command_buffers);
             device.get().destroy_command_pool(self.graphics_command_pool, None);
-            device.get().destroy_descriptor_pool(self.descriptor_pool, None);
+            for pool in &self.descriptor_pools {
+                device.get().destroy_descriptor_pool(*pool, None);
+            }
         }
     }
 }
@@ -648,27 +650,37 @@ impl VulkanRenderContext {
 
         let ubo_pool_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::UNIFORM_BUFFER,
-            descriptor_count: 8
+            descriptor_count: 16
         };
         let image_pool_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::INPUT_ATTACHMENT,
-            descriptor_count: 8
+            descriptor_count: 16
         };
         let combined_sampler_pool_size = vk::DescriptorPoolSize::builder()
             .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .descriptor_count(8)
+            .descriptor_count(16)
             .build();
         let descriptor_pool_sizes = [ubo_pool_size, image_pool_size, combined_sampler_pool_size];
         let descriptor_pool_create = vk::DescriptorPoolCreateInfo::builder()
             .flags(vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET)
             .max_sets(8)
             .pool_sizes(&descriptor_pool_sizes);
-        let descriptor_pool = unsafe {
-            logical_device.borrow().get().create_descriptor_pool(
-                &descriptor_pool_create,
-                None)
-                .expect("Failed to create descriptor pool")
-        };
+
+        let mut descriptor_pools: Vec<vk::DescriptorPool> = Vec::new();
+        for i in (0..MAX_FRAMES_IN_FLIGHT) {
+            let descriptor_pool = unsafe {
+                logical_device.borrow().get().create_descriptor_pool(
+                    &descriptor_pool_create,
+                    None)
+                    .expect("Failed to create descriptor pool")
+            };
+            descriptor_pools.push(descriptor_pool);
+        }
+
+        let graphics_command_buffers = create_command_buffers(
+            &logical_device.borrow(),
+            graphics_command_pool,
+            MAX_FRAMES_IN_FLIGHT);
 
         let frame_index = 0;
 
@@ -684,7 +696,7 @@ impl VulkanRenderContext {
             surface: surface_wrapper,
             swapchain,
             swapchain_semaphores,
-            descriptor_pool,
+            descriptor_pools,
             graphics_command_buffers,
             immediate_command_buffer: immediate_command_buffer[0],
             frame_index
@@ -743,24 +755,26 @@ impl VulkanRenderContext {
             Some(std::time::Duration::new(1, 0).as_nanos() as u64),
             Some(semaphore),
             None);
+
         VulkanFrameObjects {
             graphics_command_buffer: self.graphics_command_buffers[old_index as usize],
             swapchain_image: image,
             swapchain_semaphore: semaphore,
-            descriptor_pool: self.descriptor_pool, // TODO: this should be per-frame
+            descriptor_pool: self.descriptor_pools[old_index as usize], // TODO: this should be per-frame
             frame_index: old_index
         }
     }
 
     pub fn create_descriptor_sets(
         &self,
-        layouts: &[vk::DescriptorSetLayout]) -> Vec<vk::DescriptorSet> {
+        layouts: &[vk::DescriptorSetLayout],
+        descriptor_pool: vk::DescriptorPool) -> Vec<vk::DescriptorSet> {
 
         if layouts.len() > 0 {
             let alloc_info = vk::DescriptorSetAllocateInfo {
                 s_type: vk::StructureType::DESCRIPTOR_SET_ALLOCATE_INFO,
                 p_next: std::ptr::null(),
-                descriptor_pool: self.descriptor_pool,
+                descriptor_pool: descriptor_pool,
                 descriptor_set_count: layouts.len() as u32,
                 p_set_layouts: layouts.as_ptr()
             };

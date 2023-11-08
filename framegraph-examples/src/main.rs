@@ -157,14 +157,18 @@ impl WindowedVulkanApp {
                     true,
                     u64::MAX)
                 .expect("Failed to wait for Frame Fence");
+
+            // self.render_context.get_device().borrow().get()
+            //     .device_wait_idle()
+            //     .expect("Failed to idle");
         }
 
         // get swapchain image for this frame
         let VulkanFrameObjects {
             graphics_command_buffer: command_buffer,
-            swapchain_image: swapchain_image,
-            swapchain_semaphore: swapchain_semaphore,
-            descriptor_pool: descriptor_pool,
+            swapchain_image,
+            swapchain_semaphore,
+            descriptor_pool,
             frame_index: swapchain_index,
         } = self.render_context.get_next_frame_objects();
 
@@ -184,7 +188,9 @@ impl WindowedVulkanApp {
         // update imgui UI
         let imgui_draw_data = {
             let ui = self.imgui.new_frame();
-            ui.text("Testing UI");
+            let mut opened = true;
+            ui.show_demo_window(&mut opened);
+            // ui.text("Testing UI");
 
             self.imgui.render()
         };
