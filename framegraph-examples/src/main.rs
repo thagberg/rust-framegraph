@@ -130,9 +130,19 @@ impl WindowedVulkanApp {
     pub fn shutdown(&mut self) {
         println!("Shutting down");
         unsafe {
-            self.render_context.get_device().borrow().get()
+            let device = self.render_context.get_device();
+            device.borrow().get()
                 .device_wait_idle()
                 .expect("Failed to wait for GPU to be idle");
+
+            for semaphore in &self.render_semaphores {
+                device.borrow().get().destroy_semaphore(*semaphore, None);
+            }
+
+            for fence in &self.frame_fences {
+                device.borrow().get().destroy_fence(*fence, None);
+            }
+
         }
     }
 

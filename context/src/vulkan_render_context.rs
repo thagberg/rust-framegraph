@@ -12,7 +12,7 @@ use winit::window::Window;
 use ash::vk::DebugUtilsMessageSeverityFlagsEXT as severity_flags;
 use ash::vk::DebugUtilsMessageTypeFlagsEXT as type_flags;
 
-use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper, DeviceWrapper, DeviceFramebuffer, DeviceResource};
+use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper, DeviceWrapper, DeviceFramebuffer, DeviceResource, VulkanDebug};
 use crate::api_types::swapchain::SwapchainWrapper;
 use crate::api_types::image::ImageWrapper;
 use crate::api_types::surface::SurfaceWrapper;
@@ -231,7 +231,7 @@ fn pick_physical_device(
 
 fn create_logical_device(
     instance: &InstanceWrapper,
-    debug_utils: DebugUtils,
+    debug: Option<VulkanDebug>,
     physical_device: &PhysicalDeviceWrapper,
     surface: &Option<SurfaceWrapper>,
     layers: &[&CStr],
@@ -289,7 +289,7 @@ fn create_logical_device(
             .expect("Failed to create logical device.")
     };
 
-    DeviceWrapper::new(device, instance.get(), &physical_device, debug_utils, queue_family_indices)
+    DeviceWrapper::new(device, instance.get(), &physical_device, debug, queue_family_indices)
 }
 
 fn create_command_pool(
@@ -454,11 +454,6 @@ fn create_swapchain(
         swapchain_extent)
 }
 
-pub struct VulkanDebug {
-    debug_utils: DebugUtils,
-    debug_messenger: DebugUtilsMessengerEXT
-}
-
 pub struct VulkanFrameObjects {
     pub graphics_command_buffer: vk::CommandBuffer,
     pub swapchain_image: Option<Rc<RefCell<DeviceResource>>>,
@@ -481,7 +476,6 @@ pub struct VulkanRenderContext {
     device: Rc<RefCell<DeviceWrapper>>,
     physical_device: PhysicalDeviceWrapper,
     surface: Option<SurfaceWrapper>,
-    debug_messenger: Option<DebugUtilsMessengerEXT>,
     instance: InstanceWrapper,
     entry: ash::Entry
 }
@@ -490,6 +484,9 @@ impl Drop for VulkanRenderContext {
     fn drop(&mut self) {
         unsafe {
             let device = self.device.borrow();
+            for semaphore in &self.swapchain_semaphores {
+                device.get().destroy_semaphore(*semaphore, None);
+            }
             device.get().free_command_buffers(self.graphics_command_pool, &[self.immediate_command_buffer]);
             // for cb in &self.graphics_command_buffers {
             //     device.get().reset_command_buffer(*cb, vk::CommandBufferResetFlags::RELEASE_RESOURCES);
@@ -537,10 +534,9 @@ impl VulkanRenderContext {
             &layers,
             &instance_extensions);
 
-        let (debug_utils, debug_utils_messenger) = {
-            let debug_utils_loader = ash::extensions::ext::DebugUtils::new(&entry, &instance);
-
+        let debug = {
             if debug_enabled {
+                let debug_utils_loader = ash::extensions::ext::DebugUtils::new(&entry, &instance);
                 let messenger = unsafe {
                     debug_utils_loader.create_debug_utils_messenger(
                         &vk::DebugUtilsMessengerCreateInfoEXT::builder()
@@ -548,13 +544,15 @@ impl VulkanRenderContext {
                             .message_type(type_flags::GENERAL | type_flags::PERFORMANCE | type_flags::VALIDATION)
                             .pfn_user_callback(Some(debug_utils_callback))
                             .build(),
-                       None)
+                        None)
                         .expect("Failed to create Debug Utils Messenger")
                 };
-
-                (debug_utils_loader, Some(messenger))
+                Some(VulkanDebug{
+                    debug_utils: debug_utils_loader,
+                    debug_messenger: messenger,
+                })
             } else {
-                (debug_utils_loader, None)
+                None
             }
         };
 
@@ -582,7 +580,7 @@ impl VulkanRenderContext {
 
         let logical_device = Rc::new(RefCell::new(create_logical_device(
             &instance_wrapper,
-            debug_utils,
+            debug,
             &physical_device,
             &surface_wrapper,
             &layers,
@@ -692,7 +690,6 @@ impl VulkanRenderContext {
             descriptor_pool,
             graphics_command_buffers,
             immediate_command_buffer: immediate_command_buffer[0],
-            debug_messenger: debug_utils_messenger,
             frame_index
         }
     }
