@@ -552,6 +552,7 @@ impl VulkanFrameGraph {
     fn execute_copy_node(
         &mut self,
         descriptor_sets: &mut Vec<vk::DescriptorSet>,
+        descriptor_pool: vk::DescriptorPool,
         render_context: &mut VulkanRenderContext,
         command_buffer: &vk::CommandBuffer,
         node: &mut CopyPassNode) {
@@ -565,6 +566,7 @@ impl VulkanFrameGraph {
     fn execute_compute_node(
         &mut self,
         descriptor_sets: &mut Vec<vk::DescriptorSet>,
+        descriptor_pool: vk::DescriptorPool,
         render_context: &mut VulkanRenderContext,
         command_buffer: &vk::CommandBuffer,
         node: &mut ComputePassNode) {
@@ -628,6 +630,7 @@ impl VulkanFrameGraph {
     fn execute_graphics_node(
         &mut self,
         descriptor_sets: &mut Vec<vk::DescriptorSet>,
+        descriptor_pool: vk::DescriptorPool,
         render_context: &mut VulkanRenderContext,
         command_buffer: &vk::CommandBuffer,
         node: &mut GraphicsPassNode) {
@@ -663,7 +666,7 @@ impl VulkanFrameGraph {
 
             let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass.borrow().renderpass.clone(), pipeline_description);
 
-            *descriptor_sets = render_context.create_descriptor_sets(&pipeline.borrow().device_pipeline.descriptor_set_layouts);
+            let mut new_descriptor_sets = render_context.create_descriptor_sets(&pipeline.borrow().device_pipeline.descriptor_set_layouts, descriptor_pool);
 
             // create framebuffer
             // TODO: should cache framebuffer objects to avoid creating the same ones each frame
@@ -697,12 +700,12 @@ impl VulkanFrameGraph {
                 resolve_descriptors(
                     inputs,
                     pipeline.borrow().deref(),
-                    &descriptor_sets,
+                    &new_descriptor_sets,
                     &mut descriptor_updates);
                 resolve_descriptors(
                     outputs,
                     pipeline.borrow().deref(),
-                    &descriptor_sets,
+                    &new_descriptor_sets,
                     &mut descriptor_updates);
 
                 unsafe {
@@ -717,10 +720,10 @@ impl VulkanFrameGraph {
                         vk::PipelineBindPoint::GRAPHICS,
                         pipeline.borrow().get_pipeline_layout(),
                         0,
-                        &descriptor_sets,
+                        &new_descriptor_sets,
                         &[]);
                 }
-            };
+            }
 
             // begin render pass and bind pipeline
             {
@@ -748,6 +751,8 @@ impl VulkanFrameGraph {
                         pipeline.borrow().get_pipeline());
                 }
             }
+
+            descriptor_sets.append(&mut new_descriptor_sets);
         }
 
         if let Some(viewport) = &node.viewport {
@@ -901,13 +906,13 @@ impl FrameGraph for VulkanFrameGraph {
                 // prepare pipeline for execution (node's fill callback)
                 match node {
                     PassType::Graphics(graphics_node) => {
-                        self.execute_graphics_node(&mut frame.descriptor_sets, render_context, command_buffer, graphics_node);
+                        self.execute_graphics_node(&mut frame.descriptor_sets, frame.descriptor_pool, render_context, command_buffer, graphics_node);
                     },
                     PassType::Copy(copy_node) => {
-                        self.execute_copy_node(&mut frame.descriptor_sets, render_context, command_buffer, copy_node);
+                        self.execute_copy_node(&mut frame.descriptor_sets, frame.descriptor_pool, render_context, command_buffer, copy_node);
                     },
                     PassType::Compute(compute_node) => {
-                        self.execute_compute_node(&mut frame.descriptor_sets,render_context, command_buffer, compute_node);
+                        self.execute_compute_node(&mut frame.descriptor_sets,frame.descriptor_pool, render_context, command_buffer, compute_node);
                     }
                     _ => {}
                 }

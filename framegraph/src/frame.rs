@@ -19,7 +19,7 @@ pub struct Frame {
     state: FrameState,
     pub sorted_nodes: Vec<NodeIndex>,
     device: Rc<RefCell<DeviceWrapper>>,
-    descriptor_pool: vk::DescriptorPool,
+    pub(crate) descriptor_pool: vk::DescriptorPool,
     pub descriptor_sets: Vec<vk::DescriptorSet>
 }
 
