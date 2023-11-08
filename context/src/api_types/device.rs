@@ -4,12 +4,17 @@ use core::ffi::c_void;
 use std::rc::Rc;
 use ash::{Device, vk};
 use ash::extensions::ext::DebugUtils;
-use ash::vk::{DebugUtilsLabelEXT, DebugUtilsObjectNameInfoEXT, Handle};
+use ash::vk::{DebugUtilsLabelEXT, DebugUtilsMessengerEXT, DebugUtilsObjectNameInfoEXT, Handle};
 use gpu_allocator::vulkan::*;
 use gpu_allocator::MemoryLocation;
 
 use crate::api_types::image::{ImageWrapper, ImageCreateInfo};
 use crate::api_types::buffer::{BufferWrapper, BufferCreateInfo};
+
+pub struct VulkanDebug {
+    pub debug_utils: DebugUtils,
+    pub debug_messenger: DebugUtilsMessengerEXT
+}
 
 #[derive(Copy, Clone)]
 pub struct QueueFamilies {
@@ -67,7 +72,7 @@ impl DeviceLifetime {
 
 pub struct DeviceWrapper {
     handle_generator: u64,
-    debug_utils: DebugUtils,
+    debug: Option<VulkanDebug>,
     queue_family_indices: QueueFamilies,
     allocator: Allocator,
     device: DeviceLifetime,
@@ -76,6 +81,9 @@ pub struct DeviceWrapper {
 impl Drop for DeviceWrapper {
     fn drop(&mut self) {
         unsafe {
+            if let Some(debug) = &self.debug {
+                debug.debug_utils.destroy_debug_utils_messenger(debug.debug_messenger, None);
+            }
             self.allocator.report_memory_leaks(log::Level::Warn);
 
         }
@@ -231,7 +239,7 @@ impl DeviceWrapper {
         device: ash::Device,
         instance: &ash::Instance,
         physical_device: &PhysicalDeviceWrapper,
-        debug_utils: DebugUtils,
+        debug: Option<VulkanDebug>,
         queue_family_indices: QueueFamilies) -> DeviceWrapper {
 
         let allocator = Allocator::new(&AllocatorCreateDesc {
@@ -244,7 +252,7 @@ impl DeviceWrapper {
 
         DeviceWrapper {
             device: DeviceLifetime::new(device),
-            debug_utils,
+            debug,
             queue_family_indices,
             allocator,
             handle_generator: 0
@@ -254,8 +262,6 @@ impl DeviceWrapper {
         self.device.get()
     }
     pub fn get_queue_family_indices(&self) -> &QueueFamilies { &self.queue_family_indices }
-
-    pub fn get_debug_utils(&self) -> &DebugUtils { &self.debug_utils }
 
     pub fn free_allocation(&mut self, allocation: Allocation) {
         self.allocator.free(allocation)
@@ -327,8 +333,10 @@ impl DeviceWrapper {
             .object_name(&c_name)
             .build();
         unsafe {
-            self.debug_utils.debug_utils_set_object_name(self.device.get().handle(), &debug_info)
-                .expect("Failed to set debug object name");
+            if let Some(debug) = &self.debug {
+                debug.debug_utils.debug_utils_set_object_name(self.device.get().handle(), &debug_info)
+                    .expect("Failed to set debug object name");
+            }
         }
     }
 
@@ -627,21 +635,25 @@ impl DeviceWrapper {
         &self,
         command_buffer: vk::CommandBuffer,
         label: &str) {
-        unsafe {
-            let c_label = CString::new(label)
-                .expect("Failed to create C-string for debug label");
-            let debug_label = DebugUtilsLabelEXT::builder()
-                .label_name(&c_label)
-                .build();
-            self.debug_utils.cmd_begin_debug_utils_label(command_buffer, &debug_label);
+        if let Some(debug) = &self.debug {
+            unsafe {
+                let c_label = CString::new(label)
+                    .expect("Failed to create C-string for debug label");
+                let debug_label = DebugUtilsLabelEXT::builder()
+                    .label_name(&c_label)
+                    .build();
+                debug.debug_utils.cmd_begin_debug_utils_label(command_buffer, &debug_label);
+            }
         }
     }
 
     pub fn pop_debug_label(
         &self,
         command_buffer: vk::CommandBuffer) {
-        unsafe {
-            self.debug_utils.cmd_end_debug_utils_label(command_buffer);
+        if let Some(debug) = &self.debug {
+            unsafe {
+                debug.debug_utils.cmd_end_debug_utils_label(command_buffer);
+            }
         }
     }
 }

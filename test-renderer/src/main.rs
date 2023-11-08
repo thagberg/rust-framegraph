@@ -400,9 +400,9 @@ impl Drop for VulkanApp {
                 device.borrow().get().destroy_fence(self.in_flight_fences[i], None);
             }
 
-            device.borrow().get_debug_utils().destroy_debug_utils_messenger(
-                self.debug_merssager,
-                None);
+            // device.borrow().get_debug_utils().destroy_debug_utils_messenger(
+            //     self.debug_merssager,
+            //     None);
         }
     }
 }
