@@ -38,9 +38,7 @@ fn main() {
     // let bin_dir = env::var("CARGO_BIN_EXE_".to_string() + &env::var("CARGO_BIN_NAME").expect("Couldn't get bin name")).expect(("Couldn't get bin directory"));
     // let out_dir = env::var("CARGO_BIN_EXE_".to_string() + &env::var("CARGO_BIN_NAME").expect("Couldn't get bin name")).expect(("Couldn't get bin directory"));
     // let out_dir = "target/".to_owned() + &env::var("PROFILE").expect("Couldn't get profile");
-    let cd = std::env::current_dir().expect("Couldn't get current directory");
-    println!("Current directory: {}", cd.display());
-    let out_dir = env::var("TARGET_DIR").expect("Couldn't get target dir") + &env::var("PROFILE").expect("Couldn't get profile");
+    let out_dir = env::var("OUT_DIR").expect("Couldn't get output dir");
     println!("Shader output directory: {}", out_dir);
 
     std::fs::create_dir_all(&format!("{}/shaders", out_dir))
