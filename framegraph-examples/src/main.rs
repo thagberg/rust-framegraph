@@ -1,3 +1,5 @@
+mod ubo_example;
+
 extern crate alloc;
 
 //use alloc::ffi::CString;
@@ -218,7 +220,6 @@ impl WindowedVulkanApp {
             let image = swapchain_image.unwrap();
             let rt_ref = AttachmentReference::new(
                 image.clone(),
-                image.borrow().get_image().format,
                 vk::SampleCountFlags::TYPE_1);
 
             let imgui_nodes = self.imgui_renderer.generate_passes(
