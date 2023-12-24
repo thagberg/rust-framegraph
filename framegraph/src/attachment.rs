@@ -14,7 +14,6 @@ pub struct AttachmentReference {
 impl AttachmentReference {
     pub fn new(
         resource_image: Rc<RefCell<DeviceResource>>,
-        format: vk::Format,
         samples: vk::SampleCountFlags) -> AttachmentReference {
 
         assert!(resource_image.borrow().resource_type.is_some(), "AttachmentResource: resource_image must be valid DeviceResource");
@@ -26,7 +25,7 @@ impl AttachmentReference {
 
         AttachmentReference {
             resource_image: resource_image.clone(),
-            format,
+            format: resource_image.borrow().get_image().format,
             samples,
             layout: vk::ImageLayout::UNDEFINED
         }
