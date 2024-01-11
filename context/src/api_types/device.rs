@@ -4,7 +4,7 @@ use core::ffi::c_void;
 use std::rc::Rc;
 use ash::{Device, vk};
 use ash::extensions::ext::DebugUtils;
-use ash::vk::{DebugUtilsLabelEXT, DebugUtilsMessengerEXT, DebugUtilsObjectNameInfoEXT, Handle};
+use ash::vk::{DebugUtilsLabelEXT, DebugUtilsMessengerEXT, DebugUtilsObjectNameInfoEXT, Handle, ObjectType};
 use gpu_allocator::vulkan::*;
 use gpu_allocator::MemoryLocation;
 
@@ -553,6 +553,7 @@ impl DeviceWrapper {
 
     pub fn create_shader(
         device: Rc<RefCell<DeviceWrapper>>,
+        name: &str,
         shader_create: &vk::ShaderModuleCreateInfo) -> DeviceShader {
 
         let shader = unsafe {
@@ -560,6 +561,7 @@ impl DeviceWrapper {
                 .expect("Failed to create shader module")
         };
 
+        device.borrow().set_debug_name(ObjectType::SHADER_MODULE, shader.as_raw(), name);
         DeviceShader::new(shader, device)
     }
 

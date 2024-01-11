@@ -47,7 +47,53 @@ fn create_shader_module(device: Rc<RefCell<DeviceWrapper>>, file_name: &str) -> 
             p_code: bytes.as_ptr() as *const u32
         };
 
-        let shader = DeviceWrapper::create_shader(device, &create_info);
+        let shader = DeviceWrapper::create_shader(device, file_name, &create_info);
+
+        (reflection_module, shader)
+    };
+
+    // TODO: Add support for compute descriptor set bindings (could just use VK_SHADER_STAGE_ALL)
+    // TODO: Add support for immutable samplers
+    let mut binding_map : HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>> = HashMap::new();
+    if let Ok(descriptor_sets_reflection) = reflection_module.enumerate_descriptor_sets(None)
+    {
+        for set in descriptor_sets_reflection
+        {
+            let mut descriptor_set_bindings: Vec<vk::DescriptorSetLayoutBinding> = Vec::new();
+            for binding_reflect in set.bindings
+            {
+                descriptor_set_bindings.push(
+                    vk::DescriptorSetLayoutBinding::builder()
+                        .binding(binding_reflect.binding)
+                        .stage_flags(vk::ShaderStageFlags::empty())
+                        .descriptor_count(binding_reflect.count)
+                        .descriptor_type(translate_descriptor_type(binding_reflect.descriptor_type))
+                        .build()
+                );
+            }
+
+            binding_map.insert(set.set, descriptor_set_bindings);
+        }
+    }
+
+    Shader::new(shader, binding_map)
+}
+
+fn create_shader_module_from_bytes(device: Rc<RefCell<DeviceWrapper>>, name: &str, bytes: &[u8]) -> Shader
+{
+    let (reflection_module, shader) = {
+        let reflection_module = spirv_reflect::ShaderModule::load_u8_data(bytes)
+            .expect(&format!("Failed to parse shader for reflection data for {}", name));
+
+        let create_info = vk::ShaderModuleCreateInfo {
+            s_type: vk::StructureType::SHADER_MODULE_CREATE_INFO,
+            p_next: std::ptr::null(),
+            flags: vk::ShaderModuleCreateFlags::empty(),
+            code_size: bytes.len(),
+            p_code: bytes.as_ptr() as *const u32
+        };
+
+        let shader = DeviceWrapper::create_shader(device, name, &create_info);
 
         (reflection_module, shader)
     };
