@@ -1,4 +1,5 @@
 mod ubo_example;
+mod example;
 
 extern crate alloc;
 
