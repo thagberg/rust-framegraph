@@ -79,7 +79,7 @@ fn create_shader_module(device: Rc<RefCell<DeviceWrapper>>, file_name: &str) -> 
     Shader::new(shader, binding_map)
 }
 
-fn create_shader_module_from_bytes(device: Rc<RefCell<DeviceWrapper>>, name: &str, bytes: &[u8]) -> Shader
+pub fn create_shader_module_from_bytes(device: Rc<RefCell<DeviceWrapper>>, name: &str, bytes: &[u8]) -> Shader
 {
     let (reflection_module, shader) = {
         let reflection_module = spirv_reflect::ShaderModule::load_u8_data(bytes)
