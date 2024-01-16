@@ -12,6 +12,7 @@ use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ResourceB
 use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::pass_type::PassType;
 use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
+use framegraph::shader;
 use crate::example::Example;
 
 pub struct UBO {
@@ -19,7 +20,9 @@ pub struct UBO {
 }
 pub struct UboExample {
     active: bool,
-    uniform_buffer: Rc<RefCell<DeviceResource>>
+    uniform_buffer: Rc<RefCell<DeviceResource>>,
+    vert_shader: Rc<RefCell<shader::Shader>>,
+    frag_shader: Rc<RefCell<shader::Shader>>
 }
 
 impl Example for UboExample {
@@ -110,9 +113,16 @@ impl UboExample {
             }
         });
 
+        let vert_shader = Rc::new(RefCell::new(
+            shader::create_shader_module_from_bytes(device.clone(), "ubo-vert", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/ubo-vert.spv")))));
+        let frag_shader = Rc::new(RefCell::new(
+            shader::create_shader_module_from_bytes(device.clone(), "ubo-frag", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/ubo-frag.spv")))));
+
         UboExample {
             active: false,
-            uniform_buffer: Rc::new(RefCell::new(ubo))
+            uniform_buffer: Rc::new(RefCell::new(ubo)),
+            vert_shader,
+            frag_shader
         }
     }
 }
