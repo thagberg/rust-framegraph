@@ -7,10 +7,10 @@ use crate::pass_node::{PassNode, FillCallback};
 use crate::binding::{ResourceBinding};
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::attachment::AttachmentReference;
-use crate::pipeline::{PipelineDescription};
+use crate::pipeline::{Pipeline, PipelineDescription};
 
 pub struct GraphicsPassNode {
-    pub pipeline_description: Option<PipelineDescription>,
+    pub pipeline: Option<Rc<RefCell<Pipeline>>>,
     pub render_targets: Vec<AttachmentReference>,
     pub inputs: Vec<ResourceBinding>,
     pub outputs: Vec<ResourceBinding>,
@@ -24,7 +24,7 @@ pub struct GraphicsPassNode {
 
 #[derive(Default)]
 pub struct PassNodeBuilder {
-    pipeline_description: Option<PipelineDescription>,
+    pipeline: Option<Rc<RefCell<Pipeline>>>,
     render_targets: Vec<AttachmentReference>,
     inputs: Vec<ResourceBinding>,
     outputs: Vec<ResourceBinding>,
@@ -81,9 +81,6 @@ impl GraphicsPassNode  {
         }
     }
 
-    pub fn get_pipeline_description(&self) -> &Option<PipelineDescription> { &self.pipeline_description }
-
-    // pub fn set_framebuffer(&mut self, framebuffer: DeviceFramebuffer) {
     pub fn set_framebuffer(passnode: &mut Self, framebuffer: DeviceFramebuffer) {
         passnode.framebuffer = Some(framebuffer);
     }
@@ -129,8 +126,8 @@ impl GraphicsPassNode  {
 }
 
 impl PassNodeBuilder {
-    pub fn pipeline_description(mut self, pipeline_description: PipelineDescription) -> Self {
-        self.pipeline_description = Some(pipeline_description);
+    pub fn pipeline(mut self, pipeline: Rc<RefCell<Pipeline>>) -> Self {
+        self.pipeline = Some(pipeline);
         self
     }
 
@@ -182,7 +179,7 @@ impl PassNodeBuilder {
             let tagged_resources_len = self.tagged_resources.len();
             Ok(GraphicsPassNode {
                 name: self.name,
-                pipeline_description: self.pipeline_description,
+                pipeline: self.pipeline,
                 render_targets: self.render_targets.into_iter().take(rt_len).collect(),
                 inputs: self.inputs.into_iter().take(inputs_len).collect(),
                 outputs: self.outputs.into_iter().take(outputs_len).collect(),

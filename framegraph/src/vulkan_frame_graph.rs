@@ -635,8 +635,8 @@ impl VulkanFrameGraph {
         command_buffer: &vk::CommandBuffer,
         node: &mut GraphicsPassNode) {
 
-        let active_pipeline = &node.pipeline_description;
-        if let Some(pipeline_description) = active_pipeline {
+        let active_pipeline = &node.pipeline;
+        if let Some(pipeline) = active_pipeline {
             // resolve render targets for this node
             let resolved_render_targets = {
                 let render_targets = &node.render_targets;
@@ -664,7 +664,7 @@ impl VulkanFrameGraph {
                 &node.render_targets,
                 render_context.get_device());
 
-            let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass.borrow().renderpass.clone(), pipeline_description);
+            // let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass.borrow().renderpass.clone(), pipeline_description);
 
             let mut new_descriptor_sets = render_context.create_descriptor_sets(&pipeline.borrow().device_pipeline.descriptor_set_layouts, descriptor_pool);
 

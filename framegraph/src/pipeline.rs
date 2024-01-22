@@ -8,7 +8,7 @@ use ash::vk;
 use context::api_types::device::{DevicePipeline, DeviceWrapper};
 use context::render_context::RenderContext;
 
-use crate::shader::ShaderManager;
+use crate::shader::{Shader, ShaderManager};
 
 extern crate context;
 use context::vulkan_render_context::VulkanRenderContext;
@@ -41,8 +41,9 @@ pub struct PipelineDescription
     rasterization: RasterizationType,
     depth_stencil: DepthStencilType,
     blend: BlendType,
-    vertex_name: String,
-    fragment_name: String
+    name: String,
+    vertex_shader: Rc<RefCell<Shader>>,
+    fragment_shader: Rc<RefCell<Shader>>
 }
 
 impl Hash for PipelineDescription
@@ -50,8 +51,7 @@ impl Hash for PipelineDescription
     fn hash<H: Hasher>(&self, state: &mut H) {
         // TODO: this is an inadequate hash
         // will need to actually use some pipeline state for a better hash
-        self.vertex_name.hash(state);
-        self.fragment_name.hash(state);
+        self.name.hash(state);
     }
 }
 
@@ -63,8 +63,9 @@ impl PipelineDescription
         rasterization: RasterizationType,
         depth_stencil: DepthStencilType,
         blend: BlendType,
-        vertex_name: &str,
-        fragment_name: &str) -> Self
+        name: &str,
+        vertex_shader: Rc<RefCell<Shader>>,
+        fragment_shader: Rc<RefCell<Shader>>) -> Self
     {
         PipelineDescription {
             vertex_input,
@@ -72,12 +73,13 @@ impl PipelineDescription
             rasterization,
             depth_stencil,
             blend,
-            vertex_name: vertex_name.to_string(),
-            fragment_name: fragment_name.to_string()
+            name: name.to_string(),
+            vertex_shader,
+            fragment_shader
         }
     }
 
-    pub fn get_name(&self) -> &str { &self.vertex_name }
+    pub fn get_name(&self) -> &str { &self.name }
 }
 
 
@@ -410,18 +412,12 @@ impl VulkanPipelineManager {
         match pipeline_val {
             Some(pipeline) => { pipeline.clone() },
             None => {
-                let mut vertex_shader_module = self.shader_manager.load_shader(
-                    render_context.get_device(),
-                    &pipeline_description.vertex_name);
-                let mut frag_shader_module = self.shader_manager.load_shader(
-                    render_context.get_device(),
-                    &pipeline_description.fragment_name);
 
                 // Need to reconcile descriptor bindings between vertex and fragment stages
                 //  i.e. - Could have duplicate bindings for descriptors used in both stages, or
                 //  bindings only used in a single stage but are part of a larger descriptor set
                 let mut full_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>> = HashMap::new();
-                for (set, bindings) in &mut vertex_shader_module.borrow_mut().descriptor_bindings {
+                for (set, bindings) in &pipeline_description.vertex_shader.borrow().descriptor_bindings {
                     let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
                     // set_bindings.copy_from_slice(&bindings);
                     set_bindings.extend(bindings.iter());
@@ -429,7 +425,7 @@ impl VulkanPipelineManager {
                         binding.stage_flags = vk::ShaderStageFlags::VERTEX;
                     }
                 }
-                for (set, bindings) in &mut frag_shader_module.borrow_mut().descriptor_bindings {
+                for (set, bindings) in &pipeline_description.fragment_shader.borrow().descriptor_bindings {
                     let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
                     for binding in bindings {
                         let duplicate = set_bindings.iter_mut().find(|x| {
@@ -440,8 +436,9 @@ impl VulkanPipelineManager {
                                dupe_binding.stage_flags |= vk::ShaderStageFlags::FRAGMENT;
                             },
                             None => {
-                                binding.stage_flags = vk::ShaderStageFlags::FRAGMENT;
-                                set_bindings.push(binding.clone());
+                                let mut new_binding = binding.clone();
+                                new_binding.stage_flags = vk::ShaderStageFlags::FRAGMENT;
+                                set_bindings.push(new_binding);
                             }
                         }
                     }
@@ -498,7 +495,7 @@ impl VulkanPipelineManager {
                         s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
                         p_next: std::ptr::null(),
                         flags: vk::PipelineShaderStageCreateFlags::empty(),
-                        module: vertex_shader_module.borrow().shader.shader_module.clone(),
+                        module: pipeline_description.vertex_shader.borrow().shader.shader_module.clone(),
                         p_name: main_name.as_ptr(),
                         p_specialization_info: std::ptr::null(),
                         stage: vk::ShaderStageFlags::VERTEX,
@@ -508,7 +505,7 @@ impl VulkanPipelineManager {
                         s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
                         p_next: std::ptr::null(),
                         flags: vk::PipelineShaderStageCreateFlags::empty(),
-                        module: frag_shader_module.borrow().shader.shader_module.clone(),
+                        module: pipeline_description.fragment_shader.borrow().shader.shader_module.clone(),
                         p_name: main_name.as_ptr(),
                         p_specialization_info: std::ptr::null(),
                         stage: vk::ShaderStageFlags::FRAGMENT,
