@@ -85,22 +85,25 @@ impl PipelineDescription
 
 pub struct ComputePipelineDescription
 {
-    compute_name: String
+    name: String,
+    shader: Rc<RefCell<Shader>>
 }
 
 impl Hash for ComputePipelineDescription
 {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.compute_name.hash(state);
+        self.name.hash(state);
     }
 }
 
 impl ComputePipelineDescription {
     pub fn new(
-        compute_name: &str
+        compute_name: &str,
+        shader: Rc<RefCell<Shader>>
     ) -> Self {
         ComputePipelineDescription {
-            compute_name: compute_name.to_string()
+            name: compute_name.to_string(),
+            shader
         }
     }
 }
@@ -324,6 +327,193 @@ fn create_descriptor_set_layouts(render_context: &VulkanRenderContext, full_bind
     descriptor_set_layouts
 }
 
+pub fn create_compute_pipeline(
+    render_context: &VulkanRenderContext,
+    pipeline_description: &ComputePipelineDescription
+) -> Pipeline {
+    let mut full_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>> = HashMap::new();
+    // for (set, bindings) in &mut compute_shader_module.borrow_mut().descriptor_bindings {
+    for (set, bindings) in pipeline_description.shader.borrow().descriptor_bindings {
+        let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
+        set_bindings.extend(bindings.iter());
+        for binding in set_bindings {
+            binding.stage_flags = vk::ShaderStageFlags::COMPUTE;
+        }
+    }
+
+    let descriptor_set_layouts = create_descriptor_set_layouts(render_context, &full_bindings);
+
+    // let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
+
+    let pipeline_layout = {
+        let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
+            .set_layouts(&descriptor_set_layouts);
+        unsafe {
+            render_context.get_device().borrow().get().create_pipeline_layout(&pipeline_layout_create, None)
+                .expect("Failed to create pipeline layout")
+        }
+    };
+
+    let main_name = std::ffi::CString::new("main").unwrap();
+    let shader_stage = vk::PipelineShaderStageCreateInfo::builder()
+        .module(pipeline_description.shader.borrow().shader.shader_module.clone())
+        .name(&main_name)
+        .stage(vk::ShaderStageFlags::COMPUTE);
+
+    let compute_pipeline_info = vk::ComputePipelineCreateInfo::builder()
+        .stage(*shader_stage)
+        .layout(pipeline_layout)
+        .build();
+
+    let device_pipeline = DeviceWrapper::create_compute_pipeline(
+        render_context.get_device(),
+        &compute_pipeline_info,
+        pipeline_layout,
+        descriptor_set_layouts,
+        &pipeline_description.name);
+    let pipeline = Rc::new(RefCell::new(Pipeline::new(
+        device_pipeline)));
+}
+
+pub fn create_graphics_pipeline(
+    render_context: &VulkanRenderContext,
+    render_pass: vk::RenderPass,
+    pipeline_description: &PipelineDescription
+) -> Pipeline {
+    // Need to reconcile descriptor bindings between vertex and fragment stages
+    //  i.e. - Could have duplicate bindings for descriptors used in both stages, or
+    //  bindings only used in a single stage but are part of a larger descriptor set
+    let mut full_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>> = HashMap::new();
+    for (set, bindings) in &pipeline_description.vertex_shader.borrow().descriptor_bindings {
+        let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
+        // set_bindings.copy_from_slice(&bindings);
+        set_bindings.extend(bindings.iter());
+        for binding in set_bindings {
+            binding.stage_flags = vk::ShaderStageFlags::VERTEX;
+        }
+    }
+    for (set, bindings) in &pipeline_description.fragment_shader.borrow().descriptor_bindings {
+        let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
+        for binding in bindings {
+            let duplicate = set_bindings.iter_mut().find(|x| {
+                x.binding == binding.binding && x.descriptor_count == binding.descriptor_count && x.descriptor_type == binding.descriptor_type
+            });
+            match duplicate {
+                Some(dupe_binding) => {
+                    dupe_binding.stage_flags |= vk::ShaderStageFlags::FRAGMENT;
+                },
+                None => {
+                    let mut new_binding = binding.clone();
+                    new_binding.stage_flags = vk::ShaderStageFlags::FRAGMENT;
+                    set_bindings.push(new_binding);
+                }
+            }
+        }
+    }
+
+    let descriptor_set_layouts = create_descriptor_set_layouts(render_context, &full_bindings);
+
+    // let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
+
+    let pipeline_layout = {
+        let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
+            .set_layouts(&descriptor_set_layouts);
+        unsafe {
+            render_context.get_device().borrow().get().create_pipeline_layout(&pipeline_layout_create, None)
+                .expect("Failed to create pipeline layout")
+        }
+    };
+
+    let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo {
+        s_type: vk::StructureType::PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        flags: vk::PipelineInputAssemblyStateCreateFlags::empty(),
+        p_next: std::ptr::null(),
+        primitive_restart_enable: vk::FALSE,
+        topology: vk::PrimitiveTopology::TRIANGLE_LIST,
+    };
+
+    // TODO: parameterize multisample state
+    let multisample_state_create_info = vk::PipelineMultisampleStateCreateInfo {
+        s_type: vk::StructureType::PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        flags: vk::PipelineMultisampleStateCreateFlags::empty(),
+        p_next: std::ptr::null(),
+        rasterization_samples: vk::SampleCountFlags::TYPE_1,
+        sample_shading_enable: vk::FALSE,
+        min_sample_shading: 0.0,
+        p_sample_mask: std::ptr::null(),
+        alpha_to_one_enable: vk::FALSE,
+        alpha_to_coverage_enable: vk::FALSE,
+    };
+
+    let viewport_state = vk::PipelineViewportStateCreateInfo {
+        s_type: vk::StructureType::PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        p_next: std::ptr::null(),
+        flags: vk::PipelineViewportStateCreateFlags::empty(),
+        viewport_count: 1,
+        p_viewports: std::ptr::null(),
+        scissor_count: 1,
+        p_scissors: std::ptr::null()
+    };
+
+    let main_name = std::ffi::CString::new("main").unwrap();
+    let shader_stages = [
+        vk::PipelineShaderStageCreateInfo {
+            // Vertex Shader
+            s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
+            p_next: std::ptr::null(),
+            flags: vk::PipelineShaderStageCreateFlags::empty(),
+            module: pipeline_description.vertex_shader.borrow().shader.shader_module.clone(),
+            p_name: main_name.as_ptr(),
+            p_specialization_info: std::ptr::null(),
+            stage: vk::ShaderStageFlags::VERTEX,
+        },
+        vk::PipelineShaderStageCreateInfo {
+            // Fragment Shader
+            s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
+            p_next: std::ptr::null(),
+            flags: vk::PipelineShaderStageCreateFlags::empty(),
+            module: pipeline_description.fragment_shader.borrow().shader.shader_module.clone(),
+            p_name: main_name.as_ptr(),
+            p_specialization_info: std::ptr::null(),
+            stage: vk::ShaderStageFlags::FRAGMENT,
+        },
+    ];
+
+    let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
+        .dynamic_states(&pipeline_description.dynamic_states);
+
+    let rasterization_state = generate_rasteration_state(pipeline_description.rasterization);
+    let depth_stencil_state = generate_depth_stencil_state(pipeline_description.depth_stencil);
+    let blend_attachments = generate_blend_attachments(pipeline_description.blend);
+    let blend_state = generate_blend_state(pipeline_description.blend, &blend_attachments);
+
+    let graphics_pipeline_info = vk::GraphicsPipelineCreateInfo::builder()
+        .stages(&shader_stages)
+        .input_assembly_state(&vertex_input_assembly_state_info)
+        .vertex_input_state(&pipeline_description.vertex_input)
+        .viewport_state(&viewport_state)
+        .rasterization_state(&rasterization_state)
+        .multisample_state(&multisample_state_create_info)
+        .depth_stencil_state(&depth_stencil_state)
+        .color_blend_state(&blend_state)
+        // .dynamic_state(&pipeline_description.dynamic_state)
+        .dynamic_state(&dynamic_state)
+        // .layout(frag_shader_module.pipeline_layout)
+        .layout(pipeline_layout)
+        .render_pass(render_pass)
+        .subpass(0); // TODO: this shouldn't be static
+    // .build();
+
+    let device_pipeline = DeviceWrapper::create_pipeline(
+        render_context.get_device(),
+        &graphics_pipeline_info,
+        pipeline_layout,
+        descriptor_set_layouts,
+        pipeline_description.get_name());
+    let pipeline = Pipeline::new( device_pipeline);
+
+    pipeline
+}
 
 impl VulkanPipelineManager {
     pub fn new() -> VulkanPipelineManager
@@ -334,7 +524,7 @@ impl VulkanPipelineManager {
         }
     }
 
-    pub fn create_compute_pipeline(
+    pub fn load_compute_pipeline(
         &mut self,
         render_context: &VulkanRenderContext,
         pipeline_description: &ComputePipelineDescription) -> Rc<RefCell<Pipeline>> {
@@ -346,58 +536,15 @@ impl VulkanPipelineManager {
         match pipeline_val {
             Some(pipeline) => { pipeline.clone() },
             None => {
-                let mut compute_shader_module = self.shader_manager.load_shader(
-                    render_context.get_device(),
-                    &pipeline_description.compute_name);
-
-                let mut full_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>> = HashMap::new();
-                for (set, bindings) in &mut compute_shader_module.borrow_mut().descriptor_bindings {
-                    let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
-                    set_bindings.extend(bindings.iter());
-                    for binding in set_bindings {
-                        binding.stage_flags = vk::ShaderStageFlags::COMPUTE;
-                    }
-                }
-
-                let descriptor_set_layouts = create_descriptor_set_layouts(render_context, &full_bindings);
-
-                // let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
-
-                let pipeline_layout = {
-                    let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
-                        .set_layouts(&descriptor_set_layouts);
-                    unsafe {
-                        render_context.get_device().borrow().get().create_pipeline_layout(&pipeline_layout_create, None)
-                            .expect("Failed to create pipeline layout")
-                    }
-                };
-
-                let main_name = std::ffi::CString::new("main").unwrap();
-                let shader_stage = vk::PipelineShaderStageCreateInfo::builder()
-                    .module(compute_shader_module.borrow().shader.shader_module.clone())
-                    .name(&main_name)
-                    .stage(vk::ShaderStageFlags::COMPUTE);
-
-                let compute_pipeline_info = vk::ComputePipelineCreateInfo::builder()
-                    .stage(*shader_stage)
-                    .layout(pipeline_layout)
-                    .build();
-
-                let device_pipeline = DeviceWrapper::create_compute_pipeline(
-                    render_context.get_device(),
-                    &compute_pipeline_info,
-                    pipeline_layout,
-                    descriptor_set_layouts,
-                    &pipeline_description.compute_name);
-                let pipeline = Rc::new(RefCell::new(Pipeline::new(
-                    device_pipeline)));
+                let pipeline = Rc::new(RefCell::new(
+                    create_compute_pipeline(render_context, pipeline_description)));
                 self.pipeline_cache.insert(pipeline_key, pipeline.clone());
                 pipeline
             }
         }
     }
 
-    pub fn create_pipeline(
+    pub fn load_graphics_pipeline(
         &mut self,
         render_context: &VulkanRenderContext,
         render_pass: vk::RenderPass,
@@ -413,138 +560,8 @@ impl VulkanPipelineManager {
             Some(pipeline) => { pipeline.clone() },
             None => {
 
-                // Need to reconcile descriptor bindings between vertex and fragment stages
-                //  i.e. - Could have duplicate bindings for descriptors used in both stages, or
-                //  bindings only used in a single stage but are part of a larger descriptor set
-                let mut full_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>> = HashMap::new();
-                for (set, bindings) in &pipeline_description.vertex_shader.borrow().descriptor_bindings {
-                    let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
-                    // set_bindings.copy_from_slice(&bindings);
-                    set_bindings.extend(bindings.iter());
-                    for binding in set_bindings {
-                        binding.stage_flags = vk::ShaderStageFlags::VERTEX;
-                    }
-                }
-                for (set, bindings) in &pipeline_description.fragment_shader.borrow().descriptor_bindings {
-                    let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
-                    for binding in bindings {
-                        let duplicate = set_bindings.iter_mut().find(|x| {
-                            x.binding == binding.binding && x.descriptor_count == binding.descriptor_count && x.descriptor_type == binding.descriptor_type
-                        });
-                        match duplicate {
-                            Some(dupe_binding) => {
-                               dupe_binding.stage_flags |= vk::ShaderStageFlags::FRAGMENT;
-                            },
-                            None => {
-                                let mut new_binding = binding.clone();
-                                new_binding.stage_flags = vk::ShaderStageFlags::FRAGMENT;
-                                set_bindings.push(new_binding);
-                            }
-                        }
-                    }
-                }
-
-                let descriptor_set_layouts = create_descriptor_set_layouts(render_context, &full_bindings);
-
-                // let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
-
-                let pipeline_layout = {
-                        let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
-                            .set_layouts(&descriptor_set_layouts);
-                        unsafe {
-                            render_context.get_device().borrow().get().create_pipeline_layout(&pipeline_layout_create, None)
-                                .expect("Failed to create pipeline layout")
-                        }
-                };
-
-                let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo {
-                    s_type: vk::StructureType::PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-                    flags: vk::PipelineInputAssemblyStateCreateFlags::empty(),
-                    p_next: std::ptr::null(),
-                    primitive_restart_enable: vk::FALSE,
-                    topology: vk::PrimitiveTopology::TRIANGLE_LIST,
-                };
-
-                // TODO: parameterize multisample state
-                let multisample_state_create_info = vk::PipelineMultisampleStateCreateInfo {
-                    s_type: vk::StructureType::PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-                    flags: vk::PipelineMultisampleStateCreateFlags::empty(),
-                    p_next: std::ptr::null(),
-                    rasterization_samples: vk::SampleCountFlags::TYPE_1,
-                    sample_shading_enable: vk::FALSE,
-                    min_sample_shading: 0.0,
-                    p_sample_mask: std::ptr::null(),
-                    alpha_to_one_enable: vk::FALSE,
-                    alpha_to_coverage_enable: vk::FALSE,
-                };
-
-                let viewport_state = vk::PipelineViewportStateCreateInfo {
-                    s_type: vk::StructureType::PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-                    p_next: std::ptr::null(),
-                    flags: vk::PipelineViewportStateCreateFlags::empty(),
-                    viewport_count: 1,
-                    p_viewports: std::ptr::null(),
-                    scissor_count: 1,
-                    p_scissors: std::ptr::null()
-                };
-
-                let main_name = std::ffi::CString::new("main").unwrap();
-                let shader_stages = [
-                    vk::PipelineShaderStageCreateInfo {
-                        // Vertex Shader
-                        s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
-                        p_next: std::ptr::null(),
-                        flags: vk::PipelineShaderStageCreateFlags::empty(),
-                        module: pipeline_description.vertex_shader.borrow().shader.shader_module.clone(),
-                        p_name: main_name.as_ptr(),
-                        p_specialization_info: std::ptr::null(),
-                        stage: vk::ShaderStageFlags::VERTEX,
-                    },
-                    vk::PipelineShaderStageCreateInfo {
-                        // Fragment Shader
-                        s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
-                        p_next: std::ptr::null(),
-                        flags: vk::PipelineShaderStageCreateFlags::empty(),
-                        module: pipeline_description.fragment_shader.borrow().shader.shader_module.clone(),
-                        p_name: main_name.as_ptr(),
-                        p_specialization_info: std::ptr::null(),
-                        stage: vk::ShaderStageFlags::FRAGMENT,
-                    },
-                ];
-
-                let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
-                    .dynamic_states(&pipeline_description.dynamic_states);
-
-                let rasterization_state = generate_rasteration_state(pipeline_description.rasterization);
-                let depth_stencil_state = generate_depth_stencil_state(pipeline_description.depth_stencil);
-                let blend_attachments = generate_blend_attachments(pipeline_description.blend);
-                let blend_state = generate_blend_state(pipeline_description.blend, &blend_attachments);
-
-                let graphics_pipeline_info = vk::GraphicsPipelineCreateInfo::builder()
-                    .stages(&shader_stages)
-                    .input_assembly_state(&vertex_input_assembly_state_info)
-                    .vertex_input_state(&pipeline_description.vertex_input)
-                    .viewport_state(&viewport_state)
-                    .rasterization_state(&rasterization_state)
-                    .multisample_state(&multisample_state_create_info)
-                    .depth_stencil_state(&depth_stencil_state)
-                    .color_blend_state(&blend_state)
-                    // .dynamic_state(&pipeline_description.dynamic_state)
-                    .dynamic_state(&dynamic_state)
-                    // .layout(frag_shader_module.pipeline_layout)
-                    .layout(pipeline_layout)
-                    .render_pass(render_pass)
-                    .subpass(0); // TODO: this shouldn't be static
-                // .build();
-
-                let device_pipeline = DeviceWrapper::create_pipeline(
-                    render_context.get_device(),
-                    &graphics_pipeline_info,
-                    pipeline_layout,
-                    descriptor_set_layouts,
-                    pipeline_description.get_name());
-                let pipeline = Rc::new(RefCell::new(Pipeline::new(
-                    device_pipeline)));
+                let pipeline = Rc::new(RefCell::new(
+                    create_graphics_pipeline(render_context, render_pass, pipeline_description)));
                 self.pipeline_cache.insert(pipeline_key, pipeline.clone());
                 pipeline
             }

@@ -572,7 +572,7 @@ impl VulkanFrameGraph {
         node: &mut ComputePassNode) {
 
         // get compute pipeline from node's pipeline description
-        let pipeline = self.pipeline_manager.create_compute_pipeline(
+        let pipeline = self.pipeline_manager.load_compute_pipeline(
             render_context,
             &node.pipeline_description);
 

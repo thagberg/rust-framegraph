@@ -51,8 +51,9 @@ impl Example for UboExample {
             RasterizationType::Standard,
             DepthStencilType::Disable,
             BlendType::None,
-            "ubo-vert.spv",
-            "ubo-frag.spv");
+            "ubo"
+            self.vert_shader.clone(),
+            self.frag_shader.clone());
         
         let ubo_binding = ResourceBinding {
             resource: self.uniform_buffer.clone(),

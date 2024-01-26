@@ -16,8 +16,8 @@ use framegraph::attachment::AttachmentReference;
 use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding};
 use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::pass_type::PassType;
-use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
-use framegraph::shader;
+use framegraph::pipeline::{BlendType, DepthStencilType, Pipeline, PipelineDescription, RasterizationType};
+use framegraph::{pipeline, shader};
 
 const IMGUI_VERTEX_BINDING: vk::VertexInputBindingDescription = vk::VertexInputBindingDescription{
     binding: 0,
@@ -59,7 +59,8 @@ pub struct DisplayBuffer {
 pub struct ImguiRender {
     font_texture: Rc<RefCell<DeviceResource>>,
     vert_shader: Rc<RefCell<shader::Shader>>,
-    frag_shader: Rc<RefCell<shader::Shader>>
+    frag_shader: Rc<RefCell<shader::Shader>>,
+    pipeline: Rc<RefCell<Pipeline>>
 }
 
 impl Drop for ImguiRender {
@@ -78,6 +79,29 @@ impl ImguiRender {
             shader::create_shader_module_from_bytes(device.clone(), "imgui-vert", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-vert.spv")))));
         let frag_shader = Rc::new(RefCell::new(
             shader::create_shader_module_from_bytes(device.clone(), "imgui-frag", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-frag.spv")))));
+
+        let pipeline = {
+            let vertex_input = vk::PipelineVertexInputStateCreateInfo::builder()
+                .vertex_binding_descriptions(std::slice::from_ref(&IMGUI_VERTEX_BINDING))
+                .vertex_attribute_descriptions(&IMGUI_VERTEX_ATTRIBUTES)
+                .build();
+
+            let dynamic_states = vec!(vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR);
+
+            let pipeline_description = PipelineDescription::new(
+                vertex_input,
+                dynamic_states,
+                RasterizationType::Standard,
+                DepthStencilType::Disable,
+                BlendType::Transparent,
+                "imgui",
+                vert_shader.clone(),
+                frag_shader.clone());
+
+            // Need to get the renderpass here somehow...
+            // pipeline::create_graphics_pipeline(render_context, )
+        };
+
 
         let font_buffer_create = BufferCreateInfo::new(
             vk::BufferCreateInfo::builder()
@@ -395,23 +419,6 @@ impl ImguiRender {
                     access: vk::AccessFlags::SHADER_READ
                 }
             };
-
-            let vertex_input = vk::PipelineVertexInputStateCreateInfo::builder()
-                .vertex_binding_descriptions(std::slice::from_ref(&IMGUI_VERTEX_BINDING))
-                .vertex_attribute_descriptions(&IMGUI_VERTEX_ATTRIBUTES)
-                .build();
-
-            let dynamic_states = vec!(vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR);
-
-            let pipeline_description = PipelineDescription::new(
-                vertex_input,
-                dynamic_states,
-                RasterizationType::Standard,
-                DepthStencilType::Disable,
-                BlendType::Transparent,
-                "imgui",
-                self.vert_shader.clone(),
-                self.frag_shader.clone());
 
             let display_binding = ResourceBinding {
                 resource: display_buffer.clone(),
