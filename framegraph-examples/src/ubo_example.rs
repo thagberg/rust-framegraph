@@ -51,7 +51,7 @@ impl Example for UboExample {
             RasterizationType::Standard,
             DepthStencilType::Disable,
             BlendType::None,
-            "ubo"
+            "ubo",
             self.vert_shader.clone(),
             self.frag_shader.clone());
         

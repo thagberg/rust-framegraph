@@ -18,6 +18,7 @@ use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::pass_type::PassType;
 use framegraph::pipeline::{BlendType, DepthStencilType, Pipeline, PipelineDescription, RasterizationType};
 use framegraph::{pipeline, shader};
+use framegraph::renderpass_contract::{NodeAttachmentDescription, NodeContract, RenderpassContract};
 
 const IMGUI_VERTEX_BINDING: vk::VertexInputBindingDescription = vk::VertexInputBindingDescription{
     binding: 0,
@@ -60,7 +61,8 @@ pub struct ImguiRender {
     font_texture: Rc<RefCell<DeviceResource>>,
     vert_shader: Rc<RefCell<shader::Shader>>,
     frag_shader: Rc<RefCell<shader::Shader>>,
-    pipeline: Rc<RefCell<Pipeline>>
+    pipeline: Rc<RefCell<Pipeline>>,
+    contract: RenderpassContract
 }
 
 impl Drop for ImguiRender {
@@ -69,11 +71,21 @@ impl Drop for ImguiRender {
     }
 }
 
+impl NodeContract for ImguiRender {
+    fn get_contract(&self) -> &framegraph::renderpass_contract::RenderpassContract {
+        todo!()
+    }
+}
+
 impl ImguiRender {
     pub fn new(
         device: Rc<RefCell<DeviceWrapper>>,
         render_context: &VulkanRenderContext,
-        font_atlas: imgui::FontAtlasTexture) -> ImguiRender {
+        font_atlas: imgui::FontAtlasTexture,
+        ) -> ImguiRender {
+
+        let contract = RenderpassContract::new(
+            vec![NodeAttachmentDescription::new()]);
 
         let vert_shader = Rc::new(RefCell::new(
             shader::create_shader_module_from_bytes(device.clone(), "imgui-vert", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-vert.spv")))));
@@ -453,7 +465,7 @@ impl ImguiRender {
             };
 
             let pass_node = GraphicsPassNode::builder("imgui".to_string())
-                .pipeline_description(pipeline_description)
+                // .pipeline_description(pipeline_description)
                 .render_target(render_target.clone())
                 .read(font_binding)
                 .read(display_binding)

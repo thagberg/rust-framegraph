@@ -333,7 +333,7 @@ pub fn create_compute_pipeline(
 ) -> Pipeline {
     let mut full_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>> = HashMap::new();
     // for (set, bindings) in &mut compute_shader_module.borrow_mut().descriptor_bindings {
-    for (set, bindings) in pipeline_description.shader.borrow().descriptor_bindings {
+    for (set, bindings) in &pipeline_description.shader.borrow().descriptor_bindings {
         let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
         set_bindings.extend(bindings.iter());
         for binding in set_bindings {
@@ -371,8 +371,9 @@ pub fn create_compute_pipeline(
         pipeline_layout,
         descriptor_set_layouts,
         &pipeline_description.name);
-    let pipeline = Rc::new(RefCell::new(Pipeline::new(
-        device_pipeline)));
+    let pipeline = Pipeline::new( device_pipeline);
+
+    pipeline
 }
 
 pub fn create_graphics_pipeline(
