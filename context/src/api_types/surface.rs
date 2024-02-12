@@ -2,9 +2,6 @@ use std::os::raw::c_void;
 use ash::extensions::khr::Win32Surface;
 use ash::vk;
 
-extern crate winapi;
-use winapi::um::libloaderapi::GetModuleHandleW;
-use winit::platform::windows::WindowExtWindows;
 use crate::api_types::device::PhysicalDeviceWrapper;
 
 pub struct SurfaceWrapper {
@@ -32,25 +29,6 @@ impl SurfaceCapabilities {
     }
 }
 
-#[cfg(target_os = "windows")]
-unsafe fn create_window_surface(
-    entry: &ash::Entry,
-    instance: &ash::Instance,
-    window: &winit::window::Window
-) -> Result<vk::SurfaceKHR, vk::Result> {
-    let hwnd = window.hwnd() as vk::HWND;
-    let hinstance = GetModuleHandleW(std::ptr::null());
-    let create_info = vk::Win32SurfaceCreateInfoKHR {
-        s_type: vk::StructureType::WIN32_SURFACE_CREATE_INFO_KHR,
-        p_next: std::ptr::null(),
-        flags: Default::default(),
-        hinstance: hinstance as *const c_void,
-        hwnd: hwnd as *const c_void
-    };
-    let surface_loader = Win32Surface::new(entry, instance);
-    surface_loader.create_win32_surface(&create_info, None)
-}
-
 impl SurfaceWrapper {
     pub fn new(
         entry: &ash::Entry,
@@ -58,7 +36,7 @@ impl SurfaceWrapper {
         window: &winit::window::Window
     ) -> SurfaceWrapper {
         let surface = unsafe {
-            create_window_surface(entry, instance, window)
+            ash_window::create_surface(entry, instance, &window, None)
                 .expect("Failed to create window surface")
         };
         let surface_loader = ash::extensions::khr::Surface::new(entry, instance);
