@@ -1,9 +1,15 @@
+use std::ffi::CStr;
 use std::os::raw::c_void;
 use ash::extensions::khr::Win32Surface;
 use ash::vk;
 
 use crate::api_types::device::PhysicalDeviceWrapper;
 
+pub fn get_required_surface_extensions(window: &winit::window::Window) -> Vec<&CStr> {
+
+    ash_window::enumerate_required_extensions(window)
+        .expect("Failed to find required surface extension names")
+}
 pub struct SurfaceWrapper {
     surface: vk::SurfaceKHR,
     surface_loader: ash::extensions::khr::Surface
