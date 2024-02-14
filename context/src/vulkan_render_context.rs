@@ -17,6 +17,7 @@ use crate::api_types::swapchain::SwapchainWrapper;
 use crate::api_types::image::ImageWrapper;
 use crate::api_types::surface::SurfaceWrapper;
 use crate::api_types::instance::InstanceWrapper;
+use crate::api_types::surface;
 use crate::render_context::RenderContext;
 
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
@@ -332,7 +333,7 @@ fn create_swapchain(
     surface: &SurfaceWrapper,
     window: &winit::window::Window
 ) -> SwapchainWrapper {
-    let swapchain_capabilities = surface.get_surface_capabilities(physical_device, surface);
+    let swapchain_capabilities = surface.get_surface_capabilities(physical_device);
 
     // TODO: may want to make format and color space customizable
     let swapchain_format = {
@@ -517,10 +518,16 @@ impl VulkanRenderContext {
             unsafe { ::std::ffi::CStr::from_bytes_with_nul_unchecked(b"VK_LAYER_KHRONOS_validation\0") }
         ];
 
-        let instance_extensions = [
-            ash::extensions::ext::DebugUtils::name(),
-            ash::extensions::khr::Win32Surface::name(),
-            ash::extensions::khr::Surface::name()];
+        let mut instance_extensions = vec![
+            ash::extensions::ext::DebugUtils::name()
+        ];
+
+        if let Some(resolved_window) = window {
+            let extensions = surface::get_required_surface_extensions(resolved_window);
+            for extension in extensions {
+                instance_extensions.push(extension);
+            }
+        }
 
         let device_extensions = [
             ash::extensions::khr::Swapchain::name()
