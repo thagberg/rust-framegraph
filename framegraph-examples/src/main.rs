@@ -26,6 +26,8 @@ use framegraph::renderpass_manager::VulkanRenderpassManager;
 use framegraph::vulkan_frame_graph::VulkanFrameGraph;
 use passes::imgui_draw::ImguiRender;
 use passes::clear;
+use crate::example::Example;
+use crate::ubo_example::UboExample;
 
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 
@@ -38,6 +40,8 @@ struct WindowedVulkanApp {
     render_semaphores: Vec<vk::Semaphore>,
     frame_fences: Vec<vk::Fence>,
     frames: [Option<Box<Frame>>; MAX_FRAMES_IN_FLIGHT as usize],
+
+    examples: Vec<Box<dyn Example>>,
 
     imgui_renderer: ImguiRender,
     frame_graph: VulkanFrameGraph,
@@ -117,9 +121,14 @@ impl WindowedVulkanApp {
             }
         }
 
+        let examples: Vec<Box<dyn Example>> = vec![
+            Box::new(UboExample::new(render_context.get_device().clone()))
+        ];
+
         WindowedVulkanApp {
             window,
             platform,
+            examples,
             imgui,
             frame_graph,
             imgui_renderer,
