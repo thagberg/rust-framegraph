@@ -62,7 +62,8 @@ impl WindowedVulkanApp {
         let render_context = {
             let c_title = CString::new(title).unwrap();
             let application_info = vk::ApplicationInfo::builder()
-                .application_name(&c_title);
+                .application_name(&c_title)
+                .api_version(vk::API_VERSION_1_2);
 
             VulkanRenderContext::new(
                 &application_info,
