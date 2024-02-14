@@ -17,6 +17,8 @@ use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBind
 use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::pass_type::PassType;
 use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
+use framegraph::shader;
+use framegraph::shader::Shader;
 
 const IMGUI_VERTEX_BINDING: vk::VertexInputBindingDescription = vk::VertexInputBindingDescription{
     binding: 0,
@@ -56,6 +58,8 @@ pub struct DisplayBuffer {
 }
 
 pub struct ImguiRender {
+    vertex_shader: Rc<RefCell<Shader>>,
+    fragment_shader: Rc<RefCell<Shader>>,
     font_texture: Rc<RefCell<DeviceResource>>
 }
 
@@ -70,6 +74,11 @@ impl ImguiRender {
         device: Rc<RefCell<DeviceWrapper>>,
         render_context: &VulkanRenderContext,
         font_atlas: imgui::FontAtlasTexture) -> ImguiRender {
+
+        let vert_shader = Rc::new(RefCell::new(
+            shader::create_shader_module_from_bytes(device.clone(), "imgui-vert", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-vert.spv")))));
+        let frag_shader = Rc::new(RefCell::new(
+            shader::create_shader_module_from_bytes(device.clone(), "imgui-frag", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-frag.spv")))));
 
         let font_buffer_create = BufferCreateInfo::new(
             vk::BufferCreateInfo::builder()
@@ -272,6 +281,8 @@ impl ImguiRender {
         }
 
         ImguiRender {
+            vertex_shader: vert_shader,
+            fragment_shader: frag_shader,
             font_texture: Rc::new(RefCell::new(font_texture)),
         }
     }
@@ -399,8 +410,9 @@ impl ImguiRender {
                 RasterizationType::Standard,
                 DepthStencilType::Disable,
                 BlendType::Transparent,
-                "imgui-vert.spv",
-                "imgui-frag.spv");
+                "imgui",
+                self.vertex_shader.clone(),
+                self.fragment_shader.clone());
 
             let display_binding = ResourceBinding {
                 resource: display_buffer.clone(),

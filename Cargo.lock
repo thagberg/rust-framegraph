@@ -1187,6 +1187,7 @@ dependencies = [
  "context",
  "framegraph",
  "glam",
+ "glob",
  "gpu-allocator",
  "imgui",
 ]
