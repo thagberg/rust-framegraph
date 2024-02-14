@@ -56,26 +56,25 @@ impl SurfaceWrapper {
     }
 
     pub fn get_surface_capabilities(&self,
-        physical_device: &PhysicalDeviceWrapper,
-        surface: &SurfaceWrapper
+        physical_device: &PhysicalDeviceWrapper
     ) -> SurfaceCapabilities {
         unsafe {
-            let capabilities = surface.get_loader()
+            let capabilities = self.get_loader()
                 .get_physical_device_surface_capabilities(
                     physical_device.get(),
-                    surface.get_surface())
+                    self.get_surface())
                 .expect("Failed to query device for surface capabilities.");
 
-            let formats = surface.get_loader()
+            let formats = self.get_loader()
                 .get_physical_device_surface_formats(
                     physical_device.get(),
-                    surface.get_surface())
+                    self.get_surface())
                 .expect("Failed to query for surface formats.");
 
-            let present_modes = surface.get_loader()
+            let present_modes = self.get_loader()
                 .get_physical_device_surface_present_modes(
                     physical_device.get(),
-                    surface.get_surface() )
+                    self.get_surface() )
                 .expect("Failed to query surface for present modes.");
 
             SurfaceCapabilities::new(capabilities, formats, present_modes)
