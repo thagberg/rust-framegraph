@@ -389,8 +389,13 @@ fn create_swapchain(
         }
     };
 
-    // just assume double-buffering for now
-    let image_count = MAX_FRAMES_IN_FLIGHT;
+    let image_count = {
+        if swapchain_capabilities.capabilities.min_image_count > MAX_FRAMES_IN_FLIGHT {
+            swapchain_capabilities.capabilities.min_image_count
+        } else {
+            MAX_FRAMES_IN_FLIGHT
+        }
+    };
 
     // TODO: using exclusive mode right now but might want to make this concurrent
     let image_sharing_mode = vk::SharingMode::EXCLUSIVE;
@@ -613,16 +618,6 @@ impl VulkanRenderContext {
             &logical_device.borrow(),
             logical_device.borrow().get_queue_family_indices().graphics.unwrap());
 
-        let graphics_command_buffers = create_command_buffers(
-            &logical_device.borrow(),
-            graphics_command_pool,
-            MAX_FRAMES_IN_FLIGHT);
-
-        let immediate_command_buffer = create_command_buffers(
-            &logical_device.borrow(),
-            graphics_command_pool,
-            1);
-
         let swapchain = {
             if window.is_some() && surface_wrapper.is_some() {
                 Some(create_swapchain(
@@ -654,6 +649,13 @@ impl VulkanRenderContext {
             semaphores
         };
 
+        let max_frames_in_flight = {
+            if let Some(swapchain) = &swapchain {
+               swapchain.get_images().len() as u32
+            } else {
+                MAX_FRAMES_IN_FLIGHT
+            }
+        };
 
         let ubo_pool_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::UNIFORM_BUFFER,
@@ -674,7 +676,7 @@ impl VulkanRenderContext {
             .pool_sizes(&descriptor_pool_sizes);
 
         let mut descriptor_pools: Vec<vk::DescriptorPool> = Vec::new();
-        for i in (0..MAX_FRAMES_IN_FLIGHT) {
+        for i in (0..max_frames_in_flight) {
             let descriptor_pool = unsafe {
                 logical_device.borrow().get().create_descriptor_pool(
                     &descriptor_pool_create,
@@ -684,10 +686,15 @@ impl VulkanRenderContext {
             descriptor_pools.push(descriptor_pool);
         }
 
+        let immediate_command_buffer = create_command_buffers(
+            &logical_device.borrow(),
+            graphics_command_pool,
+            1);
+
         let graphics_command_buffers = create_command_buffers(
             &logical_device.borrow(),
             graphics_command_pool,
-            MAX_FRAMES_IN_FLIGHT);
+            max_frames_in_flight);
 
         let frame_index = 0;
 
