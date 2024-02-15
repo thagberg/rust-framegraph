@@ -199,14 +199,12 @@ impl WindowedVulkanApp {
         }
 
         // update imgui UI
-        let imgui_draw_data = {
-            let ui = self.imgui.new_frame();
-            let mut opened = true;
-            ui.show_demo_window(&mut opened);
+        let ui = self.imgui.new_frame();
+        let mut opened = true;
+        ui.show_demo_window(&mut opened);
             // ui.text("Testing UI");
 
-            self.imgui.render()
-        };
+            // self.imgui.render()
 
         // prepare framegraph
         self.frames[self.frame_index as usize] = Some(self.frame_graph.start(self.render_context.get_device(), descriptor_pool));
@@ -233,12 +231,21 @@ impl WindowedVulkanApp {
                 image.clone(),
                 vk::SampleCountFlags::TYPE_1);
 
+            for example in self.examples.iter() {
+                let example_nodes = example.execute(ui, rt_ref.clone());
+                for node in example_nodes {
+                    current_frame.add_node(node);
+                }
+            }
+
+            let imgui_draw_data = self.imgui.render();
+
             let imgui_nodes = self.imgui_renderer.generate_passes(
                 imgui_draw_data,
                 rt_ref.clone(),
                 self.render_context.get_device());
 
-            for (i, imgui_node) in imgui_nodes.into_iter().enumerate() {
+            for imgui_node in imgui_nodes {
                 current_frame.add_node(imgui_node);
             }
         }

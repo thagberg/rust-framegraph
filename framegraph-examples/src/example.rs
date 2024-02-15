@@ -9,5 +9,5 @@ pub trait Example {
 
     fn get_active(&self) -> bool;
 
-    fn execute(&self, imgui_ui: &Ui, back_buffer: AttachmentReference) -> Vec<PassType>;
+    fn execute(&self, imgui_ui: &mut Ui,back_buffer: AttachmentReference) -> Vec<PassType>;
 }
