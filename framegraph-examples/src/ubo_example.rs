@@ -38,7 +38,7 @@ impl Example for UboExample {
         self.active
     }
 
-    fn execute(&self, imgui_ui: &Ui, back_buffer: AttachmentReference) -> Vec<PassType> {
+    fn execute(&self, imgui_ui: &mut Ui, back_buffer: AttachmentReference) -> Vec<PassType> {
         let vertex_state_create = vk::PipelineVertexInputStateCreateInfo::builder()
             .vertex_attribute_descriptions(&[])
             .vertex_binding_descriptions(&[]);
