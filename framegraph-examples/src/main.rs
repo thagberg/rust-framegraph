@@ -33,6 +33,20 @@ use crate::ubo_example::UboExample;
 
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 
+struct Examples {
+    examples: Vec<Box<dyn Example>>,
+    active_example_index: Option<usize>
+}
+
+impl Examples {
+    pub fn new(examples: Vec<Box<dyn Example>>) -> Self {
+        Examples {
+            examples,
+            active_example_index: None
+        }
+    }
+}
+
 struct WindowedVulkanApp {
     window: Window,
     platform: WinitPlatform,
@@ -43,7 +57,8 @@ struct WindowedVulkanApp {
     frame_fences: Vec<vk::Fence>,
     frames: Vec<Option<Box<Frame>>>,
 
-    examples: Vec<Box<dyn Example>>,
+    // examples: Vec<Box<dyn Example>>,
+    examples: Examples,
 
     imgui_renderer: ImguiRender,
     frame_graph: VulkanFrameGraph,
@@ -145,7 +160,7 @@ impl WindowedVulkanApp {
         WindowedVulkanApp {
             window,
             platform,
-            examples,
+            examples: Examples::new(examples),
             imgui,
             frame_graph,
             imgui_renderer,
@@ -220,8 +235,20 @@ impl WindowedVulkanApp {
         // update imgui UI
         let ui = self.imgui.new_frame();
         let mut opened = true;
-        // ui.show_demo_window(&mut opened);
-        ui.text("Testing UI");
+        if let Some(main_menu) = ui.begin_main_menu_bar() {
+            if let Some(file_menu) = ui.begin_menu("File") {
+
+            }
+            if let Some(examples_menu) = ui.begin_menu("Examples") {
+                for (i, example) in &mut self.examples.examples.iter().enumerate() {
+                    if ui.menu_item(example.get_name()) {
+                        self.examples.active_example_index = Some(i);
+                    }
+                }
+            }
+        }
+        //ui.show_demo_window(&mut opened);
+        // ui.text("Testing UI");
 
             // self.imgui.render()
 
@@ -250,10 +277,12 @@ impl WindowedVulkanApp {
                 image.clone(),
                 vk::SampleCountFlags::TYPE_1);
 
-            for example in self.examples.iter() {
-                let example_nodes = example.execute(ui, rt_ref.clone());
-                for node in example_nodes {
-                    current_frame.add_node(node);
+            if let Some(index) = self.examples.active_example_index {
+                if let Some(active_example) = self.examples.examples.get(index) {
+                    let nodes = active_example.execute(ui, rt_ref.clone());
+                    for node in nodes {
+                        current_frame.add_node(node);
+                    }
                 }
             }
 
