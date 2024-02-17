@@ -31,6 +31,7 @@ use framegraph::vulkan_frame_graph::VulkanFrameGraph;
 use passes::imgui_draw::ImguiRender;
 use passes::clear;
 use crate::example::Example;
+use crate::model_example::ModelExample;
 use crate::ubo_example::UboExample;
 
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
@@ -154,7 +155,8 @@ impl WindowedVulkanApp {
         }
 
         let examples: Vec<Box<dyn Example>> = vec![
-            Box::new(UboExample::new(render_context.get_device().clone()))
+            Box::new(UboExample::new(render_context.get_device().clone())),
+            Box::new(ModelExample::new())
         ];
 
         let mut frames: Vec<Option<Box<Frame>>> = Vec::new();
