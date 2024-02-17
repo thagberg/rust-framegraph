@@ -6,6 +6,7 @@ use gpu_allocator::MemoryLocation;
 use imgui::Ui;
 use context::api_types::buffer::BufferCreateInfo;
 use context::api_types::device::{DeviceResource, DeviceWrapper};
+use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::attachment::AttachmentReference;
 use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ResourceBinding};
@@ -75,7 +76,38 @@ impl Example for UboExample {
             .fill_commands(Box::new(
                 move |render_ctx: &VulkanRenderContext,
                      command_buffer: &vk::CommandBuffer | {
+                    let viewport = vk::Viewport::builder()
+                        .x(0.0)
+                        .y(0.0)
+                        .width(800.0)
+                        .height(600.0)
+                        .min_depth(0.0)
+                        .max_depth(1.0)
+                        .build();
 
+                    let scissor = vk::Rect2D::builder()
+                        .offset(vk::Offset2D{x: 0, y: 0})
+                        .extent(vk::Extent2D::builder().width(800).height(600).build())
+                        .build();
+
+                    unsafe {
+                        render_ctx.get_device().borrow().get().cmd_set_viewport(
+                            *command_buffer,
+                            0,
+                            std::slice::from_ref(&viewport));
+
+                        render_ctx.get_device().borrow().get().cmd_set_scissor(
+                            *command_buffer,
+                            0,
+                            std::slice::from_ref(&scissor));
+
+                        render_ctx.get_device().borrow().get().cmd_draw(
+                            *command_buffer,
+                            3,
+                            1,
+                            0,
+                            0);
+                    }
                 }
             ))
             .build()
