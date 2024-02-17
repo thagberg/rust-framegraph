@@ -14,6 +14,8 @@ use winit::event::{Event, WindowEvent};
 use winit::event_loop::{EventLoop, ControlFlow};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use imgui;
+use imgui::BackendFlags;
+use context::api_types::swapchain::SwapchainWrapper;
 use context::render_context::RenderContext;
 use context::vulkan_render_context::{VulkanFrameObjects, VulkanRenderContext};
 use framegraph::attachment::AttachmentReference;
@@ -39,7 +41,7 @@ struct WindowedVulkanApp {
     frame_index: u32,
     render_semaphores: Vec<vk::Semaphore>,
     frame_fences: Vec<vk::Fence>,
-    frames: [Option<Box<Frame>>; MAX_FRAMES_IN_FLIGHT as usize],
+    frames: Vec<Option<Box<Frame>>>,
 
     examples: Vec<Box<dyn Example>>,
 
@@ -59,6 +61,7 @@ impl WindowedVulkanApp {
 
         let mut imgui = imgui::Context::create();
         imgui.set_ini_filename(None);
+        imgui.io_mut().backend_flags |= BackendFlags::RENDERER_HAS_VTX_OFFSET;
 
         let mut platform = WinitPlatform::init(&mut imgui);
         platform.attach_window(imgui.io_mut(), &window, HiDpiMode::Default);
@@ -91,6 +94,17 @@ impl WindowedVulkanApp {
                 font_texture)
         };
 
+        let max_frames_in_flight = {
+            match render_context.get_swapchain() {
+                Some(swapchain) => {
+                    swapchain.get_images().len() as u32
+                }
+                None => {
+                    MAX_FRAMES_IN_FLIGHT
+                }
+            }
+        };
+
         let mut frame_fences: Vec<vk::Fence> = Vec::new();
         let mut render_semaphores: Vec<vk::Semaphore> = Vec::new();
         {
@@ -104,7 +118,7 @@ impl WindowedVulkanApp {
                 .build();
 
             unsafe {
-                for _ in 0..MAX_FRAMES_IN_FLIGHT {
+                for _ in 0..max_frames_in_flight {
                     frame_fences.push(
                         render_context.get_device().borrow().get().create_fence(
                             &fence_create,
@@ -125,6 +139,9 @@ impl WindowedVulkanApp {
             Box::new(UboExample::new(render_context.get_device().clone()))
         ];
 
+        let mut frames: Vec<Option<Box<Frame>>> = Vec::new();
+        frames.resize_with(max_frames_in_flight as usize, Default::default);
+
         WindowedVulkanApp {
             window,
             platform,
@@ -133,7 +150,7 @@ impl WindowedVulkanApp {
             frame_graph,
             imgui_renderer,
             render_semaphores,
-            frames: Default::default(),
+            frames,
             frame_fences,
             frame_index: 0,
             render_context,
@@ -175,6 +192,8 @@ impl WindowedVulkanApp {
             //     .device_wait_idle()
             //     .expect("Failed to idle");
         }
+        // clean up the completed frame
+        self.frames[self.frame_index as usize] = None;
 
         // get swapchain image for this frame
         let VulkanFrameObjects {
@@ -201,8 +220,8 @@ impl WindowedVulkanApp {
         // update imgui UI
         let ui = self.imgui.new_frame();
         let mut opened = true;
-        ui.show_demo_window(&mut opened);
-            // ui.text("Testing UI");
+        // ui.show_demo_window(&mut opened);
+        ui.text("Testing UI");
 
             // self.imgui.render()
 
@@ -291,7 +310,17 @@ impl WindowedVulkanApp {
 
         // queue present (wait on semaphores)
 
-        self.frame_index = (self.frame_index + 1) % MAX_FRAMES_IN_FLIGHT;
+        let max_frames_in_flight = {
+            match self.render_context.get_swapchain() {
+                Some(swapchain) => {
+                    swapchain.get_images().len() as u32
+                }
+                None => {
+                    MAX_FRAMES_IN_FLIGHT
+                }
+            }
+        };
+        self.frame_index = (self.frame_index + 1) % max_frames_in_flight;
     }
 
     // pub fn run(mut self, event_loop: EventLoop<()>) -> Result<u32, &'static str>{
