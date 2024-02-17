@@ -20,7 +20,6 @@ pub struct UBO {
     pub color: [f32; 3]
 }
 pub struct UboExample {
-    active: bool,
     uniform_buffer: Rc<RefCell<DeviceResource>>,
     vert_shader: Rc<RefCell<shader::Shader>>,
     frag_shader: Rc<RefCell<shader::Shader>>
@@ -29,14 +28,6 @@ pub struct UboExample {
 impl Example for UboExample {
     fn get_name(&self) -> &'static str {
         "UBO"
-    }
-
-    fn set_active(&mut self, active: bool) {
-        self.active = active;
-    }
-
-    fn get_active(&self) -> bool {
-        self.active
     }
 
     fn execute(&self, imgui_ui: &mut Ui, back_buffer: AttachmentReference) -> Vec<PassType> {
@@ -152,7 +143,6 @@ impl UboExample {
             shader::create_shader_module_from_bytes(device.clone(), "ubo-frag", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/ubo-frag.spv")))));
 
         UboExample {
-            active: false,
             uniform_buffer: Rc::new(RefCell::new(ubo)),
             vert_shader,
             frag_shader
