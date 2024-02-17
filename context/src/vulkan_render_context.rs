@@ -206,11 +206,32 @@ fn pick_physical_device(
     surface: &Option<SurfaceWrapper>,
     required_extensions: &[&CStr]) -> Result<PhysicalDeviceWrapper, &'static str> {
 
-    let devices = unsafe {
+    let mut devices = unsafe {
         instance.get()
             .enumerate_physical_devices()
             .expect("Error enumerating physical devides")
     };
+
+    // sort physical devices such that discrete GPUs are preferred
+    unsafe {
+        devices.sort_by(|a, b| {
+            let a_properties = instance.get().get_physical_device_properties(a.clone());
+            let b_properties = instance.get().get_physical_device_properties(b.clone());
+
+            let get_device_ranking = |device_type: vk::PhysicalDeviceType| -> u32 {
+                match device_type {
+                    vk::PhysicalDeviceType::DISCRETE_GPU => 0,
+                    vk::PhysicalDeviceType::INTEGRATED_GPU => 1,
+                    vk::PhysicalDeviceType::VIRTUAL_GPU => 2,
+                    _ => 3
+                }
+            };
+
+            let a_rank = get_device_ranking(a_properties.device_type);
+            let b_rank = get_device_ranking(b_properties.device_type);
+            a.cmp(b)
+        });
+    }
 
     let result = devices.iter().find(|device| {
         let is_suitable = is_physical_device_suitable(
@@ -762,11 +783,18 @@ impl VulkanRenderContext {
 
     pub fn get_next_frame_objects(&mut self) -> VulkanFrameObjects {
         let old_index = self.frame_index;
-        self.frame_index = (self.frame_index + 1) % MAX_FRAMES_IN_FLIGHT;
+        let max_frames_in_flight = {
+            if let Some(swapchain) = &self.swapchain {
+                swapchain.get_images().len() as u32
+            } else {
+                MAX_FRAMES_IN_FLIGHT
+            }
+        };
+        self.frame_index = (self.frame_index + 1) % max_frames_in_flight;
 
         let semaphore = self.swapchain_semaphores[old_index as usize];
         let image = self.get_next_swapchain_image(
-            Some(std::time::Duration::new(1, 0).as_nanos() as u64),
+            None,
             Some(semaphore),
             None);
 
