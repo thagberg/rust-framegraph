@@ -156,7 +156,7 @@ impl WindowedVulkanApp {
 
         let examples: Vec<Box<dyn Example>> = vec![
             Box::new(UboExample::new(render_context.get_device().clone())),
-            Box::new(ModelExample::new())
+            Box::new(ModelExample::new(render_context.get_device().clone()))
         ];
 
         let mut frames: Vec<Option<Box<Frame>>> = Vec::new();
