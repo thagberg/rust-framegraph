@@ -48,6 +48,29 @@ unsafe extern "system" fn debug_utils_callback(
     vk::FALSE
 }
 
+#[cfg(target_os = "macos")]
+fn get_logical_device_extensions() -> Vec<&'static CStr> {
+    vec![
+        ash::extensions::khr::Swapchain::name(),
+        // Needed for MoltenVK
+        vk::KhrPortabilitySubsetFn::name()
+    ]
+}
+
+#[cfg(not(target_os = "macos"))]
+fn get_logical_device_extensions() -> Vec<&'static CStr> {
+    vec![
+        ash::extensions::khr::Swapchain::name()
+    ]
+}
+
+fn get_physical_device_extensions() -> Vec<&'static CStr> {
+    vec![
+        ash::extensions::khr::Swapchain::name()
+    ]
+}
+
+
 fn create_vulkan_instance(
     entry: &ash::Entry,
     application_info: &vk::ApplicationInfo,
@@ -71,7 +94,8 @@ fn create_vulkan_instance(
     let mut builder = vk::InstanceCreateInfo::builder()
         .application_info(&application_info)
         .enabled_layer_names(&raw_layer_names)
-        .enabled_extension_names(&raw_extension_names);
+        .enabled_extension_names(&raw_extension_names)
+        .flags(vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR);
 
     let mut instance_debug = vk::DebugUtilsMessengerCreateInfoEXT::builder()
         .message_severity(severity_flags::WARNING | severity_flags::ERROR)
@@ -229,7 +253,7 @@ fn pick_physical_device(
 
             let a_rank = get_device_ranking(a_properties.device_type);
             let b_rank = get_device_ranking(b_properties.device_type);
-            a.cmp(b)
+            a_rank.cmp(&b_rank)
         });
     }
 
@@ -551,13 +575,19 @@ impl VulkanRenderContext {
         if let Some(resolved_window) = window {
             let extensions = surface::get_required_surface_extensions(resolved_window);
             for extension in extensions {
-                instance_extensions.push(extension);
+                unsafe {
+                    // instance_extensions.push(extension);
+                    instance_extensions.push(CStr::from_ptr(*extension));
+                }
             }
         }
 
-        let device_extensions = [
-            ash::extensions::khr::Swapchain::name()
-        ];
+        // Need to support portability drivers for MoltenVK
+        instance_extensions.push(vk::KhrPortabilityEnumerationFn::name());
+        instance_extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
+
+        let physical_device_extensions = get_physical_device_extensions();
+        let logical_device_extensions = get_logical_device_extensions();
 
         let entry = ash::Entry::linked();
         let instance = create_vulkan_instance(
@@ -608,7 +638,7 @@ impl VulkanRenderContext {
         let physical_device = pick_physical_device(
     &instance_wrapper,
             &surface_wrapper,
-        &device_extensions).expect("Failed to select a suitable physical device.");
+        &physical_device_extensions).expect("Failed to select a suitable physical device.");
 
         let logical_device = Rc::new(RefCell::new(create_logical_device(
             &instance_wrapper,
@@ -616,7 +646,7 @@ impl VulkanRenderContext {
             &physical_device,
             &surface_wrapper,
             &layers,
-            &device_extensions
+            &logical_device_extensions
         )));
 
         let graphics_queue = unsafe {

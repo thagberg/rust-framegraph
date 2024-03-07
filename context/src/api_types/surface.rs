@@ -1,13 +1,12 @@
-use std::ffi::CStr;
-use std::os::raw::c_void;
-use ash::extensions::khr::Win32Surface;
+use std::os::raw::{c_char};
 use ash::vk;
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 use crate::api_types::device::PhysicalDeviceWrapper;
 
-pub fn get_required_surface_extensions(window: &winit::window::Window) -> Vec<&CStr> {
+pub fn get_required_surface_extensions(window: &winit::window::Window) -> &'static [*const c_char] {
 
-    ash_window::enumerate_required_extensions(window)
+    ash_window::enumerate_required_extensions(window.raw_display_handle())
         .expect("Failed to find required surface extension names")
 }
 pub struct SurfaceWrapper {
@@ -42,7 +41,7 @@ impl SurfaceWrapper {
         window: &winit::window::Window
     ) -> SurfaceWrapper {
         let surface = unsafe {
-            ash_window::create_surface(entry, instance, &window, None)
+            ash_window::create_surface(entry, instance, window.raw_display_handle(), window.raw_window_handle(), None)
                 .expect("Failed to create window surface")
         };
         let surface_loader = ash::extensions::khr::Surface::new(entry, instance);

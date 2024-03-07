@@ -247,7 +247,8 @@ impl DeviceWrapper {
             device: device.clone(),
             physical_device: physical_device.get(),
             debug_settings: Default::default(),
-            buffer_device_address: false // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceBufferDeviceAddressFeaturesEXT.html
+            buffer_device_address: false, // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceBufferDeviceAddressFeaturesEXT.html
+            allocation_sizes: Default::default(), // TODO: optimize allocation block sizes?
         }).expect("Failed to create GPU memory allocator");
 
         DeviceWrapper {
@@ -357,7 +358,8 @@ impl DeviceWrapper {
             name: &alloc_name,
             requirements,
             location,
-            linear
+            linear,
+            allocation_scheme: AllocationScheme::GpuAllocatorManaged,
         }).expect("Failed to allocate memory for Device resource")
     }
 

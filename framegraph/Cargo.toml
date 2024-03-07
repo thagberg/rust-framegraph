@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ash             = {version = "^0.36", features = ["linked"]}
+ash             = {version = "^0.37", features = ["linked"]}
 petgraph        = {version = "^0.6", features = ["stable_graph"]}
 multimap        = "^0.8.0"
-gpu-allocator   = "^0.17"
+gpu-allocator   = "^0.25"
 spirv-reflect   = "^0.2"
 context         =  {path="../context"}

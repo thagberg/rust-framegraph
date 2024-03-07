@@ -16,6 +16,7 @@ use winit::event_loop::{EventLoop, ControlFlow};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use imgui;
 use imgui::BackendFlags;
+use winit::error::EventLoopError;
 use context::api_types::swapchain::SwapchainWrapper;
 use context::render_context::RenderContext;
 use context::vulkan_render_context::{VulkanFrameObjects, VulkanRenderContext};
@@ -71,6 +72,7 @@ impl WindowedVulkanApp {
     pub fn new(event_loop: &EventLoop<()>, title: &str, width: u32, height: u32) -> WindowedVulkanApp {
         let window = WindowBuilder::new()
             .with_title(title)
+            // .with_inner_size(winit::dpi::LogicalSize::new(width, height))
             .with_inner_size(winit::dpi::PhysicalSize::new(width, height))
             .build(event_loop)
             .expect("Failed to create window");
@@ -248,10 +250,6 @@ impl WindowedVulkanApp {
                 }
             }
         }
-        //ui.show_demo_window(&mut opened);
-        // ui.text("Testing UI");
-
-            // self.imgui.render()
 
         // prepare framegraph
         self.frames[self.frame_index as usize] = Some(self.frame_graph.start(self.render_context.get_device(), descriptor_pool));
@@ -388,41 +386,41 @@ impl WindowedVulkanApp {
     // }
 }
 
-fn run(mut app: WindowedVulkanApp, event_loop: EventLoop<()>) {
+fn run(mut app: WindowedVulkanApp, event_loop: EventLoop<()>) -> Result<(), EventLoopError> {
     let mut last_frame = Instant::now();
 
     // &self.event_loop.run(move |event, _, control_flow| {
-    event_loop.run(move |event, _, control_flow| {
+    event_loop.run(move |event, event_loop| {
         match event {
             Event::NewEvents(_) => {
                 let now = Instant::now();
                 app.imgui.io_mut().update_delta_time(now - last_frame);
                 last_frame = now;
             },
-            Event::MainEventsCleared => {
+            Event::AboutToWait => {
                 app.platform.prepare_frame(app.imgui.io_mut(), &app.window)
                     .expect("Failed to prepare frame");
                 app.window.request_redraw();
             },
             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
-                *control_flow = ControlFlow::Exit;
+                event_loop.exit();
             },
-            Event::RedrawRequested(_) => {
+            Event::WindowEvent { event: WindowEvent::RedrawRequested, .. } => {
                 app.draw_frame();
             },
-            Event::LoopDestroyed => {
+            Event::LoopExiting => {
                 app.shutdown();
             },
             event => {
                 app.platform.handle_event(app.imgui.io_mut(), &app.window, &event);
             }
         }
-    });
+    })
 }
 
 fn main() {
     // create app
-    let event_loop: EventLoop<()> = EventLoop::new();
+    let event_loop: EventLoop<()> = EventLoop::new().expect("Couldn't create EventLoop");
     let app = WindowedVulkanApp::new(&event_loop, "Examples", 1200, 800);
     // let exit = app.run(event_loop);
     run(app, event_loop);
