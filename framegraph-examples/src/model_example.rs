@@ -14,13 +14,25 @@ use context::api_types::device::{DeviceResource, DeviceWrapper};
 use framegraph::attachment::AttachmentReference;
 use framegraph::pass_type::PassType;
 use once_cell::sync::Lazy;
+use context::vulkan_render_context::VulkanRenderContext;
+use framegraph::graphics_pass_node::GraphicsPassNode;
+use framegraph::shader::Shader;
+use util::camera::Camera;
+use glm;
+use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ResourceBinding};
+use framegraph::shader;
 use crate::example::Example;
-use crate::ubo_example::UBO;
 
 pub struct GltfModel {
     document: gltf::Document,
     buffers: Vec<gltf::buffer::Data>,
     images: Vec<gltf::image::Data>
+}
+
+struct MVP {
+    model: glm::TMat4<f32>,
+    view: glm::TMat4<f32>,
+    proj: glm::TMat4<f32>
 }
 
 pub struct RenderMesh {
@@ -99,6 +111,9 @@ pub fn get_vk_format(data_type: DataType, dimensions: Dimensions) -> vk::Format 
 }
 
 pub struct ModelExample {
+    vertex_shader: Rc<RefCell<Shader>>,
+    fragment_shader: Rc<RefCell<Shader>>,
+    camera: Camera,
     duck_model: GltfModel,
     render_mesh: RenderMesh
 }
@@ -108,8 +123,73 @@ impl Example for ModelExample {
         "Model Render"
     }
 
-    fn execute(&self, imgui_ui: &mut Ui, back_buffer: AttachmentReference) -> Vec<PassType> {
-        Vec::new()
+    fn execute(&self, device: Rc<RefCell<DeviceWrapper>>, imgui_ui: &mut Ui, back_buffer: AttachmentReference) -> Vec<PassType> {
+        let mut passes: Vec<PassType> = Vec::new();
+
+        // create UBO for MVP
+        let mvp_buffer = {
+            let create_info = BufferCreateInfo::new(
+                vk::BufferCreateInfo::builder()
+                    .size(std::mem::size_of::<MVP>() as vk::DeviceSize)
+                    .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
+                    .build(),
+                "MVP_buffer".to_string()
+            );
+            let buffer = DeviceWrapper::create_buffer(
+                device.clone(),
+                &create_info,
+                MemoryLocation::CpuToGpu
+            );
+
+            device.borrow().update_buffer(&buffer, |mapped_memory: *mut c_void, _size: u64| {
+                let mvp = MVP {
+                    model: Default::default(),
+                    view: Default::default(),
+                    proj: Default::default(),
+                };
+
+                unsafe {
+                    core::ptr::copy_nonoverlapping(
+                        &mvp,
+                        mapped_memory as *mut MVP,
+                        std::mem::size_of::<MVP>()
+                    );
+                }
+            });
+
+            Rc::new(RefCell::new(buffer))
+        };
+
+        let mvp_binding = ResourceBinding {
+            resource: mvp_buffer.clone(),
+            binding_info: BindingInfo {
+                binding_type: BindingType::Buffer(BufferBindingInfo{
+                    offset: 0,
+                    range: std::mem::size_of::<MVP>() as vk::DeviceSize,
+                }),
+                set: 0,
+                slot: 0,
+                stage: vk::PipelineStageFlags::VERTEX_SHADER,
+                access: vk::AccessFlags::SHADER_READ,
+            }
+        };
+
+        let passnode = GraphicsPassNode::builder("model_render".to_string())
+            // .pipeline_description()
+            .read(mvp_binding)
+            .render_target(back_buffer)
+            .fill_commands(Box::new(
+                move | render_ctx: &VulkanRenderContext,
+                command_buffer: &vk::CommandBuffer | {
+                    println!("Rendering glTF model");
+                }
+            ))
+            .build()
+            .expect("Failed to create glTF Model pass");
+
+        passes.push(PassType::Graphics(passnode));
+
+        passes
     }
 }
 
@@ -272,7 +352,25 @@ impl ModelExample {
             }
         }
 
+        let camera = Camera::new(
+            1.5,
+            0.66,
+            1.0,
+            10000.0,
+            &glm::Vec3::new(0.0, 0.0, 0.0),
+            &glm::Vec3::new(0.0, 0.0, 1.0),
+            &glm::Vec3::new(0.0, 1.0, 0.0)
+        );
+
+        let vert_shader = Rc::new(RefCell::new(
+            shader::create_shader_module_from_bytes(device.clone(), "model-vert", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-vert.spv")))));
+        let frag_shader = Rc::new(RefCell::new(
+            shader::create_shader_module_from_bytes(device.clone(), "model-frag", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-frag.spv")))));
+
         ModelExample{
+            vertex_shader: vert_shader,
+            fragment_shader: frag_shader,
+            camera: camera,
             duck_model: duck_gltf,
             render_mesh: RenderMesh {
                 vertex_buffer: Rc::new(RefCell::new(vbo.expect("No VBO created"))),
