@@ -375,3 +375,7 @@ Will need to add a DeviceDescriptorSet type to handle this via RAII
 Maybe should double-buffer the descriptor pool?
 
 Definitely shouldn't be allocating descriptor sets per node, can we do this once per frame instead?
+
+09 March 2024
+Need to add camera for the glTF Model Example
+Should probably create a new crate for this

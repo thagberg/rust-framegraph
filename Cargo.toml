@@ -4,5 +4,6 @@ members = [
     "context",
     "framegraph",
     "passes",
+    "util",
     "framegraph-examples"
 ]

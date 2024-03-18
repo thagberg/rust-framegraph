@@ -3,6 +3,7 @@ mod example;
 mod model_example;
 
 extern crate alloc;
+extern crate nalgebra_glm as glm;
 
 //use alloc::ffi::CString;
 use std::ffi::CString;
@@ -280,7 +281,10 @@ impl WindowedVulkanApp {
 
             if let Some(index) = self.examples.active_example_index {
                 if let Some(active_example) = self.examples.examples.get(index) {
-                    let nodes = active_example.execute(ui, rt_ref.clone());
+                    let nodes = active_example.execute(
+                        self.render_context.get_device(),
+                        ui,
+                        rt_ref.clone());
                     for node in nodes {
                         current_frame.add_node(node);
                     }
