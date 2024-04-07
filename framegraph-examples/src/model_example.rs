@@ -23,6 +23,12 @@ use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ResourceB
 use framegraph::shader;
 use crate::example::Example;
 
+struct Vert {
+    pub pos: glm::Vec3,
+    pub normal: glm::Vec3,
+    pub uv: glm::Vec2
+}
+
 pub struct GltfModel {
     document: gltf::Document,
     buffers: Vec<gltf::buffer::Data>,
@@ -35,10 +41,17 @@ struct MVP {
     proj: glm::TMat4<f32>
 }
 
+const VERTEX_BINDING:  vk::VertexInputBindingDescription = vk::VertexInputBindingDescription {
+    binding: 0,
+    stride: std::mem::size_of::<Vert>() as u32,
+    input_rate: vk::VertexInputRate::VERTEX,
+};
+
 pub struct RenderMesh {
     vertex_buffer: Rc<RefCell<DeviceResource>>,
-    index_buffer: Option<Rc<RefCell<DeviceResource>>>
-
+    index_buffer: Option<Rc<RefCell<DeviceResource>>>,
+    vertex_binding: vk::VertexInputBindingDescription,
+    vertex_attributes: [vk::VertexInputAttributeDescription; 3]
 }
 
 #[derive(Eq, PartialEq, Hash)]
@@ -109,6 +122,7 @@ pub fn get_vk_format(data_type: DataType, dimensions: Dimensions) -> vk::Format 
     };
     result
 }
+
 
 pub struct ModelExample {
     vertex_shader: Rc<RefCell<Shader>>,
@@ -375,6 +389,29 @@ impl ModelExample {
             render_mesh: RenderMesh {
                 vertex_buffer: Rc::new(RefCell::new(vbo.expect("No VBO created"))),
                 index_buffer: ibo,
+                vertex_binding: VERTEX_BINDING,
+                vertex_attributes: [
+                    vk::VertexInputAttributeDescription {
+                        location: 0,
+                        binding: 0,
+                        format: vk::Format::R32G32B32_SFLOAT,
+                        offset: 0,
+                    },
+
+                    vk::VertexInputAttributeDescription {
+                        location: 1,
+                        binding: 0,
+                        format: vk::Format::R32G32B32_SFLOAT,
+                        offset: 0,
+                    },
+
+                    vk::VertexInputAttributeDescription {
+                        location: 2,
+                        binding: 0,
+                        format: Default::default(),
+                        offset: 0,
+                    }
+                ],
             }
         }
     }
