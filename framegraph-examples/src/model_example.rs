@@ -41,6 +41,12 @@ struct MVP {
     proj: glm::TMat4<f32>
 }
 
+static ATTRIBUTE_LOOKUP: Lazy<HashMap<gltf::mesh::Semantic, u32>> = Lazy::new(|| HashMap::from([
+    (gltf::mesh::Semantic::Positions, 0),
+    (gltf::mesh::Semantic::Normals, 1),
+    (gltf::mesh::Semantic::TexCoords(0), 2)
+]));
+
 const VERTEX_BINDING:  vk::VertexInputBindingDescription = vk::VertexInputBindingDescription {
     binding: 0,
     stride: std::mem::size_of::<Vert>() as u32,
@@ -48,10 +54,11 @@ const VERTEX_BINDING:  vk::VertexInputBindingDescription = vk::VertexInputBindin
 };
 
 pub struct RenderMesh {
+    // TODO: add primitive topology (also need to support this in pipeline.rs)
     vertex_buffer: Rc<RefCell<DeviceResource>>,
     index_buffer: Option<Rc<RefCell<DeviceResource>>>,
     vertex_binding: vk::VertexInputBindingDescription,
-    vertex_attributes: [vk::VertexInputAttributeDescription; 3]
+    vertex_attributes: Vec<vk::VertexInputAttributeDescription>
 }
 
 #[derive(Eq, PartialEq, Hash)]
@@ -129,7 +136,7 @@ pub struct ModelExample {
     fragment_shader: Rc<RefCell<Shader>>,
     camera: Camera,
     duck_model: GltfModel,
-    render_mesh: RenderMesh
+    render_meshes: Vec<RenderMesh>
 }
 
 impl Example for ModelExample {
@@ -230,11 +237,12 @@ impl ModelExample {
         //  * buffer bindings
         //  * image bindings
         // each node could be a separate object in the scene
-        let mut vbo: Option<DeviceResource> = None;
-        let mut ibo: Option<Rc<RefCell<DeviceResource>>> = None;
+        let mut meshes: Vec<RenderMesh> = Vec::new();
         for node in duck_gltf.document.nodes() {
             if let Some(mesh) = node.mesh() {
                 for (i, primitive) in mesh.primitives().enumerate() {
+                    let mut ibo: Option<Rc<RefCell<DeviceResource>>> = None;
+
                     let primitive_name = {
                         if let Some(mesh_name) = mesh.name() {
                             format!("{}_{}", mesh_name, i)
@@ -283,32 +291,28 @@ impl ModelExample {
                     let mut vertex_size = 0usize;
                     let mut vertex_attributes: Vec<vk::VertexInputAttributeDescription> = Vec::new();
                     // need to do an initial pass over attributes to calculate total VBO size and vertex size
-                    for (_, attribute_accessor) in primitive.attributes() {
-                        vertex_data_size += attribute_accessor.count() * attribute_accessor.size();
-                        let offset = vertex_size; // TODO: probably need to deal with alignment here
-                        vertex_size += attribute_accessor.size();
-                        // attribute_accessor.data_type()
+                    for (semantic, attribute_accessor) in primitive.attributes() {
+                        if let Some(found_location) = ATTRIBUTE_LOOKUP.get(&semantic) {
+                            vertex_data_size += attribute_accessor.count() * attribute_accessor.size();
+                            let offset = vertex_size; // TODO: probably need to deal with alignment here
+                            vertex_size += attribute_accessor.size();
+                            // attribute_accessor.data_type()
 
-                        // create a vertex input attribute per primitive attribute
-                        let format = get_vk_format(attribute_accessor.data_type(), attribute_accessor.dimensions());
-                        vertex_attributes.push(
-                        vk::VertexInputAttributeDescription::builder()
-                            .format(format)
-                            .binding(0) // TODO: assuming a single vertex buffer currently
-                            .location(attribute_accessor.index() as u32) // TODO: should match this to shader via reflection instead?
-                            .offset(offset as u32)
-                            .build()
-                        );
+                            // create a vertex input attribute per primitive attribute
+                            let format = get_vk_format(attribute_accessor.data_type(), attribute_accessor.dimensions());
+                            vertex_attributes.push(
+                                vk::VertexInputAttributeDescription::builder()
+                                    .format(format)
+                                    .binding(0) // TODO: assuming a single vertex buffer currently
+                                    .location(*found_location)
+                                    .offset(offset as u32)
+                                    .build()
+                            );
+                        }
                     }
 
-                    let vertex_binding = vk::VertexInputBindingDescription::builder()
-                        .binding(0)
-                        .input_rate(vk::VertexInputRate::VERTEX)
-                        .stride(vertex_size as u32)
-                        .build();
-
                     // create vertex buffer
-                    vbo = {
+                    let vbo = {
                         let vbo_create = BufferCreateInfo::new(
                             vk::BufferCreateInfo::builder()
                                 .size(vertex_data_size as vk::DeviceSize)
@@ -317,15 +321,15 @@ impl ModelExample {
                                 .build(),
                             primitive_name.clone()
                         );
-                        Some(DeviceWrapper::create_buffer(
+                        DeviceWrapper::create_buffer(
                             device.clone(),
                             &vbo_create,
                             MemoryLocation::CpuToGpu
-                        ))
+                        )
                     };
 
                     // iterate over attributes again and copy them from mesh buffers into the VBO
-                    device.borrow().update_buffer(vbo.as_ref().unwrap(), |mapped_memory: *mut c_void, _size: u64| {
+                    device.borrow().update_buffer(&vbo, |mapped_memory: *mut c_void, _size: u64| {
                         unsafe {
                             let mut vertex_offset = 0;
                             for (semantic, attribute_accessor) in primitive.attributes() {
@@ -362,6 +366,14 @@ impl ModelExample {
                             }
                         }
                     });
+
+                    let render_mesh = RenderMesh {
+                        vertex_buffer: Rc::new(RefCell::new(vbo)),
+                        index_buffer: ibo,
+                        vertex_binding: Default::default(),
+                        vertex_attributes
+                    };
+                    meshes.push(render_mesh);
                 }
             }
         }
@@ -384,38 +396,9 @@ impl ModelExample {
         ModelExample{
             vertex_shader: vert_shader,
             fragment_shader: frag_shader,
-            camera: camera,
+            camera,
             duck_model: duck_gltf,
-            render_mesh: RenderMesh {
-                vertex_buffer: Rc::new(RefCell::new(vbo.expect("No VBO created"))),
-                index_buffer: ibo,
-                vertex_binding: VERTEX_BINDING,
-                vertex_attributes: [
-                    // position
-                    vk::VertexInputAttributeDescription {
-                        location: 0,
-                        binding: 0,
-                        format: vk::Format::R32G32B32_SFLOAT,
-                        offset: 0,
-                    },
-
-                    // normal
-                    vk::VertexInputAttributeDescription {
-                        location: 1,
-                        binding: 0,
-                        format: vk::Format::R32G32B32_SFLOAT,
-                        offset: 12,
-                    },
-
-                    // UV
-                    vk::VertexInputAttributeDescription {
-                        location: 2,
-                        binding: 0,
-                        format: vk::Format::R8G8B8_SNORM,
-                        offset: 12 + 12,
-                    }
-                ],
-            }
+            render_meshes: meshes
         }
     }
 }
