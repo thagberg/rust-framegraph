@@ -391,6 +391,7 @@ impl ModelExample {
                 index_buffer: ibo,
                 vertex_binding: VERTEX_BINDING,
                 vertex_attributes: [
+                    // position
                     vk::VertexInputAttributeDescription {
                         location: 0,
                         binding: 0,
@@ -398,18 +399,20 @@ impl ModelExample {
                         offset: 0,
                     },
 
+                    // normal
                     vk::VertexInputAttributeDescription {
                         location: 1,
                         binding: 0,
                         format: vk::Format::R32G32B32_SFLOAT,
-                        offset: 0,
+                        offset: 12,
                     },
 
+                    // UV
                     vk::VertexInputAttributeDescription {
                         location: 2,
                         binding: 0,
-                        format: Default::default(),
-                        offset: 0,
+                        format: vk::Format::R8G8B8_SNORM,
+                        offset: 12 + 12,
                     }
                 ],
             }
