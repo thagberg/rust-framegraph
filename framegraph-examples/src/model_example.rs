@@ -173,7 +173,7 @@ impl Example for ModelExample {
                     core::ptr::copy_nonoverlapping(
                         &mvp,
                         mapped_memory as *mut MVP,
-                        std::mem::size_of::<MVP>()
+                        1
                     );
                 }
             });
@@ -292,6 +292,7 @@ impl ModelExample {
                     let mut vertex_attributes: Vec<vk::VertexInputAttributeDescription> = Vec::new();
                     // need to do an initial pass over attributes to calculate total VBO size and vertex size
                     for (semantic, attribute_accessor) in primitive.attributes() {
+                        // only keep attributes which are used in the renderer
                         if let Some(found_location) = ATTRIBUTE_LOOKUP.get(&semantic) {
                             vertex_data_size += attribute_accessor.count() * attribute_accessor.size();
                             let offset = vertex_size; // TODO: probably need to deal with alignment here
@@ -389,9 +390,15 @@ impl ModelExample {
         );
 
         let vert_shader = Rc::new(RefCell::new(
-            shader::create_shader_module_from_bytes(device.clone(), "model-vert", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-vert.spv")))));
+            shader::create_shader_module_from_bytes(
+                device.clone(),
+                "model-vert",
+                include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-vert.spv")))));
         let frag_shader = Rc::new(RefCell::new(
-            shader::create_shader_module_from_bytes(device.clone(), "model-frag", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-frag.spv")))));
+            shader::create_shader_module_from_bytes(
+                device.clone(),
+                "model-frag",
+                include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-frag.spv")))));
 
         ModelExample{
             vertex_shader: vert_shader,
