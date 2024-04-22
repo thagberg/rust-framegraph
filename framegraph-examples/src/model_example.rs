@@ -20,6 +20,7 @@ use framegraph::shader::Shader;
 use util::camera::Camera;
 use glm;
 use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ResourceBinding};
+use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
 use framegraph::shader;
 use crate::example::Example;
 
@@ -195,20 +196,38 @@ impl Example for ModelExample {
             }
         };
 
-        let passnode = GraphicsPassNode::builder("model_render".to_string())
-            // .pipeline_description()
-            .read(mvp_binding)
-            .render_target(back_buffer)
-            .fill_commands(Box::new(
-                move | render_ctx: &VulkanRenderContext,
-                command_buffer: &vk::CommandBuffer | {
-                    println!("Rendering glTF model");
-                }
-            ))
-            .build()
-            .expect("Failed to create glTF Model pass");
+        for render_mesh in &self.render_meshes {
+            let dynamic_states = vec!(vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR);
+            let vertex_input = vk::PipelineVertexInputStateCreateInfo::builder()
+                .vertex_binding_descriptions(std::slice::from_ref(&render_mesh.vertex_binding))
+                .vertex_attribute_descriptions(&render_mesh.vertex_attributes)
+                .build();
 
-        passes.push(PassType::Graphics(passnode));
+            let pipeline_description = PipelineDescription::new(
+                vertex_input,
+                dynamic_states,
+                RasterizationType::Standard,
+                DepthStencilType::Disable,
+                BlendType::None,
+                "",
+                self.vertex_shader.clone(),
+                self.fragment_shader.clone());
+
+            let passnode = GraphicsPassNode::builder("model_render".to_string())
+                .pipeline_description(pipeline_description)
+                .read(mvp_binding.clone())
+                .render_target(back_buffer.clone())
+                .fill_commands(Box::new(
+                    move | render_ctx: &VulkanRenderContext,
+                           command_buffer: &vk::CommandBuffer | {
+                        println!("Rendering glTF model");
+                    }
+                ))
+                .build()
+                .expect("Failed to create glTF Model pass");
+
+            passes.push(PassType::Graphics(passnode));
+        }
 
         passes
     }
