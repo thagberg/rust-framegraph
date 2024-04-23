@@ -10,7 +10,7 @@ use gltf::accessor::{DataType, Dimensions};
 use gpu_allocator::MemoryLocation;
 use image::error::UnsupportedErrorKind::Format;
 use context::api_types::buffer::{BufferCreateInfo, BufferWrapper};
-use context::api_types::device::{DeviceResource, DeviceWrapper};
+use context::api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
 use framegraph::attachment::AttachmentReference;
 use framegraph::pass_type::PassType;
 use once_cell::sync::Lazy;
@@ -19,6 +19,7 @@ use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::shader::Shader;
 use util::camera::Camera;
 use glm;
+use context::render_context::RenderContext;
 use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ResourceBinding};
 use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
 use framegraph::shader;
@@ -58,6 +59,7 @@ pub struct RenderMesh {
     // TODO: add primitive topology (also need to support this in pipeline.rs)
     vertex_buffer: Rc<RefCell<DeviceResource>>,
     index_buffer: Option<Rc<RefCell<DeviceResource>>>,
+    num_indices: usize,
     vertex_binding: vk::VertexInputBindingDescription,
     vertex_attributes: Vec<vk::VertexInputAttributeDescription>
 }
@@ -209,24 +211,91 @@ impl Example for ModelExample {
                 RasterizationType::Standard,
                 DepthStencilType::Disable,
                 BlendType::None,
-                "",
+                "gltf-model-draw",
                 self.vertex_shader.clone(),
                 self.fragment_shader.clone());
 
-            let passnode = GraphicsPassNode::builder("model_render".to_string())
-                .pipeline_description(pipeline_description)
-                .read(mvp_binding.clone())
-                .render_target(back_buffer.clone())
-                .fill_commands(Box::new(
-                    move | render_ctx: &VulkanRenderContext,
-                           command_buffer: &vk::CommandBuffer | {
-                        println!("Rendering glTF model");
-                    }
-                ))
-                .build()
-                .expect("Failed to create glTF Model pass");
+            let (viewport, scissor) = {
+                let extent = back_buffer.resource_image.borrow().get_image().extent;
+                let v = vk::Viewport::builder()
+                    .x(0.0)
+                    .y(0.0)
+                    .width(extent.width as f32)
+                    .height(extent.height as f32)
+                    .min_depth(0.0)
+                    .max_depth(1.0)
+                    .build();
 
-            passes.push(PassType::Graphics(passnode));
+                let s = vk::Rect2D::builder()
+                    .offset(vk::Offset2D{x: 0, y: 0})
+                    .extent(vk::Extent2D{width: extent.width, height: extent.height})
+                    .build();
+
+                (v, s)
+            };
+
+            if let Some(ibo_ref) = &render_mesh.index_buffer {
+                let ibo = ibo_ref.clone();
+                let vbo = render_mesh.vertex_buffer.clone();
+                let idx_length = render_mesh.num_indices;
+                let passnode = GraphicsPassNode::builder("model_render".to_string())
+                    .pipeline_description(pipeline_description)
+                    .render_target(back_buffer.clone())
+                    .read(mvp_binding.clone())
+                    .tag(render_mesh.vertex_buffer.clone())
+                    .tag(ibo.clone())
+                    .viewport(viewport)
+                    .scissor(scissor)
+                    .fill_commands(Box::new(
+                        move | render_ctx: &VulkanRenderContext,
+                               command_buffer: &vk::CommandBuffer | {
+                            println!("Rendering glTF model");
+
+                            unsafe {
+                                // set vertex buffer
+                                {
+                                    if let ResourceType::Buffer(vb) = vbo.borrow().resource_type.as_ref().unwrap() {
+                                        render_ctx.get_device().borrow().get().cmd_bind_vertex_buffers(
+                                            *command_buffer,
+                                            0,
+                                            &[vb.buffer],
+                                            &[0 as vk::DeviceSize]
+                                        );
+                                    } else {
+                                        panic!("Invalid vertex buffer for gltf draw");
+                                    }
+                                }
+
+                                // set index buffer
+                                {
+                                    if let ResourceType::Buffer(ib) = ibo.borrow().resource_type.as_ref().unwrap() {
+                                        render_ctx.get_device().borrow().get().cmd_bind_index_buffer(
+                                            *command_buffer,
+                                            ib.buffer,
+                                            0 as vk::DeviceSize,
+                                            vk::IndexType::UINT16
+                                        );
+                                    } else {
+                                        panic!("Invalid index buffer for gltf draw");
+                                    }
+                                }
+
+                                render_ctx.get_device().borrow().get().cmd_draw_indexed(
+                                    *command_buffer,
+                                    idx_length as u32,
+                                    1,
+                                    0,
+                                    0,
+                                    0
+                                );
+                            }
+                        }
+                    ))
+                    .build()
+                    .expect("Failed to create glTF Model pass");
+
+                passes.push(PassType::Graphics(passnode));
+            }
         }
 
         passes
@@ -271,8 +340,10 @@ impl ModelExample {
                     };
 
                     let mode = primitive.mode();
+                    let mut num_indices = 0;
                     if let Some(indices_accessor) = primitive.indices() {
                         // * create GPU index buffer
+                        num_indices = indices_accessor.count();
                         let ibo_size = indices_accessor.count() * indices_accessor.size();
                         indices_accessor.data_type();
                         ibo = Some({
@@ -390,7 +461,8 @@ impl ModelExample {
                     let render_mesh = RenderMesh {
                         vertex_buffer: Rc::new(RefCell::new(vbo)),
                         index_buffer: ibo,
-                        vertex_binding: Default::default(),
+                        num_indices,
+                        vertex_binding: VERTEX_BINDING,
                         vertex_attributes
                     };
                     meshes.push(render_mesh);
@@ -412,12 +484,12 @@ impl ModelExample {
             shader::create_shader_module_from_bytes(
                 device.clone(),
                 "model-vert",
-                include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-vert.spv")))));
+                include_bytes!(concat!(env!("OUT_DIR"), "/shaders/model-vert.spv")))));
         let frag_shader = Rc::new(RefCell::new(
             shader::create_shader_module_from_bytes(
                 device.clone(),
                 "model-frag",
-                include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-frag.spv")))));
+                include_bytes!(concat!(env!("OUT_DIR"), "/shaders/model-frag.spv")))));
 
         ModelExample{
             vertex_shader: vert_shader,
