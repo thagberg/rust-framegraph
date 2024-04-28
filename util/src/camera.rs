@@ -1,7 +1,7 @@
 use glm;
 pub struct Camera {
-    projection: glm::TMat4<f32>,
-    view: glm::TMat4<f32>
+    pub projection: glm::TMat4<f32>,
+    pub view: glm::TMat4<f32>
 }
 
 impl Camera {

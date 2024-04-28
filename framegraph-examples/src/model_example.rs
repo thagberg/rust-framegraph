@@ -167,9 +167,9 @@ impl Example for ModelExample {
 
             device.borrow().update_buffer(&buffer, |mapped_memory: *mut c_void, _size: u64| {
                 let mvp = MVP {
-                    model: Default::default(),
-                    view: Default::default(),
-                    proj: Default::default(),
+                    model: glm::identity(),
+                    view: self.camera.view.clone(),
+                    proj: self.camera.projection.clone(),
                 };
 
                 unsafe {
@@ -344,7 +344,8 @@ impl ModelExample {
                     if let Some(indices_accessor) = primitive.indices() {
                         // * create GPU index buffer
                         num_indices = indices_accessor.count();
-                        let ibo_size = indices_accessor.count() * indices_accessor.size();
+                        let index_size = indices_accessor.size();
+                        let ibo_size = indices_accessor.count() * index_size;
                         indices_accessor.data_type();
                         ibo = Some({
                             let ibo_create = BufferCreateInfo::new(
@@ -369,10 +370,11 @@ impl ModelExample {
                                 let view = indices_accessor.view().expect("Failed to get view for index buffer");
                                 let buffer_data = duck_gltf.buffers.get(view.buffer().index())
                                     .expect("Failed to get buffer data for index buffer");
+                                let source_offset = view.offset() + indices_accessor.offset();
                                 core::ptr::copy_nonoverlapping(
-                                    buffer_data.0.as_ptr(),
+                                    buffer_data.0.as_ptr().byte_add(source_offset),
                                     mapped_memory as *mut u8,
-                                    1);
+                                    ibo_size);
                             }
                         });
                     }
@@ -445,9 +447,9 @@ impl ModelExample {
                                     // dest_offset will increment by the vertex size (attributes are interleaved in the dest buffer)
 
                                     core::ptr::copy_nonoverlapping(
-                                        buffer_data.0.as_ptr().add(source_offset),
-                                        mapped_memory as *mut u8,
-                                        1);
+                                        buffer_data.0.as_ptr().byte_add(source_offset),
+                                        mapped_memory.byte_add(dest_offset) as *mut u8,
+                                        attribute_accessor.size());
 
                                     source_offset += stride;
                                     dest_offset += vertex_size;
