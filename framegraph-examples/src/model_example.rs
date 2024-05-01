@@ -166,8 +166,10 @@ impl Example for ModelExample {
             );
 
             device.borrow().update_buffer(&buffer, |mapped_memory: *mut c_void, _size: u64| {
+                let mut model = glm::scale(&glm::identity(), &glm::vec3(0.1, 0.1, 0.1));
+                model = glm::translate(&model, &glm::vec3(0.0, 0.0, 1000.0));
                 let mvp = MVP {
-                    model: glm::identity(),
+                    model,
                     view: self.camera.view.clone(),
                     proj: self.camera.projection.clone(),
                 };
