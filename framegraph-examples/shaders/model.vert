@@ -23,5 +23,5 @@ void main() {
     Out.uv = uv;
     Out.normal = normal;
     Out.color = vec4(1.0, 0.0, 0.0, 1.0);
-    gl_Position = model.proj * model.view * vec4(position, 1.0);
+    gl_Position = model.proj * model.view * model.model * vec4(position, 1.0);
 }
