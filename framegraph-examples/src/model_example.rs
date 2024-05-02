@@ -139,7 +139,8 @@ pub struct ModelExample {
     fragment_shader: Rc<RefCell<Shader>>,
     camera: Camera,
     duck_model: GltfModel,
-    render_meshes: Vec<RenderMesh>
+    render_meshes: Vec<RenderMesh>,
+    mvp_buffer: Rc<RefCell<DeviceResource>>
 }
 
 impl Example for ModelExample {
@@ -150,44 +151,8 @@ impl Example for ModelExample {
     fn execute(&self, device: Rc<RefCell<DeviceWrapper>>, imgui_ui: &mut Ui, back_buffer: AttachmentReference) -> Vec<PassType> {
         let mut passes: Vec<PassType> = Vec::new();
 
-        // create UBO for MVP
-        let mvp_buffer = {
-            let create_info = BufferCreateInfo::new(
-                vk::BufferCreateInfo::builder()
-                    .size(std::mem::size_of::<MVP>() as vk::DeviceSize)
-                    .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
-                    .build(),
-                "MVP_buffer".to_string()
-            );
-            let buffer = DeviceWrapper::create_buffer(
-                device.clone(),
-                &create_info,
-                MemoryLocation::CpuToGpu
-            );
-
-            device.borrow().update_buffer(&buffer, |mapped_memory: *mut c_void, _size: u64| {
-                let mut model = glm::scale(&glm::identity(), &glm::vec3(0.1, 0.1, 0.1));
-                model = glm::translate(&model, &glm::vec3(0.0, 0.0, 1000.0));
-                let mvp = MVP {
-                    model,
-                    view: self.camera.view.clone(),
-                    proj: self.camera.projection.clone(),
-                };
-
-                unsafe {
-                    core::ptr::copy_nonoverlapping(
-                        &mvp,
-                        mapped_memory as *mut MVP,
-                        1
-                    );
-                }
-            });
-
-            Rc::new(RefCell::new(buffer))
-        };
-
         let mvp_binding = ResourceBinding {
-            resource: mvp_buffer.clone(),
+            resource: self.mvp_buffer.clone(),
             binding_info: BindingInfo {
                 binding_type: BindingType::Buffer(BufferBindingInfo{
                     offset: 0,
@@ -484,6 +449,43 @@ impl ModelExample {
             &glm::Vec3::new(0.0, 1.0, 0.0)
         );
 
+        // create UBO for MVP
+        let mvp_buffer = {
+            let create_info = BufferCreateInfo::new(
+                vk::BufferCreateInfo::builder()
+                    .size(std::mem::size_of::<MVP>() as vk::DeviceSize)
+                    .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
+                    .build(),
+                "MVP_buffer".to_string()
+            );
+            let buffer = DeviceWrapper::create_buffer(
+                device.clone(),
+                &create_info,
+                MemoryLocation::CpuToGpu
+            );
+
+            device.borrow().update_buffer(&buffer, |mapped_memory: *mut c_void, _size: u64| {
+                let mut model = glm::scale(&glm::identity(), &glm::vec3(0.1, 0.1, 0.1));
+                model = glm::translate(&model, &glm::vec3(0.0, 0.0, 1000.0));
+                let mvp = MVP {
+                    model,
+                    view: camera.view.clone(),
+                    proj: camera.projection.clone(),
+                };
+
+                unsafe {
+                    core::ptr::copy_nonoverlapping(
+                        &mvp,
+                        mapped_memory as *mut MVP,
+                        1
+                    );
+                }
+            });
+
+            Rc::new(RefCell::new(buffer))
+        };
+
+
         let vert_shader = Rc::new(RefCell::new(
             shader::create_shader_module_from_bytes(
                 device.clone(),
@@ -500,7 +502,8 @@ impl ModelExample {
             fragment_shader: frag_shader,
             camera,
             duck_model: duck_gltf,
-            render_meshes: meshes
+            render_meshes: meshes,
+            mvp_buffer
         }
     }
 }
