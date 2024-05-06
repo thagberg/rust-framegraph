@@ -1,6 +1,8 @@
 extern crate petgraph;
 
 use std::cell::RefCell;
+use log::trace;
+
 use petgraph::stable_graph::{NodeIndex, StableDiGraph};
 extern crate multimap;
 use multimap::MultiMap;
@@ -329,7 +331,7 @@ impl VulkanFrameGraph {
                     // DFS requires we order nodes as input -> output, but for sorting we want output -> input
                     sorted_list.reverse();
                     for i in &sorted_list {
-                        println!("Node: {:?}", nodes.node_weight(*i).unwrap().get_name());
+                        log::trace!(target: "framegraph", "Sorted node: {:?}", nodes.node_weight(*i).unwrap().get_name())
                     }
                     sorted_nodes = sorted_list;
                 },
@@ -904,6 +906,10 @@ impl FrameGraph for VulkanFrameGraph {
                 }
 
                 // prepare pipeline for execution (node's fill callback)
+                {
+                    let node_name = node.get_name();
+                    trace!(target: "framegraph", "Executing node: {node_name}");
+                }
                 match node {
                     PassType::Graphics(graphics_node) => {
                         self.execute_graphics_node(&mut frame.descriptor_sets, frame.descriptor_pool, render_context, command_buffer, graphics_node);

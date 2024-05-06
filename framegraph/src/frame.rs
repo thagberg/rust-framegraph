@@ -25,7 +25,7 @@ pub struct Frame {
 
 impl Drop for Frame {
     fn drop(&mut self) {
-        println!("Dropping Frame");
+        log::trace!(target: "frame", "Dropping frame");
         unsafe {
             self.device.borrow().get().free_descriptor_sets(
                 self.descriptor_pool,
