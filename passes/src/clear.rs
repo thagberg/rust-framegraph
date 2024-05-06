@@ -27,9 +27,6 @@ pub fn clear_color(
         .fill_commands(Box::new(
             move |render_ctx: &VulkanRenderContext,
                   command_buffer: &vk::CommandBuffer | {
-
-                println!("Clearing color target");
-
                 let range = vk::ImageSubresourceRange::builder()
                     .aspect_mask(vk::ImageAspectFlags::COLOR)
                     .level_count(1)

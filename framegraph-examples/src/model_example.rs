@@ -2,6 +2,8 @@ use alloc::rc::Rc;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::c_void;
+use log::debug;
+
 use ash::vk;
 use ash::vk::BufferDeviceAddressCreateInfoEXT;
 use imgui::Ui;
@@ -251,8 +253,6 @@ impl Example for ModelExample {
                     .fill_commands(Box::new(
                         move | render_ctx: &VulkanRenderContext,
                                command_buffer: &vk::CommandBuffer | {
-                            println!("Rendering glTF model");
-
                             unsafe {
                                 // set vertex buffer
                                 {

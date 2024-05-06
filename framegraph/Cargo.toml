@@ -10,3 +10,4 @@ multimap        = "^0.8.0"
 gpu-allocator   = "^0.25"
 spirv-reflect   = "^0.2"
 context         =  {path="../context"}
+log             = "0.4.21"

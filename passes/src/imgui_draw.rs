@@ -458,8 +458,6 @@ impl ImguiRender {
                 .fill_commands(Box::new(
                     move |render_ctx: &VulkanRenderContext,
                           command_buffer: &vk::CommandBuffer | {
-                        println!("Rendering Imgui drawlists");
-
                         unsafe {
                             // set vertex buffer
                             {

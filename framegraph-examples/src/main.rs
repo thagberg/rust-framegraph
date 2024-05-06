@@ -10,6 +10,8 @@ use std::ffi::CString;
 use std::time::Instant;
 use ash::vk;
 
+use simple_logger::SimpleLogger;
+
 use winit;
 use winit::window::{Window, WindowBuilder};
 use winit::event::{Event, WindowEvent};
@@ -72,6 +74,8 @@ struct WindowedVulkanApp {
 
 impl WindowedVulkanApp {
     pub fn new(event_loop: &EventLoop<()>, title: &str, width: u32, height: u32) -> WindowedVulkanApp {
+        SimpleLogger::new().init().unwrap();
+
         let window = WindowBuilder::new()
             .with_title(title)
             // .with_inner_size(winit::dpi::LogicalSize::new(width, height))
@@ -198,7 +202,7 @@ impl WindowedVulkanApp {
     }
 
     pub fn draw_frame(&mut self) {
-        println!("New frame");
+        log::trace!(target: "frame", "Drawing new frame");
         // wait for fence if necessary (can we avoid this using just semaphores?)
         let wait_fence = self.frame_fences[self.frame_index as usize];
         unsafe {

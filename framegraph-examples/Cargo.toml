@@ -18,6 +18,8 @@ passes              = {path="../passes"}
 util                = {path="../util"}
 glam                = "0.21.2"
 gpu-allocator       = "^0.25"
+log                 = "0.4.21"
+simple_logger       = "5.0.0"
 
 # released versions of imgui-winit-support use an older version of winit which
 # incorrectly fires a window resize event when a window is initialized on macOS
