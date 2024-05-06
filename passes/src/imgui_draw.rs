@@ -60,7 +60,8 @@ pub struct DisplayBuffer {
 pub struct ImguiRender {
     vertex_shader: Rc<RefCell<Shader>>,
     fragment_shader: Rc<RefCell<Shader>>,
-    font_texture: Rc<RefCell<DeviceResource>>
+    font_texture: Rc<RefCell<DeviceResource>>,
+    display_buffer: Rc<RefCell<DeviceResource>>
 }
 
 impl Drop for ImguiRender {
@@ -280,10 +281,27 @@ impl ImguiRender {
                 .expect("Error while waiting for font buffer -> image copy operation to complete");
         }
 
+        // display data (scale and pos) is shared for all draw lists
+        let display_buffer = {
+            let display_create_info = BufferCreateInfo::new(
+                vk::BufferCreateInfo::builder()
+                    .size(std::mem::size_of::<DisplayBuffer>() as vk::DeviceSize)
+                    .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
+                    .build(),
+                "Imgui_display_buffer".to_string());
+            let display_buffer = DeviceWrapper::create_buffer(
+                device.clone(),
+                &display_create_info,
+                MemoryLocation::CpuToGpu);
+
+            Rc::new(RefCell::new(display_buffer))
+        };
+
         ImguiRender {
             vertex_shader: vert_shader,
             fragment_shader: frag_shader,
             font_texture: Rc::new(RefCell::new(font_texture)),
+            display_buffer
         }
     }
 
@@ -298,42 +316,64 @@ impl ImguiRender {
         pass_nodes.reserve(draw_data.draw_lists_count());
 
         // display data (scale and pos) is shared for all draw lists
-        let display_buffer = {
-            let display_create_info = BufferCreateInfo::new(
-                vk::BufferCreateInfo::builder()
-                    .size(std::mem::size_of::<DisplayBuffer>() as vk::DeviceSize)
-                    .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
-                    .build(),
-                "Imgui_display_buffer".to_string());
-            let display_buffer = DeviceWrapper::create_buffer(
-                device.clone(),
-                &display_create_info,
-                MemoryLocation::CpuToGpu);
+        // let display_buffer = {
+        //     let display_create_info = BufferCreateInfo::new(
+        //         vk::BufferCreateInfo::builder()
+        //             .size(std::mem::size_of::<DisplayBuffer>() as vk::DeviceSize)
+        //             .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
+        //             .build(),
+        //         "Imgui_display_buffer".to_string());
+        //     let display_buffer = DeviceWrapper::create_buffer(
+        //         device.clone(),
+        //         &display_create_info,
+        //         MemoryLocation::CpuToGpu);
+        //
+        //     device.borrow().update_buffer(&display_buffer, |mapped_memory: *mut c_void, _size: u64| {
+        //         let mut display_scale: [f32; 2] = [0.0, 0.0];
+        //         display_scale[0] = draw_data.framebuffer_scale[0] / draw_data.display_size[0];
+        //         display_scale[1] = draw_data.framebuffer_scale[1] / draw_data.display_size[1];
+        //
+        //         let mut display_pos: [f32; 2] = [0.0, 0.0];
+        //         display_pos[0] = -1.0 - draw_data.display_pos[0] * display_scale[0];
+        //         display_pos[1] = -1.0 - draw_data.display_pos[1] * display_scale[1];
+        //
+        //         let display_value = DisplayBuffer {
+        //             scale: display_scale,
+        //             pos: display_pos
+        //         };
+        //
+        //         unsafe {
+        //             core::ptr::copy_nonoverlapping(
+        //                 &display_value,
+        //                 mapped_memory as *mut DisplayBuffer,
+        //                 std::mem::size_of::<DisplayBuffer>());
+        //         }
+        //     });
+        //
+        //     Rc::new(RefCell::new(display_buffer))
+        // };
 
-            device.borrow().update_buffer(&display_buffer, |mapped_memory: *mut c_void, _size: u64| {
-                let mut display_scale: [f32; 2] = [0.0, 0.0];
-                display_scale[0] = draw_data.framebuffer_scale[0] / draw_data.display_size[0];
-                display_scale[1] = draw_data.framebuffer_scale[1] / draw_data.display_size[1];
+        device.borrow().update_buffer(&self.display_buffer.borrow(), |mapped_memory: *mut c_void, _size: u64| {
+            let mut display_scale: [f32; 2] = [0.0, 0.0];
+            display_scale[0] = draw_data.framebuffer_scale[0] / draw_data.display_size[0];
+            display_scale[1] = draw_data.framebuffer_scale[1] / draw_data.display_size[1];
 
-                let mut display_pos: [f32; 2] = [0.0, 0.0];
-                display_pos[0] = -1.0 - draw_data.display_pos[0] * display_scale[0];
-                display_pos[1] = -1.0 - draw_data.display_pos[1] * display_scale[1];
+            let mut display_pos: [f32; 2] = [0.0, 0.0];
+            display_pos[0] = -1.0 - draw_data.display_pos[0] * display_scale[0];
+            display_pos[1] = -1.0 - draw_data.display_pos[1] * display_scale[1];
 
-                let display_value = DisplayBuffer {
-                    scale: display_scale,
-                    pos: display_pos
-                };
+            let display_value = DisplayBuffer {
+                scale: display_scale,
+                pos: display_pos
+            };
 
-                unsafe {
-                    core::ptr::copy_nonoverlapping(
-                        &display_value,
-                        mapped_memory as *mut DisplayBuffer,
-                        std::mem::size_of::<DisplayBuffer>());
-                }
-            });
-
-            Rc::new(RefCell::new(display_buffer))
-        };
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    &display_value,
+                    mapped_memory as *mut DisplayBuffer,
+                    std::mem::size_of::<DisplayBuffer>());
+            }
+        });
 
 
         for draw_list in draw_data.draw_lists() {
@@ -415,7 +455,7 @@ impl ImguiRender {
                 self.fragment_shader.clone());
 
             let display_binding = ResourceBinding {
-                resource: display_buffer.clone(),
+                resource: self.display_buffer.clone(),
                 binding_info: BindingInfo {
                     binding_type: BindingType::Buffer(BufferBindingInfo{
                         offset: 0,
