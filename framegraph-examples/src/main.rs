@@ -202,9 +202,9 @@ impl WindowedVulkanApp {
     }
 
     pub fn draw_frame(&mut self) {
-        log::trace!(target: "frame", "Drawing new frame");
         // wait for fence if necessary (can we avoid this using just semaphores?)
         let wait_fence = self.frame_fences[self.frame_index as usize];
+        log::trace!(target: "frame", "Waiting for frame: {}", self.frame_index);
         unsafe {
             self.render_context.get_device().borrow().get()
                 .wait_for_fences(
@@ -217,6 +217,7 @@ impl WindowedVulkanApp {
             //     .device_wait_idle()
             //     .expect("Failed to idle");
         }
+        log::trace!(target: "frame", "Wait complete; cleaning up frame.");
         // clean up the completed frame
         self.frames[self.frame_index as usize] = None;
 
@@ -259,6 +260,7 @@ impl WindowedVulkanApp {
         }
 
         // prepare framegraph
+        log::trace!(target: "frame", "Creating new frame: {}", self.frame_index);
         self.frames[self.frame_index as usize] = Some(self.frame_graph.start(self.render_context.get_device(), descriptor_pool));
         let current_frame = self.frames[self.frame_index as usize].as_mut().unwrap();
 
