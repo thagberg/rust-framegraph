@@ -70,6 +70,16 @@ fn get_physical_device_extensions() -> Vec<&'static CStr> {
     ]
 }
 
+#[cfg(target_os = "macos")]
+fn get_instance_flags() -> vk::InstanceCreateFlags {
+    vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR
+}
+
+#[cfg(not(target_os = "macos"))]
+fn get_instance_flags() -> vk::InstanceCreateFlags {
+    vk::InstanceCreateFlags::empty()
+}
+
 
 fn create_vulkan_instance(
     entry: &ash::Entry,
@@ -95,7 +105,7 @@ fn create_vulkan_instance(
         .application_info(&application_info)
         .enabled_layer_names(&raw_layer_names)
         .enabled_extension_names(&raw_extension_names)
-        .flags(vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR);
+        .flags(get_instance_flags());
 
     let mut instance_debug = vk::DebugUtilsMessengerCreateInfoEXT::builder()
         .message_severity(severity_flags::WARNING | severity_flags::ERROR)
