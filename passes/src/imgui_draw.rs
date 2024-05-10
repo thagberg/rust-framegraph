@@ -312,8 +312,8 @@ impl ImguiRender {
 
             device.borrow().update_buffer(&display_buffer, |mapped_memory: *mut c_void, _size: u64| {
                 let mut display_scale: [f32; 2] = [0.0, 0.0];
-                display_scale[0] = 2.0 / draw_data.display_size[0] * draw_data.framebuffer_scale[0];
-                display_scale[1] = 2.0 / draw_data.display_size[1] * draw_data.framebuffer_scale[1];
+                display_scale[0] = 2.0 / draw_data.display_size[0];
+                display_scale[1] = 2.0 / draw_data.display_size[1];
 
                 let mut display_pos: [f32; 2] = [0.0, 0.0];
                 display_pos[0] = -1.0 - draw_data.display_pos[0] * display_scale[0];
