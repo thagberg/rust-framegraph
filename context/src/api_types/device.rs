@@ -1,12 +1,14 @@
 use std::cell::RefCell;
 use std::ffi::{CString};
 use core::ffi::c_void;
+use std::alloc::alloc;
 use std::rc::Rc;
 use ash::{Device, vk};
 use ash::extensions::ext::DebugUtils;
 use ash::vk::{DebugUtilsLabelEXT, DebugUtilsMessengerEXT, DebugUtilsObjectNameInfoEXT, Handle, ObjectType};
 use gpu_allocator::vulkan::*;
 use gpu_allocator::MemoryLocation;
+use log::trace;
 
 use crate::api_types::image::{ImageWrapper, ImageCreateInfo};
 use crate::api_types::buffer::{BufferWrapper, BufferCreateInfo};
@@ -110,9 +112,11 @@ impl Drop for DeviceResource {
         if let Some(resource_type) = &mut self.resource_type {
             match resource_type {
                 ResourceType::Buffer(buffer) => {
+                    log::trace!(target: "resource", "Destroying buffer: {}", self.handle);
                     self.device.borrow_mut().destroy_buffer(buffer);
                 },
                 ResourceType::Image(image) => {
+                    log::trace!(target: "resource", "Destroying image: {}", self.handle);
                     self.device.borrow_mut().destroy_image(image);
                 }
             }
@@ -482,6 +486,8 @@ impl DeviceWrapper {
 
         let device_buffer = {
             let new_handle = device.borrow_mut().generate_handle();
+            log::trace!(target: "resource", "Creating buffer: {} -- {}", new_handle, buffer_desc.get_name());
+
             let create_info = buffer_desc.get_create_info();
             let buffer = unsafe {
                 device.borrow().get().create_buffer(create_info, None)
@@ -520,6 +526,8 @@ impl DeviceWrapper {
 
     pub fn update_buffer<F>(&self, device_buffer: &DeviceResource, mut fill_callback: F)
         where F: FnMut(*mut c_void, u64) {
+        log::trace!(target: "resource", "Updating buffer: {}", device_buffer.get_handle());
+
         let allocation = {
             match &device_buffer.allocation {
                 Some(alloc) => { alloc },
@@ -530,6 +538,17 @@ impl DeviceWrapper {
         };
         if let Some(resolved_resource) = &device_buffer.resource_type {
             if let ResourceType::Buffer(_) = &resolved_resource {
+                let mapped_range = unsafe {
+                    vk::MappedMemoryRange::builder()
+                        .memory(allocation.memory())
+                        // .size(allocation.size())
+                        .size(vk::WHOLE_SIZE)
+                        .offset(allocation.offset())
+                };
+                unsafe {
+                    self.device.get().invalidate_mapped_memory_ranges(std::slice::from_ref(&mapped_range))
+                        .expect("Failed to invalidate memory range before mapping");
+                }
                 if let Some(mapped) = allocation.mapped_ptr() {
                     // TODO: I believe this will occur if the memory is already host-visible?
                     fill_callback(mapped.as_ptr(), allocation.size());
@@ -544,6 +563,10 @@ impl DeviceWrapper {
                         fill_callback(mapped_memory, allocation.size());
                         self.device.get().unmap_memory(allocation.memory());
                     }
+                }
+                unsafe {
+                    self.device.get().flush_mapped_memory_ranges(std::slice::from_ref(&mapped_range))
+                        .expect("Failed to flush mapped memory");
                 }
             } else {
                 panic!("Cannot update a non-buffer resource as a buffer");
