@@ -328,7 +328,7 @@ impl ImguiRender {
                     core::ptr::copy_nonoverlapping(
                         &display_value,
                         mapped_memory as *mut DisplayBuffer,
-                        std::mem::size_of::<DisplayBuffer>());
+                        1);
                 }
             });
 
