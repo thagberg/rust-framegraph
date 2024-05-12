@@ -17,8 +17,8 @@ pub fn clear_color(
             binding_type: BindingType::Image(ImageBindingInfo { layout: vk::ImageLayout::GENERAL}),
             set: 0,
             slot: 0,
-            stage: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-            access: vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+            stage: vk::PipelineStageFlags::TRANSFER,
+            access: vk::AccessFlags::TRANSFER_WRITE
         }
     };
 
