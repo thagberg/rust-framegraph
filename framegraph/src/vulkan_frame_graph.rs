@@ -374,9 +374,8 @@ impl VulkanFrameGraph {
                             let handle = rt.resource_image.borrow().get_handle();
                             let last_usage = usage_cache.get(&handle);
                             let new_usage = ResourceUsage {
-                                access: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-                                stage: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-                                // layout: Some(rt.layout)
+                                access: vk::AccessFlags::COLOR_ATTACHMENT_WRITE | vk::AccessFlags::COLOR_ATTACHMENT_READ,
+                                stage: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
                                 layout: Some(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
                             };
                             if let Some(usage) = last_usage {
@@ -820,6 +819,28 @@ impl FrameGraph for VulkanFrameGraph {
             let sorted_nodes = self.compile(&mut frame.nodes, root_index);
             self.link(&mut frame.nodes, &sorted_nodes)
         };
+
+        // add a global memory barrier to ensure all CPU writes are accessible
+        // prior to dispatching GPU work
+        {
+            let host_barrier = vk::MemoryBarrier::builder()
+                .src_access_mask(vk::AccessFlags::HOST_WRITE)
+                .dst_access_mask(vk::AccessFlags::UNIFORM_READ
+                    | vk::AccessFlags::INDEX_READ
+                    | vk::AccessFlags::VERTEX_ATTRIBUTE_READ)
+                .build();
+
+            unsafe {
+                render_context.get_device().borrow().get().cmd_pipeline_barrier(
+                    *command_buffer,
+                    vk::PipelineStageFlags::HOST,
+                    vk::PipelineStageFlags::VERTEX_INPUT | vk::PipelineStageFlags::VERTEX_SHADER,
+                    vk::DependencyFlags::empty(),
+                    &[host_barrier],
+                    &[],
+                    &[]);
+            }
+        }
 
         // excute nodes
         // let sorted_nodes = &frame.sorted_nodes;
