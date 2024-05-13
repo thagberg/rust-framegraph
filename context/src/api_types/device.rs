@@ -541,14 +541,9 @@ impl DeviceWrapper {
                 let mapped_range = unsafe {
                     vk::MappedMemoryRange::builder()
                         .memory(allocation.memory())
-                        // .size(allocation.size())
                         .size(vk::WHOLE_SIZE)
                         .offset(allocation.offset())
                 };
-                unsafe {
-                    self.device.get().invalidate_mapped_memory_ranges(std::slice::from_ref(&mapped_range))
-                        .expect("Failed to invalidate memory range before mapping");
-                }
                 if let Some(mapped) = allocation.mapped_ptr() {
                     // TODO: I believe this will occur if the memory is already host-visible?
                     fill_callback(mapped.as_ptr(), allocation.size());
