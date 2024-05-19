@@ -21,6 +21,8 @@ use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::shader::Shader;
 use util::camera::Camera;
 use glm;
+use glm::Vec4;
+use gltf::scene::Transform;
 use context::render_context::RenderContext;
 use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ResourceBinding};
 use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
@@ -63,7 +65,8 @@ pub struct RenderMesh {
     index_buffer: Option<Rc<RefCell<DeviceResource>>>,
     num_indices: usize,
     vertex_binding: vk::VertexInputBindingDescription,
-    vertex_attributes: Vec<vk::VertexInputAttributeDescription>
+    vertex_attributes: Vec<vk::VertexInputAttributeDescription>,
+    transform: glm::TMat4<f32>
 }
 
 #[derive(Eq, PartialEq, Hash)]
@@ -152,57 +155,59 @@ impl Example for ModelExample {
     fn execute(&self, device: Rc<RefCell<DeviceWrapper>>, imgui_ui: &mut Ui, back_buffer: AttachmentReference) -> Vec<PassType> {
         let mut passes: Vec<PassType> = Vec::new();
 
-        // create UBO for MVP
-        let mvp_buffer = {
-            let create_info = BufferCreateInfo::new(
-                vk::BufferCreateInfo::builder()
-                    .size(std::mem::size_of::<MVP>() as vk::DeviceSize)
-                    .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
-                    .build(),
-                "MVP_buffer".to_string()
-            );
-            let buffer = DeviceWrapper::create_buffer(
-                device.clone(),
-                &create_info,
-                MemoryLocation::CpuToGpu
-            );
-
-            device.borrow().update_buffer(&buffer, |mapped_memory: *mut c_void, _size: u64| {
-                let mut model = glm::scale(&glm::identity(), &glm::vec3(0.1, 0.1, 0.1));
-                model = glm::translate(&model, &glm::vec3(0.0, 0.0, 1000.0));
-                let mvp = MVP {
-                    model,
-                    view: self.camera.view.clone(),
-                    proj: self.camera.projection.clone(),
-                };
-
-                unsafe {
-                    core::ptr::copy_nonoverlapping(
-                        &mvp,
-                        mapped_memory as *mut MVP,
-                        1
-                    );
-                }
-            });
-
-            Rc::new(RefCell::new(buffer))
-        };
-
-        let mvp_binding = ResourceBinding {
-            resource: mvp_buffer.clone(),
-            binding_info: BindingInfo {
-                binding_type: BindingType::Buffer(BufferBindingInfo{
-                    offset: 0,
-                    range: std::mem::size_of::<MVP>() as vk::DeviceSize,
-                }),
-                set: 0,
-                slot: 0,
-                stage: vk::PipelineStageFlags::VERTEX_SHADER,
-                access: vk::AccessFlags::SHADER_READ,
-            }
-        };
 
         for render_mesh in &self.render_meshes {
+            // create UBO for MVP
+            let mvp_buffer = {
+                let create_info = BufferCreateInfo::new(
+                    vk::BufferCreateInfo::builder()
+                        .size(std::mem::size_of::<MVP>() as vk::DeviceSize)
+                        .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
+                        .build(),
+                    "MVP_buffer".to_string()
+                );
+                let buffer = DeviceWrapper::create_buffer(
+                    device.clone(),
+                    &create_info,
+                    MemoryLocation::CpuToGpu
+                );
+
+                device.borrow().update_buffer(&buffer, |mapped_memory: *mut c_void, _size: u64| {
+                    // TODO: issues with scene matrix, just using identity
+                    let mut model = glm::identity();
+                    let mvp = MVP {
+                        model,
+                        // model: render_mesh.transform.clone(),
+                        view: self.camera.get_view(),
+                        proj: self.camera.projection.clone(),
+                    };
+
+                    unsafe {
+                        core::ptr::copy_nonoverlapping(
+                            &mvp,
+                            mapped_memory as *mut MVP,
+                            1
+                        );
+                    }
+                });
+
+                Rc::new(RefCell::new(buffer))
+            };
+
+            let mvp_binding = ResourceBinding {
+                resource: mvp_buffer.clone(),
+                binding_info: BindingInfo {
+                    binding_type: BindingType::Buffer(BufferBindingInfo{
+                        offset: 0,
+                        range: std::mem::size_of::<MVP>() as vk::DeviceSize,
+                    }),
+                    set: 0,
+                    slot: 0,
+                    stage: vk::PipelineStageFlags::VERTEX_SHADER,
+                    access: vk::AccessFlags::SHADER_READ,
+                }
+            };
+
             let dynamic_states = vec!(vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR);
             let vertex_input = vk::PipelineVertexInputStateCreateInfo::builder()
                 .vertex_binding_descriptions(std::slice::from_ref(&render_mesh.vertex_binding))
@@ -224,8 +229,10 @@ impl Example for ModelExample {
                 let v = vk::Viewport::builder()
                     .x(0.0)
                     .y(0.0)
+                    // .y(extent.height as f32)
                     .width(extent.width as f32)
                     .height(extent.height as f32)
+                    // .height(-(extent.height as f32))
                     .min_depth(0.0)
                     .max_depth(1.0)
                     .build();
@@ -304,6 +311,18 @@ impl Example for ModelExample {
     }
 }
 
+// The gltf lib returns transform matrices in column-major order as
+// a &[[f32; 4];4]. Since I haven't found a glm::Mat4::from implementation
+// which accepts that as an input, we use this utility function
+fn gltf_to_glm(m: &[[f32; 4]; 4]) -> glm::Mat4 {
+    glm::Mat4::from_columns(&[
+        Vec4::from(m[0]),
+        Vec4::from(m[1]),
+        Vec4::from(m[2]),
+        Vec4::from(m[3])
+    ])
+}
+
 impl ModelExample {
     pub fn new(device: Rc<RefCell<DeviceWrapper>>) -> Self {
         let duck_import = gltf::import("assets/models/gltf/duck/Duck.gltf");
@@ -328,161 +347,201 @@ impl ModelExample {
         //  * image bindings
         // each node could be a separate object in the scene
         let mut meshes: Vec<RenderMesh> = Vec::new();
-        for node in duck_gltf.document.nodes() {
-            if let Some(mesh) = node.mesh() {
-                for (i, primitive) in mesh.primitives().enumerate() {
-                    let mut ibo: Option<Rc<RefCell<DeviceResource>>> = None;
+        for scene in duck_gltf.document.scenes() {
+            for node in duck_gltf.document.nodes() {
+                let node_transform = gltf_to_glm(&node.transform().matrix());
+                for child in node.children() {
+                    let child_transform = gltf_to_glm(&child.transform().matrix());
+                    if let Some(mesh) = child.mesh() {
+                        for (i, primitive) in mesh.primitives().enumerate() {
+                            let mut ibo: Option<Rc<RefCell<DeviceResource>>> = None;
 
-                    let primitive_name = {
-                        if let Some(mesh_name) = mesh.name() {
-                            format!("{}_{}", mesh_name, i)
-                        } else {
-                            format!("UnknownMesh_{}", i)
-                        }
-                    };
-
-                    let mode = primitive.mode();
-                    let mut num_indices = 0;
-                    if let Some(indices_accessor) = primitive.indices() {
-                        // * create GPU index buffer
-                        num_indices = indices_accessor.count();
-                        let index_size = indices_accessor.size();
-                        let ibo_size = indices_accessor.count() * index_size;
-                        indices_accessor.data_type();
-                        ibo = Some({
-                            let ibo_create = BufferCreateInfo::new(
-                                vk::BufferCreateInfo::builder()
-                                    .size(ibo_size as vk::DeviceSize)
-                                    .usage(vk::BufferUsageFlags::INDEX_BUFFER)
-                                    .sharing_mode(vk::SharingMode::EXCLUSIVE)
-                                    .build(),
-                                primitive_name.clone()
-                            );
-                            Rc::new(RefCell::new(DeviceWrapper::create_buffer(
-                                device.clone(),
-                                &ibo_create,
-                                MemoryLocation::CpuToGpu
-                            )))
-                        });
-
-                        // * memory map the buffer
-                        // * use the indices accessor to copy indices data into the GPU buffer
-                        device.borrow().update_buffer(&ibo.as_ref().unwrap().borrow(), |mapped_memory: *mut c_void, _size: u64| {
-                            unsafe {
-                                let view = indices_accessor.view().expect("Failed to get view for index buffer");
-                                let buffer_data = duck_gltf.buffers.get(view.buffer().index())
-                                    .expect("Failed to get buffer data for index buffer");
-                                let source_offset = view.offset() + indices_accessor.offset();
-                                core::ptr::copy_nonoverlapping(
-                                    buffer_data.0.as_ptr().byte_add(source_offset),
-                                    mapped_memory as *mut u8,
-                                    ibo_size);
-                            }
-                        });
-                    }
-
-                    let mut vertex_data_size = 0usize;
-                    let mut vertex_size = 0usize;
-                    let mut vertex_attributes: Vec<vk::VertexInputAttributeDescription> = Vec::new();
-                    // need to do an initial pass over attributes to calculate total VBO size and vertex size
-                    for (semantic, attribute_accessor) in primitive.attributes() {
-                        // only keep attributes which are used in the renderer
-                        if let Some(found_location) = ATTRIBUTE_LOOKUP.get(&semantic) {
-                            vertex_data_size += attribute_accessor.count() * attribute_accessor.size();
-                            let offset = vertex_size; // TODO: probably need to deal with alignment here
-                            vertex_size += attribute_accessor.size();
-                            // attribute_accessor.data_type()
-
-                            // create a vertex input attribute per primitive attribute
-                            let format = get_vk_format(attribute_accessor.data_type(), attribute_accessor.dimensions());
-                            vertex_attributes.push(
-                                vk::VertexInputAttributeDescription::builder()
-                                    .format(format)
-                                    .binding(0) // TODO: assuming a single vertex buffer currently
-                                    .location(*found_location)
-                                    .offset(offset as u32)
-                                    .build()
-                            );
-                        }
-                    }
-
-                    // create vertex buffer
-                    let vbo = {
-                        let vbo_create = BufferCreateInfo::new(
-                            vk::BufferCreateInfo::builder()
-                                .size(vertex_data_size as vk::DeviceSize)
-                                .usage(vk::BufferUsageFlags::VERTEX_BUFFER)
-                                .sharing_mode(vk::SharingMode::EXCLUSIVE)
-                                .build(),
-                            primitive_name.clone()
-                        );
-                        DeviceWrapper::create_buffer(
-                            device.clone(),
-                            &vbo_create,
-                            MemoryLocation::CpuToGpu
-                        )
-                    };
-
-                    // iterate over attributes again and copy them from mesh buffers into the VBO
-                    device.borrow().update_buffer(&vbo, |mapped_memory: *mut c_void, _size: u64| {
-                        unsafe {
-                            let mut vertex_offset = 0;
-                            for (semantic, attribute_accessor) in primitive.attributes() {
-                                let view = attribute_accessor.view().expect("Failed to get view for vertex attribute");
-                                let buffer_data = duck_gltf.buffers.get(view.buffer().index())
-                                    .expect("Failed to get buffer for vertex attribute");
-                                let stride = match view.stride() {
-                                    None => {1} // I think this is a safe assumption?
-                                    Some(s) => {s}
-                                };
-
-                                // source_offset is the offset into the source buffer defined by the buffer view (base) and the accessor
-                                let mut source_offset = view.offset() + attribute_accessor.offset();
-                                // dest_offset is the offset into the dest buffer defined by the index of the element being written and the
-                                //  per-vertex offset of the current attribute
-                                let mut dest_offset = vertex_offset;
-
-                                let num_elements = attribute_accessor.count();
-                                for i in (0..num_elements) {
-                                    // for each element, copy the value from the source buffer into the dest buffer
-                                    // for each element, source_offset will increment by the buffer view's stride
-                                    // dest_offset will increment by the vertex size (attributes are interleaved in the dest buffer)
-
-                                    core::ptr::copy_nonoverlapping(
-                                        buffer_data.0.as_ptr().byte_add(source_offset),
-                                        mapped_memory.byte_add(dest_offset) as *mut u8,
-                                        attribute_accessor.size());
-
-                                    source_offset += stride;
-                                    dest_offset += vertex_size;
+                            let primitive_name = {
+                                if let Some(mesh_name) = mesh.name() {
+                                    format!("{}_{}", mesh_name, i)
+                                } else {
+                                    format!("UnknownMesh_{}", i)
                                 }
+                            };
 
-                                vertex_offset += attribute_accessor.size();
+                            let mode = primitive.mode();
+                            let mut num_indices = 0;
+                            if let Some(indices_accessor) = primitive.indices() {
+                                // * create GPU index buffer
+                                num_indices = indices_accessor.count();
+                                let index_size = indices_accessor.size();
+                                let ibo_size = indices_accessor.count() * index_size;
+                                indices_accessor.data_type();
+                                ibo = Some({
+                                    let ibo_create = BufferCreateInfo::new(
+                                        vk::BufferCreateInfo::builder()
+                                            .size(ibo_size as vk::DeviceSize)
+                                            .usage(vk::BufferUsageFlags::INDEX_BUFFER)
+                                            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                                            .build(),
+                                        primitive_name.clone()
+                                    );
+                                    Rc::new(RefCell::new(DeviceWrapper::create_buffer(
+                                        device.clone(),
+                                        &ibo_create,
+                                        MemoryLocation::CpuToGpu
+                                    )))
+                                });
+
+                                // * memory map the buffer
+                                // * use the indices accessor to copy indices data into the GPU buffer
+                                device.borrow().update_buffer(&ibo.as_ref().unwrap().borrow(), |mapped_memory: *mut c_void, _size: u64| {
+                                    unsafe {
+                                        let view = indices_accessor.view().expect("Failed to get view for index buffer");
+                                        let buffer_data = duck_gltf.buffers.get(view.buffer().index())
+                                            .expect("Failed to get buffer data for index buffer");
+                                        let source_offset = view.offset() + indices_accessor.offset();
+                                        core::ptr::copy_nonoverlapping(
+                                            buffer_data.0.as_ptr().byte_add(source_offset),
+                                            mapped_memory as *mut u8,
+                                            ibo_size);
+                                    }
+                                });
                             }
-                        }
-                    });
 
-                    let render_mesh = RenderMesh {
-                        vertex_buffer: Rc::new(RefCell::new(vbo)),
-                        index_buffer: ibo,
-                        num_indices,
-                        vertex_binding: VERTEX_BINDING,
-                        vertex_attributes
-                    };
-                    meshes.push(render_mesh);
+                            let mut vertex_data_size = 0usize;
+                            let mut vertex_size = 0usize;
+                            let mut vertex_attributes: Vec<vk::VertexInputAttributeDescription> = Vec::new();
+                            // need to do an initial pass over attributes to calculate total VBO size and vertex size
+                            for (semantic, attribute_accessor) in primitive.attributes() {
+                                // only keep attributes which are used in the renderer
+                                if let Some(found_location) = ATTRIBUTE_LOOKUP.get(&semantic) {
+                                    vertex_data_size += attribute_accessor.count() * attribute_accessor.size();
+                                    let offset = vertex_size; // TODO: probably need to deal with alignment here
+                                    vertex_size += attribute_accessor.size();
+                                    // attribute_accessor.data_type()
+
+                                    // create a vertex input attribute per primitive attribute
+                                    let format = get_vk_format(attribute_accessor.data_type(), attribute_accessor.dimensions());
+                                    vertex_attributes.push(
+                                        vk::VertexInputAttributeDescription::builder()
+                                            .format(format)
+                                            .binding(0) // TODO: assuming a single vertex buffer currently
+                                            .location(*found_location)
+                                            .offset(offset as u32)
+                                            .build()
+                                    );
+                                }
+                            }
+
+                            // create vertex buffer
+                            let vbo = {
+                                let vbo_create = BufferCreateInfo::new(
+                                    vk::BufferCreateInfo::builder()
+                                        .size(vertex_data_size as vk::DeviceSize)
+                                        .usage(vk::BufferUsageFlags::VERTEX_BUFFER)
+                                        .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                                        .build(),
+                                    primitive_name.clone()
+                                );
+                                DeviceWrapper::create_buffer(
+                                    device.clone(),
+                                    &vbo_create,
+                                    MemoryLocation::CpuToGpu
+                                )
+                            };
+
+                            // iterate over attributes again and copy them from mesh buffers into the VBO
+                            device.borrow().update_buffer(&vbo, |mapped_memory: *mut c_void, _size: u64| {
+                                unsafe {
+                                    let mut vertex_offset = 0;
+                                    for (semantic, attribute_accessor) in primitive.attributes() {
+                                        let view = attribute_accessor.view().expect("Failed to get view for vertex attribute");
+                                        let buffer_data = duck_gltf.buffers.get(view.buffer().index())
+                                            .expect("Failed to get buffer for vertex attribute");
+                                        let stride = match view.stride() {
+                                            None => {1} // I think this is a safe assumption?
+                                            Some(s) => {s}
+                                        };
+
+                                        // source_offset is the offset into the source buffer defined by the buffer view (base) and the accessor
+                                        let mut source_offset = view.offset() + attribute_accessor.offset();
+                                        // dest_offset is the offset into the dest buffer defined by the index of the element being written and the
+                                        //  per-vertex offset of the current attribute
+                                        let mut dest_offset = vertex_offset;
+
+                                        let num_elements = attribute_accessor.count();
+                                        for i in (0..num_elements) {
+                                            // for each element, copy the value from the source buffer into the dest buffer
+                                            // for each element, source_offset will increment by the buffer view's stride
+                                            // dest_offset will increment by the vertex size (attributes are interleaved in the dest buffer)
+
+                                            core::ptr::copy_nonoverlapping(
+                                                buffer_data.0.as_ptr().byte_add(source_offset),
+                                                mapped_memory.byte_add(dest_offset) as *mut u8,
+                                                attribute_accessor.size());
+
+                                            source_offset += stride;
+                                            dest_offset += vertex_size;
+                                        }
+
+                                        vertex_offset += attribute_accessor.size();
+                                    }
+                                }
+                            });
+
+                            let render_mesh = RenderMesh {
+                                vertex_buffer: Rc::new(RefCell::new(vbo)),
+                                index_buffer: ibo,
+                                num_indices,
+                                vertex_binding: VERTEX_BINDING,
+                                vertex_attributes,
+                                transform: child_transform * node_transform,
+                            };
+                            meshes.push(render_mesh);
+                        }
+                    }
                 }
             }
         }
 
-        let camera = Camera::new(
+        // let camera = Camera::new(
+        //     1.5,
+        //     0.66,
+        //     1.0,
+        //     10000.0,
+        //     &glm::Vec3::new(0.0, 0.0, 100.0),
+        //     &glm::Vec3::new(0.0, 0.0, -1.0),
+        //     &glm::Vec3::new(0.0, 1.0, 0.0)
+        // );
+
+        let camera = Camera::new_from_view(
             1.5,
             0.66,
             1.0,
             10000.0,
-            &glm::Vec3::new(0.0, 0.0, 0.0),
-            &glm::Vec3::new(0.0, 0.0, 1.0),
-            &glm::Vec3::new(0.0, 1.0, 0.0)
+            glm::Mat4::from_columns(&[
+                Vec4::new( -0.7289686799049377, 0.0, -0.6845470666885376, 0.0),
+                Vec4::new(-0.4252049028873444, 0.7836934328079224, 0.4527972936630249, 0.0),
+                Vec4::new(0.5364750623703003, 0.6211478114128113, -0.571287989616394, 0.0),
+                Vec4::new( 400.1130065917969, 463.2640075683594, -431.0780334472656, 1.00)
+            ])
         );
+
+        // let camera = Camera::new_from_view(
+        //     1.5,
+        //     0.66,
+        //     1.0,
+        //     10000.0,
+        //     glm::Mat4::from_columns(&[
+        //         Vec4::new( -0.7289686799049377, -0.425, 0.5365, 400.113),
+        //         Vec4::new(0.0, 0.7836934328079224, 0.62115, 463.264),
+        //         Vec4::new(-0.6845, 0.4528, -0.571287989616394, -431.078),
+        //         Vec4::new( 0.0, 0.0, 0.0, 1.00)
+        //     ])
+        // );
+
+        // glm::Mat4::from_columns(&[
+        //     Vec4::from(m[0]),
+        //     Vec4::from(m[1]),
+        //     Vec4::from(m[2]),
+        //     Vec4::from(m[3])
+        // ])
 
         let vert_shader = Rc::new(RefCell::new(
             shader::create_shader_module_from_bytes(
