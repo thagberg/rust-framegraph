@@ -49,6 +49,22 @@ unsafe extern "system" fn debug_utils_callback(
 }
 
 #[cfg(target_os = "macos")]
+fn get_instance_extensions() -> Vec<&'static CStr> {
+    // Need to support portability drivers for MoltenVK
+    vec![
+        vk::KhrPortabilityEnumerationFn::name(),
+        vk::KhrGetPhysicalDeviceProperties2Fn::name()
+    ]
+}
+
+#[cfg(not(target_os = "macos"))]
+fn get_instance_extensions() -> Vec<&'static CStr> {
+    vec![vk::KhrGetPhysicalDeviceProperties2Fn::name()]
+    // instance_extensions.push(vk::KhrPortabilityEnumerationFn::name());
+    // instance_extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
+}
+
+#[cfg(target_os = "macos")]
 fn get_logical_device_extensions() -> Vec<&'static CStr> {
     vec![
         ash::extensions::khr::Swapchain::name(),
@@ -592,9 +608,7 @@ impl VulkanRenderContext {
             }
         }
 
-        // Need to support portability drivers for MoltenVK
-        instance_extensions.push(vk::KhrPortabilityEnumerationFn::name());
-        instance_extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
+        instance_extensions.append(&mut get_instance_extensions());
 
         let physical_device_extensions = get_physical_device_extensions();
         let logical_device_extensions = get_logical_device_extensions();
