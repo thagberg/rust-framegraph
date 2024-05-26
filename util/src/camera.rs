@@ -1,4 +1,5 @@
 use glm;
+#[derive(Clone)]
 pub struct Camera {
     pub projection: glm::TMat4<f32>,
     pub view: glm::TMat4<f32>
