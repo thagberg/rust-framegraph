@@ -18,6 +18,7 @@ imgui = {git = "https://github.com/imgui-rs/imgui-rs", rev = "ca05418"}
 gpu-allocator   = "^0.25"
 context         =  {path="../context"}
 framegraph      = {path="../framegraph"}
+util            = {path="../util"}
 
 [build-dependencies]
 glob            = "0.3.1"

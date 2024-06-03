@@ -19,6 +19,7 @@ use framegraph::pass_type::PassType;
 use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
 use framegraph::shader;
 use framegraph::shader::Shader;
+use util::image;
 
 const IMGUI_VERTEX_BINDING: vk::VertexInputBindingDescription = vk::VertexInputBindingDescription{
     binding: 0,
@@ -80,29 +81,7 @@ impl ImguiRender {
         let frag_shader = Rc::new(RefCell::new(
             shader::create_shader_module_from_bytes(device.clone(), "imgui-frag", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-frag.spv")))));
 
-        let font_buffer_create = BufferCreateInfo::new(
-            vk::BufferCreateInfo::builder()
-                .size(font_atlas.data.len() as DeviceSize)
-                .usage(vk::BufferUsageFlags::TRANSFER_SRC)
-                .sharing_mode(vk::SharingMode::EXCLUSIVE)
-                .build(),
-            "font_copy_buffer".to_string());
-
-        let font_buffer = DeviceWrapper::create_buffer(
-            device.clone(),
-            &font_buffer_create,
-            MemoryLocation::CpuToGpu);
-
-        device.borrow().update_buffer(&font_buffer, |mapped_memory: *mut c_void, _size: u64| {
-            unsafe {
-                core::ptr::copy_nonoverlapping(
-                    font_atlas.data.as_ptr(),
-                    mapped_memory as *mut u8,
-                    font_atlas.data.len());
-            }
-        });
-
-        let font_texture_create = ImageCreateInfo::new(
+        let font_texture_create =
             vk::ImageCreateInfo::builder()
                 .format(vk::Format::R8G8B8A8_UNORM)
                 .image_type(vk::ImageType::TYPE_2D)
@@ -117,13 +96,15 @@ impl ImguiRender {
                     .build())
                 .mip_levels(1)
                 .array_layers(1)
-                .build(),
-            "font_atlast_texture".to_string());
+                .build();
 
-        let mut font_texture = DeviceWrapper::create_image(
+        let mut font_texture = image::create_from_bytes(
             device.clone(),
-            &font_texture_create,
-            MemoryLocation::GpuOnly);
+            render_context,
+            font_texture_create,
+            font_atlas.data,
+            "font-atlas"
+        );
 
         let font_sampler = unsafe {
             let sampler_create = vk::SamplerCreateInfo::builder()
@@ -143,123 +124,6 @@ impl ImguiRender {
         };
 
         font_texture.get_image_mut().sampler = Some(font_sampler);
-
-        {
-            let resolved_buffer = {
-                let resolved_resource = font_buffer.resource_type.as_ref().expect("Invalid font buffer");
-                match resolved_resource {
-                    ResourceType::Buffer(buffer) => { buffer },
-                    _ => { panic!("Non-buffer resource type for font buffer")}
-                }
-            };
-            let resolved_texture = {
-                let resolved_resource = font_texture.resource_type.as_ref().expect("Invalid font texture");
-                match resolved_resource {
-                    ResourceType::Image(image) => { image },
-                    _ => { panic!("Non-image resource type for font texture")}
-                }
-            };
-
-            let copy_region = vk::BufferImageCopy::builder()
-                .buffer_offset(0)
-                .buffer_row_length(0)
-                .buffer_image_height(0)
-                .image_subresource(vk::ImageSubresourceLayers::builder()
-                    .aspect_mask(vk::ImageAspectFlags::COLOR)
-                    .layer_count(1)
-                    .base_array_layer(0)
-                    .mip_level(0)
-                    .build())
-                .image_offset(vk::Offset3D::builder()
-                    .x(0)
-                    .y(0)
-                    .z(0)
-                    .build())
-                .image_extent(resolved_texture.extent.clone())
-                .build();
-
-            let barrier_subresource_range = vk::ImageSubresourceRange::builder()
-                .level_count(1)
-                .base_mip_level(0)
-                .layer_count(1)
-                .base_array_layer(0)
-                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                .build();
-
-            let pre_barrier = vk::ImageMemoryBarrier::builder()
-                .image(resolved_texture.image)
-                .old_layout(vk::ImageLayout::UNDEFINED)
-                .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                .subresource_range(barrier_subresource_range.clone())
-                .src_queue_family_index(render_context.get_graphics_queue_index())
-                .dst_queue_family_index(render_context.get_graphics_queue_index())
-                .src_access_mask(vk::AccessFlags::NONE)
-                .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
-                .build();
-
-            let post_barrier = vk::ImageMemoryBarrier::builder()
-                .image(resolved_texture.image)
-                .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                .subresource_range(barrier_subresource_range.clone())
-                .src_queue_family_index(render_context.get_graphics_queue_index())
-                .dst_queue_family_index(render_context.get_graphics_queue_index())
-                .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
-                .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                .build();
-
-            unsafe {
-                let cb = render_context.get_immediate_command_buffer();
-                device.borrow().get().reset_command_buffer(
-                    cb,
-                    vk::CommandBufferResetFlags::empty())
-                    .expect("Failed to reset command buffer");
-
-                let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
-                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
-                    .build();
-                device.borrow().get().begin_command_buffer(cb, &command_buffer_begin_info)
-                    .expect("Failed to begin recording command buffer");
-
-                device.borrow().get().cmd_pipeline_barrier(
-                    cb,
-                    vk::PipelineStageFlags::TOP_OF_PIPE,
-                    vk::PipelineStageFlags::TRANSFER,
-                    vk::DependencyFlags::empty(),
-                    &[],
-                    &[],
-                    std::slice::from_ref(&pre_barrier));
-
-                device.borrow().get().cmd_copy_buffer_to_image(
-                    cb,
-                    resolved_buffer.buffer,
-                    resolved_texture.image,
-                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                    std::slice::from_ref(&copy_region));
-
-                device.borrow().get().cmd_pipeline_barrier(
-                    cb,
-                    vk::PipelineStageFlags::TRANSFER,
-                    vk::PipelineStageFlags::VERTEX_SHADER,
-                    vk::DependencyFlags::empty(),
-                    &[],
-                    &[],
-                    std::slice::from_ref(&post_barrier));
-
-                device.borrow().get().end_command_buffer(cb)
-                    .expect("Failed to record command buffer");
-
-                let submit = vk::SubmitInfo::builder()
-                    .command_buffers(std::slice::from_ref(&cb))
-                    .build();
-
-                device.borrow().get().queue_submit(
-                    render_context.get_graphics_queue(),
-                    std::slice::from_ref(&submit),
-                        vk::Fence::null())
-                    .expect("Failed to execute buffer->image copy");
-            }
-        }
 
         // ugly way to update the font_texture layout bookkeeping after the copy completes
         if let Some(resolved_font_texture) = font_texture.resource_type.as_mut() {
