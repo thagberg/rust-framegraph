@@ -379,11 +379,11 @@ impl Example for ModelExample {
                 let extent = back_buffer.resource_image.borrow().get_image().extent;
                 let v = vk::Viewport::builder()
                     .x(0.0)
-                    .y(0.0)
-                    // .y(extent.height as f32)
+                    // .y(0.0)
+                    .y(extent.height as f32)
                     .width(extent.width as f32)
-                    .height(extent.height as f32)
-                    // .height(-(extent.height as f32))
+                    // .height(extent.height as f32)
+                    .height(-(extent.height as f32))
                     .min_depth(0.0)
                     .max_depth(1.0)
                     .build();
@@ -477,7 +477,9 @@ fn gltf_to_glm(m: &[[f32; 4]; 4]) -> glm::Mat4 {
 /// t is an owned Transform because Transform::decomposed takes self as an argument
 fn gltf_to_decomposed_matrix(t: gltf::scene::Transform) -> DecomposedMatrix {
     let (translation, rotation, scale) = t.decomposed();
-    let rot_quat = glm::Quat::new(rotation[0], rotation[1], rotation[2], rotation[3]);
+    // the gltf Transform specifies w (the scalar component of a quaternion) as the last element, but
+    // nalgebra_glm expects it as the first argument to the Quaternion
+    let rot_quat = glm::Quat::new(rotation[3], rotation[0], rotation[1], rotation[2]);
     DecomposedMatrix::new(
         glm::Vec3::new(translation[0], translation[1], translation[2]),
         glm::quat_to_mat4(&rot_quat),
@@ -486,8 +488,8 @@ fn gltf_to_decomposed_matrix(t: gltf::scene::Transform) -> DecomposedMatrix {
 
 impl ModelExample {
     pub fn new(device: Rc<RefCell<DeviceWrapper>>) -> Self {
-        // let duck_import = gltf::import("assets/models/gltf/duck/Duck.gltf");
-        let duck_import = gltf::import("assets/models/gltf/Box/glTF/Box.gltf");
+        let duck_import = gltf::import("assets/models/gltf/duck/Duck.gltf");
+        // let duck_import = gltf::import("assets/models/gltf/Box/glTF/Box.gltf");
         let duck_gltf = match duck_import {
             Ok(gltf) => {
                 GltfModel {
@@ -512,11 +514,9 @@ impl ModelExample {
         let mut meshes: Vec<RenderMesh> = Vec::new();
         for _scene in duck_gltf.document.scenes() {
             for node in duck_gltf.document.nodes() {
-                // let node_transform = gltf_to_glm(&node.transform().matrix());
-                let node_transform = gltf_to_decomposed_matrix(node.transform());
+                let node_transform = gltf_to_glm(&node.transform().matrix());
                 for child in node.children() {
-                    // let child_transform = gltf_to_glm(&child.transform().matrix());
-                    let child_transform = gltf_to_decomposed_matrix(child.transform());
+                    let child_transform = gltf_to_glm(&child.transform().matrix());
                     if let Some(camera) = child.camera() {
                         match camera.projection() {
                             Projection::Orthographic(_ortho) => {
@@ -526,13 +526,12 @@ impl ModelExample {
                                 // per the glTF 2.0 spec, we should exclude the scale of any node
                                 // transforms in the camera's node hierarchy
                                 // https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#view-matrix
-                                let child_resolved = {
-                                    glm::translate(&child_transform.rotation, &child_transform.translation)
-                                };
                                 let scene_resolved = {
-                                    glm::translate(&node_transform.rotation, &node_transform.translation)
+                                    // Despite what the spec says, all glTF viewers I've found
+                                    // online have included the scale components from their hierarchy
+                                    node_transform
                                 };
-                                let view_resolved = scene_resolved.mul(&child_resolved);
+                                let view_resolved = scene_resolved.mul(&child_transform);
 
                                 let far = match persp.zfar() {
                                     None => { 10000.0 }
@@ -783,8 +782,7 @@ impl ModelExample {
                                 num_indices,
                                 vertex_binding: VERTEX_BINDING,
                                 vertex_attributes,
-                                // transform: child_transform * node_transform,
-                                transform: node_transform.resolve().mul(child_transform.resolve()),
+                                transform: node_transform.mul(child_transform),
                             };
                             meshes.push(render_mesh);
                         }
