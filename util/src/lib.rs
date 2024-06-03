@@ -1,5 +1,6 @@
 pub mod camera;
 pub mod math;
+pub mod image;
 
 extern crate nalgebra_glm as glm;
 
