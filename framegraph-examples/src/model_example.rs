@@ -6,7 +6,7 @@ use std::ops::Mul;
 use log::debug;
 
 use ash::vk;
-use ash::vk::BufferDeviceAddressCreateInfoEXT;
+use ash::vk::{BufferDeviceAddressCreateInfoEXT, Handle};
 use imgui::Ui;
 use gltf::{Gltf, Semantic};
 use gltf::accessor::{DataType, Dimensions};
@@ -86,7 +86,8 @@ pub struct RenderMesh {
     num_indices: usize,
     vertex_binding: vk::VertexInputBindingDescription,
     vertex_attributes: [vk::VertexInputAttributeDescription; 3],
-    transform: glm::TMat4<f32>
+    transform: glm::TMat4<f32>,
+    albedo_tex: Option<Rc<RefCell<DeviceResource>>>
 }
 
 #[derive(Eq, PartialEq, Hash)]
@@ -407,6 +408,17 @@ impl Example for ModelExample {
             //         access: vk::AccessFlags::SHADER_READ,
             //     },
             // };
+            let albedo_binding = ResourceBinding {
+                resource: render_mesh.albedo_tex.as_ref().unwrap().clone(),
+                binding_info: BindingInfo {
+                    binding_type: BindingType::Image(ImageBindingInfo {
+                        layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL }),
+                    set: 0,
+                    slot: 1,
+                    stage: vk::PipelineStageFlags::FRAGMENT_SHADER,
+                    access: vk::AccessFlags::SHADER_READ,
+                },
+            };
 
             if let Some(ibo_ref) = &render_mesh.index_buffer {
                 let ibo = ibo_ref.clone();
@@ -417,6 +429,7 @@ impl Example for ModelExample {
                     .render_target(back_buffer.clone())
                     .read(mvp_binding.clone())
                     // .read(texture_binding)
+                    .read(albedo_binding)
                     .tag(render_mesh.vertex_buffer.clone())
                     .tag(ibo.clone())
                     .viewport(viewport)
@@ -793,6 +806,7 @@ impl ModelExample {
                             });
 
                             // process  material
+                            let mut albedo_dev_tex: Option<Rc<RefCell<DeviceResource>>> = None;
                             {
                                 let material = primitive.material();
                                 if let Some(material_id) = material.index() {
@@ -818,15 +832,31 @@ impl ModelExample {
                                                 //     ibo_size);
                                             }
                                             Source::Uri{ uri, mime_type } => {
-                                                util::image::create_from_uri(
+                                                let mut tex = util::image::create_from_uri(
                                                     device.clone(),
                                                     render_context,
-                                                &format!("{}{}", "assets/models/gltf/duck/", uri),
+                                                    &format!("{}{}", "assets/models/gltf/duck/", uri),
                                                     true
                                                 );
-                                                // panic!("URI image source is unsupported")
+                                                // albedo_dev_tex = Some(Rc::new(RefCell::new(tex)));
+                                                unsafe {
+                                                    let create = vk::SamplerCreateInfo::builder()
+                                                        .mag_filter(vk::Filter::LINEAR)
+                                                        .min_filter(vk::Filter::LINEAR)
+                                                        .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+                                                        .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+                                                        .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+                                                        .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+                                                        .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+                                                        .build();
 
-                                                // need to load the image from URI using the image library
+                                                    let sampler = device.borrow().get().create_sampler(&create, None)
+                                                        .expect("Failed to create sampler for albedo texture");
+                                                    device.borrow().set_debug_name(vk::ObjectType::SAMPLER, sampler.as_raw(), "albedo_sampler");
+
+                                                    tex.get_image_mut().sampler = Some(sampler);
+                                                };
+                                                albedo_dev_tex = Some(Rc::new(RefCell::new(tex)));
                                             }
                                         }
 
@@ -844,6 +874,7 @@ impl ModelExample {
                                 vertex_binding: VERTEX_BINDING,
                                 vertex_attributes,
                                 transform: node_transform.mul(child_transform),
+                                albedo_tex: albedo_dev_tex,
                             };
                             meshes.push(render_mesh);
                         }
