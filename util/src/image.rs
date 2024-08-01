@@ -1,9 +1,13 @@
 use std::cell::RefCell;
 use std::ffi::c_void;
 use std::rc::Rc;
+
 use ash::vk;
 use ash::vk::DeviceSize;
 use gpu_allocator::MemoryLocation;
+use image::{DynamicImage, GenericImageView, ImageReader};
+use image::DynamicImage::*;
+
 use context::api_types::buffer::BufferCreateInfo;
 use context::api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
 use context::api_types::image::ImageCreateInfo;
@@ -171,4 +175,57 @@ pub fn create_from_bytes(
 
         image
     }
+}
+pub fn create_from_uri(
+    device: Rc<RefCell<DeviceWrapper>>,
+    render_context: &VulkanRenderContext,
+    uri: &str,
+    is_linear: bool
+) -> DeviceResource {
+    let img = {
+        let image = ImageReader::open(uri)
+            .expect("Unable to load image");
+        image.decode()
+            .expect("Unable to decode image")
+    };
+
+    let format = {
+        match img {
+            ImageRgb16(_) => { vk::Format::R16G16B16_SFLOAT}
+            ImageRgba16(_) => { vk::Format::R16G16B16A16_SFLOAT}
+            ImageRgb32F(_) => { vk::Format::R32G32B32_SFLOAT}
+            ImageRgba32F(_) => { vk::Format::R32G32B32A32_SFLOAT}
+            _ => {
+                match img {
+                    ImageRgb8(_) => {
+                        if is_linear {vk::Format::R8G8B8_UNORM} else {vk::Format::R8G8B8_SRGB}
+                    }
+                    ImageRgba8(_) => {
+                        if is_linear {vk::Format::R8G8B8A8_UNORM} else {vk::Format::R8G8B8A8_SRGB}
+                    }
+                    _ => {
+                        panic!("Unsupported format of loaded image")
+                    }
+                }
+            }
+        }
+    };
+
+    let texture_create = vk::ImageCreateInfo::builder()
+        .format(format)
+        .image_type(vk::ImageType::TYPE_2D)
+        .sharing_mode(vk::SharingMode::EXCLUSIVE)
+        .initial_layout(vk::ImageLayout::UNDEFINED)
+        .samples(vk::SampleCountFlags::TYPE_1)
+        .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED)
+        .extent(vk::Extent3D::builder()
+            .height(img.height())
+            .width(img.width())
+            .depth(1)
+            .build())
+        .mip_levels(1)
+        .array_layers(1)
+        .build();
+
+    create_from_bytes(device, render_context, texture_create, img.as_bytes(), uri)
 }
