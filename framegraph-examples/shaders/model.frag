@@ -8,6 +8,8 @@ layout(location = 0) in struct {
     vec3 normal;
 } In;
 
+layout(binding = 1) uniform sampler2D colorSampler;
+
 void main() {
-    fragColor = In.color;
+    fragColor = texture(colorSampler, In.uv);
 }
