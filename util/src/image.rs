@@ -182,7 +182,7 @@ pub fn create_from_uri(
     uri: &str,
     is_linear: bool
 ) -> DeviceResource {
-    let img = {
+    let mut img = {
         let image = ImageReader::open(uri)
             .expect("Unable to load image");
         image.decode()
@@ -198,7 +198,11 @@ pub fn create_from_uri(
             _ => {
                 match img {
                     ImageRgb8(_) => {
-                        if is_linear {vk::Format::R8G8B8_UNORM} else {vk::Format::R8G8B8_SRGB}
+                        // 24-bit RGB image formats are not supported on Metal, so we are
+                        // just going to cheat and convert to RGBA
+                        // let corrected_img = img.into_rgba8();
+                        img = DynamicImage::ImageRgba8(img.to_rgba8());
+                        if is_linear {vk::Format::R8G8B8A8_UNORM} else {vk::Format::R8G8B8A8_SRGB}
                     }
                     ImageRgba8(_) => {
                         if is_linear {vk::Format::R8G8B8A8_UNORM} else {vk::Format::R8G8B8A8_SRGB}

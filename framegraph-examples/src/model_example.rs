@@ -821,7 +821,7 @@ impl ModelExample {
                                                 util::image::create_from_uri(
                                                     device.clone(),
                                                     render_context,
-                                                    uri,
+                                                &format!("{}{}", "assets/models/gltf/duck/", uri),
                                                     true
                                                 );
                                                 // panic!("URI image source is unsupported")
