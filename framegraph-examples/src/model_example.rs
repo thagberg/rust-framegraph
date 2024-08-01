@@ -11,7 +11,7 @@ use imgui::Ui;
 use gltf::{Gltf, Semantic};
 use gltf::accessor::{DataType, Dimensions};
 use gpu_allocator::MemoryLocation;
-use image::error::UnsupportedErrorKind::Format;
+// use image::error::UnsupportedErrorKind::Format;
 use context::api_types::buffer::{BufferCreateInfo, BufferWrapper};
 use context::api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
 use framegraph::attachment::AttachmentReference;
@@ -25,10 +25,11 @@ use util::math::DecomposedMatrix;
 use glm;
 use glm::Vec4;
 use gltf::camera::Projection;
+use gltf::image::Source;
 use gltf::json::accessor::{ComponentType, Type};
 use gltf::scene::Transform;
 use context::render_context::RenderContext;
-use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ResourceBinding};
+use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding};
 use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
 use framegraph::shader;
 use crate::example::Example;
@@ -309,7 +310,6 @@ impl Example for ModelExample {
     fn execute(&self, device: Rc<RefCell<DeviceWrapper>>, imgui_ui: &mut Ui, back_buffer: AttachmentReference) -> Vec<PassType> {
         let mut passes: Vec<PassType> = Vec::new();
 
-
         for render_mesh in &self.render_meshes {
             // create UBO for MVP
             let mvp_buffer = {
@@ -396,6 +396,18 @@ impl Example for ModelExample {
                 (v, s)
             };
 
+            // let texture_binding = ResourceBinding {
+            //     resource: Rc::new(RefCell::new(())),
+            //     binding_info: BindingInfo {
+            //         binding_type: BindingType::Image(ImageBindingInfo {
+            //             layout: Default::default() }),
+            //         set: 0,
+            //         slot: 1,
+            //         stage: vk::PipelineStageFlags::FRAGMENT_SHADER,
+            //         access: vk::AccessFlags::SHADER_READ,
+            //     },
+            // };
+
             if let Some(ibo_ref) = &render_mesh.index_buffer {
                 let ibo = ibo_ref.clone();
                 let vbo = render_mesh.vertex_buffer.clone();
@@ -404,6 +416,7 @@ impl Example for ModelExample {
                     .pipeline_description(pipeline_description)
                     .render_target(back_buffer.clone())
                     .read(mvp_binding.clone())
+                    // .read(texture_binding)
                     .tag(render_mesh.vertex_buffer.clone())
                     .tag(ibo.clone())
                     .viewport(viewport)
@@ -487,7 +500,10 @@ fn gltf_to_decomposed_matrix(t: gltf::scene::Transform) -> DecomposedMatrix {
 }
 
 impl ModelExample {
-    pub fn new(device: Rc<RefCell<DeviceWrapper>>) -> Self {
+    pub fn new(
+        device: Rc<RefCell<DeviceWrapper>>,
+        render_context: &VulkanRenderContext) -> Self {
+
         let duck_import = gltf::import("assets/models/gltf/duck/Duck.gltf");
         // let duck_import = gltf::import("assets/models/gltf/Box/glTF/Box.gltf");
         let duck_gltf = match duck_import {
@@ -775,6 +791,51 @@ impl ModelExample {
                                     }
                                 }
                             });
+
+                            // process  material
+                            {
+                                let material = primitive.material();
+                                if let Some(material_id) = material.index() {
+                                    if let Some(albedo_tex) = material.pbr_metallic_roughness().base_color_texture() {
+                                        // create device image from image bytes
+                                        let image_source = albedo_tex.texture().source().source();
+                                        match image_source {
+                                            Source::View{view, mime_type } => {
+                                                let buffer_data = duck_gltf.buffers.get(view.buffer().index())
+                                                    .expect("Failed to get buffer data for image");
+                                                let source_offset = view.offset();
+                                                // util::image::create_from_bytes(
+                                                //     device.clone(),
+                                                //     render_context)
+
+                                                // let view = indices_accessor.view().expect("Failed to get view for index buffer");
+                                                // let buffer_data = duck_gltf.buffers.get(view.buffer().index())
+                                                //     .expect("Failed to get buffer data for index buffer");
+                                                // let source_offset = view.offset() + indices_accessor.offset();
+                                                // core::ptr::copy_nonoverlapping(
+                                                //     buffer_data.0.as_ptr().byte_add(source_offset),
+                                                //     mapped_memory as *mut u8,
+                                                //     ibo_size);
+                                            }
+                                            Source::Uri{ uri, mime_type } => {
+                                                util::image::create_from_uri(
+                                                    device.clone(),
+                                                    render_context,
+                                                    uri,
+                                                    true
+                                                );
+                                                // panic!("URI image source is unsupported")
+
+                                                // need to load the image from URI using the image library
+                                            }
+                                        }
+
+                                        // create sampler
+
+                                        // apply sampler to device image
+                                    }
+                                }
+                            }
 
                             let render_mesh = RenderMesh {
                                 vertex_buffer: Rc::new(RefCell::new(vbo)),
