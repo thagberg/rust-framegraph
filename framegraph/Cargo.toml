@@ -8,6 +8,6 @@ ash             = {version = "^0.37", features = ["linked"]}
 petgraph        = {version = "^0.6", features = ["stable_graph"]}
 multimap        = "^0.8.0"
 gpu-allocator   = "^0.25"
-spirv-reflect   = "^0.2"
+rspirv-reflect = "0.8.0"
 context         =  {path="../context"}
 log             = "0.4.21"

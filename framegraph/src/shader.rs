@@ -5,38 +5,20 @@ use std::rc::Rc;
 
 use ash::vk;
 use ash::vk::ShaderModule;
-use spirv_reflect::types::descriptor::{ReflectDescriptorType};
+use rspirv_reflect;
+use rspirv_reflect::BindingCount;
 use context::api_types::device::{DeviceShader, DeviceWrapper};
 
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
-
-fn translate_descriptor_type(reflect_type: ReflectDescriptorType) -> vk::DescriptorType
-{
-    match reflect_type
-    {
-        ReflectDescriptorType::Sampler => vk::DescriptorType::SAMPLER,
-        ReflectDescriptorType::CombinedImageSampler => vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-        ReflectDescriptorType::SampledImage => vk::DescriptorType::SAMPLED_IMAGE,
-        ReflectDescriptorType::StorageImage => vk::DescriptorType::STORAGE_IMAGE,
-        ReflectDescriptorType::UniformTexelBuffer => vk::DescriptorType::UNIFORM_TEXEL_BUFFER,
-        ReflectDescriptorType::StorageTexelBuffer => vk::DescriptorType::STORAGE_TEXEL_BUFFER,
-        ReflectDescriptorType::UniformBuffer => vk::DescriptorType::UNIFORM_BUFFER,
-        ReflectDescriptorType::StorageBuffer => vk::DescriptorType::STORAGE_BUFFER,
-        ReflectDescriptorType::UniformBufferDynamic => vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
-        ReflectDescriptorType::StorageBufferDynamic => vk::DescriptorType::STORAGE_BUFFER_DYNAMIC,
-        ReflectDescriptorType::InputAttachment => vk::DescriptorType::INPUT_ATTACHMENT,
-        ReflectDescriptorType::AccelerationStructureNV => vk::DescriptorType::ACCELERATION_STRUCTURE_NV,
-        ReflectDescriptorType::Undefined => panic!("Invalid descriptor type; can't translate")
-    }
-}
 
 fn create_shader_module(device: Rc<RefCell<DeviceWrapper>>, file_name: &str) -> Shader
 {
     let (reflection_module, shader) = {
         let bytes = fs::read(file_name)
             .expect(&format!("Unable to load shader at {}", file_name));
-        let reflection_module = spirv_reflect::ShaderModule::load_u8_data(&bytes)
+
+        let reflection_module = rspirv_reflect::Reflection::new_from_spirv(&bytes)
             .expect(&format!("Failed to parse shader for reflection data at {}", file_name));
 
         let create_info = vk::ShaderModuleCreateInfo {
@@ -55,25 +37,32 @@ fn create_shader_module(device: Rc<RefCell<DeviceWrapper>>, file_name: &str) -> 
     // TODO: Add support for compute descriptor set bindings (could just use VK_SHADER_STAGE_ALL)
     // TODO: Add support for immutable samplers
     let mut binding_map : HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>> = HashMap::new();
-    if let Ok(descriptor_sets_reflection) = reflection_module.enumerate_descriptor_sets(None)
-    {
-        for set in descriptor_sets_reflection
-        {
-            let mut descriptor_set_bindings: Vec<vk::DescriptorSetLayoutBinding> = Vec::new();
-            for binding_reflect in set.bindings
-            {
-                descriptor_set_bindings.push(
-                    vk::DescriptorSetLayoutBinding::builder()
-                        .binding(binding_reflect.binding)
-                        .stage_flags(vk::ShaderStageFlags::empty())
-                        .descriptor_count(binding_reflect.count)
-                        .descriptor_type(translate_descriptor_type(binding_reflect.descriptor_type))
-                        .build()
-                );
-            }
+    let descriptor_sets_reflection = reflection_module.get_descriptor_sets()
+        .expect("Failed to get descriptor sets for reflected shader");
+    for set in descriptor_sets_reflection {
+        let mut descriptor_set_bindings: Vec<vk::DescriptorSetLayoutBinding> = Vec::new();
+        for binding_reflect in set.1 {
+            let binding_count = match binding_reflect.1.binding_count {
+                BindingCount::One => { 1 }
+                BindingCount::StaticSized(size) => {size}
+                BindingCount::Unbounded => {
+                    panic!("Unbounded descriptor binding count not supported");
+                }
+            };
 
-            binding_map.insert(set.set, descriptor_set_bindings);
+            let descriptor_type = vk::DescriptorType::from_raw(binding_reflect.1.ty.0 as i32);
+
+            descriptor_set_bindings.push(
+                vk::DescriptorSetLayoutBinding::builder()
+                    .binding(binding_reflect.0)
+                    .stage_flags(vk::ShaderStageFlags::empty())
+                    .descriptor_count(binding_count as u32)
+                    .descriptor_type(descriptor_type)
+                    .build()
+            );
         }
+
+        binding_map.insert(set.0, descriptor_set_bindings);
     }
 
     Shader::new(shader, binding_map)
@@ -82,7 +71,7 @@ fn create_shader_module(device: Rc<RefCell<DeviceWrapper>>, file_name: &str) -> 
 pub fn create_shader_module_from_bytes(device: Rc<RefCell<DeviceWrapper>>, name: &str, bytes: &[u8]) -> Shader
 {
     let (reflection_module, shader) = {
-        let reflection_module = spirv_reflect::ShaderModule::load_u8_data(bytes)
+        let reflection_module = rspirv_reflect::Reflection::new_from_spirv(bytes)
             .expect(&format!("Failed to parse shader for reflection data for {}", name));
 
         let create_info = vk::ShaderModuleCreateInfo {
@@ -101,25 +90,32 @@ pub fn create_shader_module_from_bytes(device: Rc<RefCell<DeviceWrapper>>, name:
     // TODO: Add support for compute descriptor set bindings (could just use VK_SHADER_STAGE_ALL)
     // TODO: Add support for immutable samplers
     let mut binding_map : HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>> = HashMap::new();
-    if let Ok(descriptor_sets_reflection) = reflection_module.enumerate_descriptor_sets(None)
-    {
-        for set in descriptor_sets_reflection
-        {
-            let mut descriptor_set_bindings: Vec<vk::DescriptorSetLayoutBinding> = Vec::new();
-            for binding_reflect in set.bindings
-            {
-                descriptor_set_bindings.push(
-                    vk::DescriptorSetLayoutBinding::builder()
-                        .binding(binding_reflect.binding)
-                        .stage_flags(vk::ShaderStageFlags::empty())
-                        .descriptor_count(binding_reflect.count)
-                        .descriptor_type(translate_descriptor_type(binding_reflect.descriptor_type))
-                        .build()
-                );
-            }
+    let descriptor_sets_reflection = reflection_module.get_descriptor_sets()
+        .expect("Failed to get descriptor sets for reflected shader");
+    for set in descriptor_sets_reflection {
+        let mut descriptor_set_bindings: Vec<vk::DescriptorSetLayoutBinding> = Vec::new();
+        for binding_reflect in set.1 {
+            let binding_count = match binding_reflect.1.binding_count {
+                BindingCount::One => { 1 }
+                BindingCount::StaticSized(size) => {size}
+                BindingCount::Unbounded => {
+                    panic!("Unbounded descriptor binding count not supported");
+                }
+            };
 
-            binding_map.insert(set.set, descriptor_set_bindings);
+            let descriptor_type = vk::DescriptorType::from_raw(binding_reflect.1.ty.0 as i32);
+
+            descriptor_set_bindings.push(
+                vk::DescriptorSetLayoutBinding::builder()
+                    .binding(binding_reflect.0)
+                    .stage_flags(vk::ShaderStageFlags::empty())
+                    .descriptor_count(binding_count as u32)
+                    .descriptor_type(descriptor_type)
+                    .build()
+            );
         }
+
+        binding_map.insert(set.0, descriptor_set_bindings);
     }
 
     Shader::new(shader, binding_map)
