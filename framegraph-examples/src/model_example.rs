@@ -635,7 +635,10 @@ impl ModelExample {
                                 (gltf::mesh::Semantic::TexCoords(0), RefCell::new(None))
                             ]);
 
+                            let normals_offset = 3 * 4;
+                            let uvs_offset = 3 * 4 + normals_offset;
                             let vertex_attributes: [vk::VertexInputAttributeDescription; 3] = [
+                                // TODO: map the glTF componentTypes to the correct format (or alter the data)
                                 // positions
                                 vk::VertexInputAttributeDescription::builder()
                                     .binding(0)
@@ -649,15 +652,15 @@ impl ModelExample {
                                     .binding(0)
                                     .location(1)
                                     .format(vk::Format::R32G32B32_SFLOAT)
-                                    .offset(4)
+                                    .offset(normals_offset)
                                     .build(),
 
                                 // UVs
                                 vk::VertexInputAttributeDescription::builder()
                                     .binding(0)
                                     .location(2)
-                                    .format(vk::Format::R16G16_UNORM)
-                                    .offset(8)
+                                    .format(vk::Format::R32G32_SFLOAT)
+                                    .offset(uvs_offset)
                                     .build(),
                             ];
 

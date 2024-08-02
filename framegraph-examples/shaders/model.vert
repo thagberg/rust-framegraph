@@ -15,8 +15,8 @@ out gl_PerVertex {
 
 layout(location=0) out struct {
     vec4 color;
-    vec2 uv;
     vec3 normal;
+    vec2 uv;
 } Out;
 
 void main() {
