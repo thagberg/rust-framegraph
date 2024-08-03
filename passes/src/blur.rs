@@ -5,7 +5,7 @@ use ash::vk;
 use gpu_allocator::MemoryLocation;
 
 use context::api_types::device::{DeviceResource, DeviceWrapper};
-use context::api_types::image::ImageCreateInfo;
+use context::api_types::image::{ImageCreateInfo, ImageType};
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::binding::{BindingInfo, BindingType, ImageBindingInfo, ResourceBinding};
@@ -31,7 +31,8 @@ pub fn generate_pass(
             .mip_levels(1)
             .array_layers(1)
             .build(),
-        String::from("blur_target"));
+        String::from("blur_target"),
+        ImageType::Color);
 
     let source_binding = ResourceBinding {
         resource: source.clone(),

@@ -12,6 +12,7 @@ use crate::pipeline::{PipelineDescription};
 pub struct GraphicsPassNode {
     pub pipeline_description: Option<PipelineDescription>,
     pub render_targets: Vec<AttachmentReference>,
+    pub depth_target: Option<AttachmentReference>,
     pub inputs: Vec<ResourceBinding>,
     pub outputs: Vec<ResourceBinding>,
     pub tagged_resources: Vec<Rc<RefCell<DeviceResource>>>,
@@ -26,6 +27,7 @@ pub struct GraphicsPassNode {
 pub struct PassNodeBuilder {
     pipeline_description: Option<PipelineDescription>,
     render_targets: Vec<AttachmentReference>,
+    depth_target: Option<AttachmentReference>,
     inputs: Vec<ResourceBinding>,
     outputs: Vec<ResourceBinding>,
     tagged_resources: Vec<Rc<RefCell<DeviceResource>>>,
@@ -154,6 +156,11 @@ impl PassNodeBuilder {
         self
     }
 
+    pub fn depth_target(mut self, depth_target: AttachmentReference) -> Self {
+        self.depth_target = Some(depth_target);
+        self
+    }
+
     pub fn fill_commands(mut self, fill_callback: Box<FillCallback>) -> Self
     {
         self.fill_callback = Some(fill_callback);
@@ -184,6 +191,7 @@ impl PassNodeBuilder {
                 name: self.name,
                 pipeline_description: self.pipeline_description,
                 render_targets: self.render_targets.into_iter().take(rt_len).collect(),
+                depth_target: self.depth_target,
                 inputs: self.inputs.into_iter().take(inputs_len).collect(),
                 outputs: self.outputs.into_iter().take(outputs_len).collect(),
                 tagged_resources: self.tagged_resources.into_iter().take(tagged_resources_len).collect(),

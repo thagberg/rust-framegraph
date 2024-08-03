@@ -1,15 +1,24 @@
 use ash::vk;
 
+#[derive(Copy, Clone)]
+pub enum ImageType {
+    Color,
+    Depth,
+    DepthStencil,
+    Stencil
+}
 pub struct ImageCreateInfo {
     create_info: vk::ImageCreateInfo,
-    name: String
+    name: String,
+    image_type: ImageType
 }
 
 impl ImageCreateInfo {
-    pub fn new(create_info: vk::ImageCreateInfo, name: String) -> Self {
+    pub fn new(create_info: vk::ImageCreateInfo, name: String, image_type: ImageType) -> Self {
         ImageCreateInfo {
             create_info,
-            name
+            name,
+            image_type
         }
     }
 
@@ -20,6 +29,8 @@ impl ImageCreateInfo {
     pub fn get_name(&self) -> &str {
         &self.name
     }
+
+    pub fn get_image_type(&self) -> ImageType { self.image_type }
 }
 
 #[derive(Clone)]

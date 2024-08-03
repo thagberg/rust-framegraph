@@ -890,9 +890,19 @@ impl VulkanRenderContext {
         &self,
         render_pass: vk::RenderPass,
         extent: &vk::Extent3D,
-        images: &[ImageWrapper]) -> DeviceFramebuffer {
+        images: &[ImageWrapper],
+        depth: &Option<ImageWrapper>) -> DeviceFramebuffer {
 
-        let image_views: Vec<vk::ImageView> = images.iter().map(|i| i.view).collect();
+        let mut image_views: Vec<vk::ImageView> = Vec::new();
+        image_views.reserve(images.len() + 1);
+
+        if let Some(depth_attachment) = depth {
+            image_views.push(depth_attachment.view);
+        }
+
+        for image in images {
+            image_views.push(image.view);
+        }
 
         let create_info = vk::FramebufferCreateInfo::builder()
             .render_pass(render_pass)
