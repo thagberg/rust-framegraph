@@ -10,7 +10,7 @@ use image::DynamicImage::*;
 
 use context::api_types::buffer::BufferCreateInfo;
 use context::api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
-use context::api_types::image::ImageCreateInfo;
+use context::api_types::image::{ImageCreateInfo, ImageType};
 use context::vulkan_render_context::VulkanRenderContext;
 
 pub fn create_from_bytes(
@@ -48,7 +48,8 @@ pub fn create_from_bytes(
     // create image
     let image_create = ImageCreateInfo::new(
         image_info,
-        name.to_string()
+        name.to_string(),
+        ImageType::Color
     );
     let image = DeviceWrapper::create_image(
         device.clone(),

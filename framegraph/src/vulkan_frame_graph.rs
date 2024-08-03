@@ -644,6 +644,15 @@ impl VulkanFrameGraph {
                 resolve_render_targets(render_targets)
             };
 
+            let resolved_depth_target = {
+                if let Some(depth_target) = &node.depth_target {
+                    // Some(resolve_render_targets(std::slice::from_ref(depth_target))[0].clone())
+                    resolve_render_targets(std::slice::from_ref(depth_target)).pop()
+                } else {
+                    None
+                }
+            };
+
             // Ensure all rendertargets are the same dimensions
             let framebuffer_extent = {
                 let mut extent: Option<vk::Extent3D> = None;
@@ -663,6 +672,7 @@ impl VulkanFrameGraph {
             let renderpass = self.renderpass_manager.create_or_fetch_renderpass(
                 node.get_name(),
                 &node.render_targets,
+                &node.depth_target,
                 render_context.get_device());
 
             let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass.borrow().renderpass.clone(), pipeline_description);
@@ -675,7 +685,8 @@ impl VulkanFrameGraph {
                 let framebuffer = render_context.create_framebuffer(
                     renderpass.borrow().renderpass.clone(),
                     &framebuffer_extent,
-                    &resolved_render_targets);
+                    &resolved_render_targets,
+                    &resolved_depth_target);
                 // Framebuffer needs to be owned by the GraphicsPassNode to ensure it's
                 // destroyed after this frame has rendered
                 node.framebuffer = Some(framebuffer);

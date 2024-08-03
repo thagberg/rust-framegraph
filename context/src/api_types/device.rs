@@ -10,7 +10,7 @@ use gpu_allocator::vulkan::*;
 use gpu_allocator::MemoryLocation;
 use log::trace;
 
-use crate::api_types::image::{ImageWrapper, ImageCreateInfo};
+use crate::api_types::image::{ImageWrapper, ImageCreateInfo, ImageType};
 use crate::api_types::buffer::{BufferWrapper, BufferCreateInfo};
 
 pub struct VulkanDebug {
@@ -410,12 +410,27 @@ impl DeviceWrapper {
                     .expect("Failed to bind image to memory");
             }
 
+            let aspect_flags = match image_desc.get_image_type() {
+                ImageType::Color => {
+                    vk::ImageAspectFlags::COLOR
+                }
+                ImageType::Depth => {
+                    vk::ImageAspectFlags::DEPTH
+                }
+                ImageType::DepthStencil => {
+                    vk::ImageAspectFlags::STENCIL | vk::ImageAspectFlags::DEPTH
+                }
+                ImageType::Stencil => {
+                    vk::ImageAspectFlags::STENCIL
+                }
+            };
+
             let image_view = device.borrow().create_image_view(
                 image,
                 // vk::Format::R8G8B8A8_SRGB,
                 image_desc.get_create_info().format,
                 vk::ImageViewCreateFlags::empty(),
-                vk::ImageAspectFlags::COLOR,
+                aspect_flags,
                 1);
             device.borrow().set_debug_name(vk::ObjectType::IMAGE_VIEW, image_view.as_raw(), image_desc.get_name());
             let image_wrapper = ImageWrapper::new(

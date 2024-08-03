@@ -39,20 +39,51 @@ impl VulkanRenderpassManager {
         &mut self,
         pass_name: &str,
         color_attachments: &[AttachmentReference],
+        depth_attachment: &Option<AttachmentReference>,
         device: Rc<RefCell<DeviceWrapper>>) -> Rc<RefCell<DeviceRenderpass>> {
 
         let renderpass = self.renderpass_map.entry(pass_name.to_string()).or_insert_with_key(|_| {
             // no cached renderpass found, create it and cache it now
-            let mut color_attachment_descs: Vec<vk::AttachmentDescription> = Vec::new();
-            let mut attachment_refs: Vec<vk::AttachmentReference> = Vec::new();
+            let mut attachment_descs: Vec<vk::AttachmentDescription> = Vec::new();
+            let mut color_attachment_refs: Vec<vk::AttachmentReference> = Vec::new();
+            let mut depth_ref: Option<vk::AttachmentReference> = None;
 
             let mut attachment_index = 0;
+            // We (potentially) add the depth target as the first attachment in case
+            // we execute a depth-only draw
+            if let Some(depth_attachment) = depth_attachment {
+                // assert_eq!(depth_attachment.layout, vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL, "Invalid layout for depth attachment");
+                // attachment_refs.push(vk::AttachmentReference::builder()
+                let mut load_op = vk::AttachmentLoadOp::LOAD;
+                if (depth_attachment.layout == vk::ImageLayout::UNDEFINED) {
+                    load_op = vk::AttachmentLoadOp::DONT_CARE;
+                }
+
+                attachment_descs.push(vk::AttachmentDescription::builder()
+                    .format(depth_attachment.format)
+                    .samples(depth_attachment.samples)
+                    .load_op(load_op)
+                    .store_op(vk::AttachmentStoreOp::STORE)
+                    .initial_layout(depth_attachment.layout)
+                    // TODO: add support for seprateDepthStencilLayouts
+                    .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                    .build());
+
+                depth_ref = Some(vk::AttachmentReference::builder()
+                    .attachment(attachment_index)
+                    // TODO: add support for seprateDepthStencilLayouts
+                    // .layout(vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL)
+                    .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                    .build());
+                attachment_index += 1;
+            }
+
             for color_attachment in color_attachments {
                 let mut load_op = vk::AttachmentLoadOp::LOAD;
                 if (color_attachment.layout == vk::ImageLayout::UNDEFINED) {
                     load_op = vk::AttachmentLoadOp::DONT_CARE;
                 }
-                color_attachment_descs.push(vk::AttachmentDescription::builder()
+                attachment_descs.push(vk::AttachmentDescription::builder()
                     .format(color_attachment.format)
                     .samples(color_attachment.samples)
                     .load_op(load_op)
@@ -60,17 +91,20 @@ impl VulkanRenderpassManager {
                     .initial_layout(color_attachment.layout)
                     .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
                     .build());
-                attachment_refs.push(vk::AttachmentReference::builder()
+                color_attachment_refs.push(vk::AttachmentReference::builder()
                     .attachment(attachment_index)
                     .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
                     .build());
                 attachment_index += 1;
             }
 
-            let subpass = vk::SubpassDescription::builder()
-                .color_attachments(&attachment_refs)
+            let mut subpass = vk::SubpassDescription::builder()
+                .color_attachments(&color_attachment_refs)
                 .flags(vk::SubpassDescriptionFlags::empty())
                 .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS);
+            if let Some(depth_ref) = &depth_ref {
+                subpass = subpass.depth_stencil_attachment(depth_ref);
+            }
 
             let subpass_dependency = vk::SubpassDependency::builder()
                 .src_subpass(0)
@@ -83,7 +117,7 @@ impl VulkanRenderpassManager {
 
             let renderpass_create_info = vk::RenderPassCreateInfo::builder()
                 .flags(vk::RenderPassCreateFlags::empty())
-                .attachments(&color_attachment_descs)
+                .attachments(&attachment_descs)
                 .subpasses(std::slice::from_ref(&subpass))
                 .dependencies(std::slice::from_ref(&subpass_dependency)).build();
 

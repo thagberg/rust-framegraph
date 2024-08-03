@@ -28,6 +28,7 @@ use gltf::camera::Projection;
 use gltf::image::Source;
 use gltf::json::accessor::{ComponentType, Type};
 use gltf::scene::Transform;
+use context::api_types::image::{ImageCreateInfo, ImageType};
 use context::render_context::RenderContext;
 use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding};
 use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
@@ -311,6 +312,41 @@ impl Example for ModelExample {
     fn execute(&self, device: Rc<RefCell<DeviceWrapper>>, imgui_ui: &mut Ui, back_buffer: AttachmentReference) -> Vec<PassType> {
         let mut passes: Vec<PassType> = Vec::new();
 
+        let depth_attachment = {
+            let depth_image = {
+                let rt_extent = back_buffer.resource_image.borrow().get_image().extent.clone();
+                let depth_create = vk::ImageCreateInfo::builder()
+                    .format(vk::Format::D32_SFLOAT)
+                    .image_type(vk::ImageType::TYPE_2D)
+                    .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                    // .initial_layout(vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL)
+                    .initial_layout(vk::ImageLayout::UNDEFINED)
+                    .samples(vk::SampleCountFlags::TYPE_1)
+                    .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
+                    .extent(rt_extent)
+                    .mip_levels(1)
+                    .array_layers(1)
+                    .build();
+
+                let image_create = ImageCreateInfo::new(
+                    depth_create,
+                    "model_example_depth".to_string(),
+                    ImageType::Depth
+                );
+
+                DeviceWrapper::create_image(
+                    device.clone(),
+                    &image_create,
+                    MemoryLocation::GpuOnly
+                )
+            };
+
+            AttachmentReference::new(
+                Rc::new(RefCell::new(depth_image)),
+                vk::SampleCountFlags::TYPE_1
+            )
+        };
+
         for render_mesh in &self.render_meshes {
             // create UBO for MVP
             let mvp_buffer = {
@@ -370,7 +406,7 @@ impl Example for ModelExample {
                 vertex_input,
                 dynamic_states,
                 RasterizationType::Standard,
-                DepthStencilType::Disable,
+                DepthStencilType::Enable,
                 BlendType::None,
                 "gltf-model-draw",
                 self.vertex_shader.clone(),
@@ -397,17 +433,6 @@ impl Example for ModelExample {
                 (v, s)
             };
 
-            // let texture_binding = ResourceBinding {
-            //     resource: Rc::new(RefCell::new(())),
-            //     binding_info: BindingInfo {
-            //         binding_type: BindingType::Image(ImageBindingInfo {
-            //             layout: Default::default() }),
-            //         set: 0,
-            //         slot: 1,
-            //         stage: vk::PipelineStageFlags::FRAGMENT_SHADER,
-            //         access: vk::AccessFlags::SHADER_READ,
-            //     },
-            // };
             let albedo_binding = ResourceBinding {
                 resource: render_mesh.albedo_tex.as_ref().unwrap().clone(),
                 binding_info: BindingInfo {
@@ -427,8 +452,8 @@ impl Example for ModelExample {
                 let passnode = GraphicsPassNode::builder("model_render".to_string())
                     .pipeline_description(pipeline_description)
                     .render_target(back_buffer.clone())
+                    .depth_target(depth_attachment.clone())
                     .read(mvp_binding.clone())
-                    // .read(texture_binding)
                     .read(albedo_binding)
                     .tag(render_mesh.vertex_buffer.clone())
                     .tag(ibo.clone())
