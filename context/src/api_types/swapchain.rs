@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use ash::prelude::VkResult;
 use ash::vk;
-use crate::api_types::device::DeviceResource;
+use crate::api_types::device::{DeviceResource, DeviceWrapper};
 
 #[derive(PartialEq, Eq)]
 pub enum SwapchainStatus {
@@ -21,7 +21,8 @@ pub struct SwapchainWrapper {
     swapchain: vk::SwapchainKHR,
     images: Vec<Rc<RefCell<DeviceResource>>>,
     format: vk::Format,
-    extent: vk::Extent2D
+    extent: vk::Extent2D,
+    present_fences: Vec<vk::Fence>
 }
 
 impl SwapchainWrapper {
@@ -30,14 +31,16 @@ impl SwapchainWrapper {
         swapchain: vk::SwapchainKHR,
         images: Vec<Rc<RefCell<DeviceResource>>>,
         format: vk::Format,
-        extent: vk::Extent2D
+        extent: vk::Extent2D,
+        present_fences: Vec<vk::Fence>
     ) -> SwapchainWrapper {
         SwapchainWrapper {
             loader,
             swapchain,
             images,
             format,
-            extent
+            extent,
+            present_fences
         }
     }
 
@@ -50,6 +53,27 @@ impl SwapchainWrapper {
     pub fn get_extent(&self) -> vk::Extent2D { self.extent }
 
     pub fn get_loader(&self) -> &ash::extensions::khr::Swapchain { &self.loader }
+
+    pub fn get_present_fence(&self, index: u32) -> vk::Fence {
+        self.present_fences[index as usize].clone()
+    }
+
+    pub fn can_destroy(&self, device: &DeviceWrapper) -> bool {
+        let mut can_destroy = true;
+
+        unsafe {
+            for fence in &self.present_fences {
+                let fence_status = device.get().get_fence_status(*fence)
+                    .expect("Failed to get Present fence status");
+                match fence_status {
+                    true => {}
+                    false => {can_destroy = false}
+                }
+            }
+        }
+
+        can_destroy
+    }
 
     fn _acquire_next_image_impl(
         &self,
