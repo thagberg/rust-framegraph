@@ -397,6 +397,30 @@ fn create_command_buffers(
     }
 }
 
+fn create_debug_util(
+    entry: &ash::Entry,
+    instance: &ash::Instance,
+    severity: severity_flags,
+    message_flags: type_flags) -> VulkanDebug {
+    let debug_utils_loader = ash::extensions::ext::DebugUtils::new(&entry, &instance);
+
+    let messenger = unsafe {
+        debug_utils_loader.create_debug_utils_messenger(
+            &vk::DebugUtilsMessengerCreateInfoEXT::builder()
+                .message_severity(severity)
+                .message_type(message_flags)
+                .pfn_user_callback(Some(debug_utils_callback))
+                .build(),
+            None)
+            .expect("Failed to create Debug Utils Messenger")
+    };
+
+    VulkanDebug{
+        debug_utils: debug_utils_loader,
+        debug_messenger: messenger,
+    }
+}
+
 fn create_swapchain(
     instance: &InstanceWrapper,
     device: Rc<RefCell<DeviceWrapper>>,
@@ -588,7 +612,6 @@ impl VulkanRenderContext {
         debug_enabled: bool,
         window: Option<&winit::window::Window>
     ) -> VulkanRenderContext {
-        // let extensions = vec!(ash::extensions::khr::Swapchain::name().as_ptr());
 
         let layers = [
             unsafe { ::std::ffi::CStr::from_bytes_with_nul_unchecked(b"VK_LAYER_KHRONOS_validation\0") }
@@ -602,7 +625,6 @@ impl VulkanRenderContext {
             let extensions = surface::get_required_surface_extensions(resolved_window);
             for extension in extensions {
                 unsafe {
-                    // instance_extensions.push(extension);
                     instance_extensions.push(CStr::from_ptr(*extension));
                 }
             }
@@ -622,21 +644,11 @@ impl VulkanRenderContext {
 
         let debug = {
             if debug_enabled {
-                let debug_utils_loader = ash::extensions::ext::DebugUtils::new(&entry, &instance);
-                let messenger = unsafe {
-                    debug_utils_loader.create_debug_utils_messenger(
-                        &vk::DebugUtilsMessengerCreateInfoEXT::builder()
-                            .message_severity(severity_flags::WARNING | severity_flags::ERROR)
-                            .message_type(type_flags::GENERAL | type_flags::PERFORMANCE | type_flags::VALIDATION)
-                            .pfn_user_callback(Some(debug_utils_callback))
-                            .build(),
-                        None)
-                        .expect("Failed to create Debug Utils Messenger")
-                };
-                Some(VulkanDebug{
-                    debug_utils: debug_utils_loader,
-                    debug_messenger: messenger,
-                })
+                Some(create_debug_util(
+                    &entry,
+                    &instance,
+                    severity_flags::WARNING | severity_flags::ERROR,
+                    type_flags::GENERAL | type_flags::PERFORMANCE | type_flags::VALIDATION))
             } else {
                 None
             }
