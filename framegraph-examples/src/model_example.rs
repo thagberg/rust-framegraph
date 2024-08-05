@@ -7,7 +7,7 @@ use log::debug;
 
 use ash::vk;
 use ash::vk::{BufferDeviceAddressCreateInfoEXT, Handle};
-use imgui::Ui;
+use imgui::{Condition, Ui};
 use gltf::{Gltf, Semantic};
 use gltf::accessor::{DataType, Dimensions};
 use gpu_allocator::MemoryLocation;
@@ -310,6 +310,13 @@ impl Example for ModelExample {
     }
 
     fn execute(&self, device: Rc<RefCell<DeviceWrapper>>, imgui_ui: &mut Ui, back_buffer: AttachmentReference) -> Vec<PassType> {
+        // build UI
+        imgui_ui.window("glTF Model")
+            .size([300.0, 300.0], Condition::Once)
+            .build(|| {
+
+            });
+
         let mut passes: Vec<PassType> = Vec::new();
 
         let depth_attachment = {
