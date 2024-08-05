@@ -1,7 +1,20 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use ash::prelude::VkResult;
 use ash::vk;
 use crate::api_types::device::DeviceResource;
+
+#[derive(PartialEq, Eq)]
+pub enum SwapchainStatus {
+    Ok,
+    Suboptimal,
+    Outdated
+}
+
+pub struct NextImage {
+    pub image: Option<Rc<RefCell<DeviceResource>>>,
+    pub status: SwapchainStatus
+}
 
 pub struct SwapchainWrapper {
     loader: ash::extensions::khr::Swapchain,
@@ -43,25 +56,42 @@ impl SwapchainWrapper {
         timeout: u64,
         semaphore: vk::Semaphore,
         fence: vk::Fence
-    ) -> Rc<RefCell<DeviceResource>>
+    ) -> NextImage
     {
-        let (image_index, _is_sub_optimal) = unsafe
-        {
+        let acquire_image = unsafe {
             self.loader.acquire_next_image(
                 self.swapchain,
                 timeout,
                 semaphore,
                 fence)
-            .expect("Failed to acquire next swapchain image")
         };
-        self.images[image_index as usize].clone()
+
+        match acquire_image {
+            Ok((image_index, is_sub_optimal)) => {
+                let status = match is_sub_optimal {
+                    true => {SwapchainStatus::Suboptimal}
+                    false => {SwapchainStatus::Ok}
+                };
+                NextImage {
+                    image: Some(self.images[image_index as usize].clone()),
+                    status,
+                }
+            }
+            Err(e) => {
+                log::trace!(target: "swapchain", "Error when obtaining next swapchain image: {}", e);
+                NextImage {
+                    image: None,
+                    status: SwapchainStatus::Outdated
+                }
+            }
+        }
     }
 
     pub fn acquire_next_image(
         &self,
         timeout: Option<u64>,
         semaphore: Option<vk::Semaphore>,
-        fence: Option<vk::Fence>) -> Rc<RefCell<DeviceResource>>
+        fence: Option<vk::Fence>) -> NextImage
     {
         let t = match timeout
         {

@@ -7,6 +7,7 @@ extern crate nalgebra_glm as glm;
 
 //use alloc::ffi::CString;
 use std::ffi::CString;
+use std::mem::swap;
 use std::time::Instant;
 use ash::vk;
 
@@ -20,7 +21,8 @@ use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use imgui;
 use imgui::BackendFlags;
 use winit::error::EventLoopError;
-use context::api_types::swapchain::SwapchainWrapper;
+use winit::platform::macos::WindowBuilderExtMacOS;
+use context::api_types::swapchain::{NextImage, SwapchainStatus, SwapchainWrapper};
 use context::render_context::RenderContext;
 use context::vulkan_render_context::{VulkanFrameObjects, VulkanRenderContext};
 use framegraph::attachment::AttachmentReference;
@@ -74,14 +76,17 @@ struct WindowedVulkanApp {
 
 impl WindowedVulkanApp {
     pub fn new(event_loop: &EventLoop<()>, title: &str, width: u32, height: u32) -> WindowedVulkanApp {
-        SimpleLogger::new().init().unwrap();
+        // SimpleLogger::new().init().unwrap();
+        simple_logger::init_with_level(log::Level::Warn).unwrap();
 
         let window = WindowBuilder::new()
             .with_title(title)
             // .with_inner_size(winit::dpi::LogicalSize::new(width, height))
+            // .with_disallow_hidpi(true)
             .with_inner_size(winit::dpi::PhysicalSize::new(width, height))
             .build(event_loop)
             .expect("Failed to create window");
+        let scale_factor = window.scale_factor();
 
         let mut imgui = imgui::Context::create();
         imgui.set_ini_filename(None);
@@ -212,14 +217,12 @@ impl WindowedVulkanApp {
                     true,
                     u64::MAX)
                 .expect("Failed to wait for Frame Fence");
-
-            // self.render_context.get_device().borrow().get()
-            //     .device_wait_idle()
-            //     .expect("Failed to idle");
         }
         log::trace!(target: "frame", "Wait complete; cleaning up frame.");
         // clean up the completed frame
         self.frames[self.frame_index as usize] = None;
+
+        self.render_context.start_frame();
 
         // get swapchain image for this frame
         let VulkanFrameObjects {
@@ -229,6 +232,33 @@ impl WindowedVulkanApp {
             descriptor_pool,
             frame_index: swapchain_index,
         } = self.render_context.get_next_frame_objects();
+
+        // let next_image = &swapchain_image.unwrap();
+        let next_image = match &swapchain_image {
+            Some(next_image) => {
+                next_image.image.as_ref().unwrap().clone()
+                // match next_image.status {
+                //     SwapchainStatus::Ok => {
+                //         // if the status is OK then we know this is safe
+                //         next_image.image.as_ref().unwrap().clone()
+                //     }
+                //     SwapchainStatus::Suboptimal => {
+                //         // subobtimal, we can still use this image but
+                //         // should also recreate the swapchain
+                //         self.render_context.recreate_swapchain(&self.window);
+                //         next_image.image.as_ref().unwrap().clone()
+                //     }
+                //     SwapchainStatus::Outdated => {
+                //         // outdated, we can no longer use this image and
+                //         // it must be recreated before we can render
+                //         panic!("Outdated swapchain handling not yet supported")
+                //     }
+                // }
+            }
+            None => {
+                panic!("No swapchain exists")
+            }
+        };
 
         // begin commandbuffer
         unsafe {
@@ -264,9 +294,9 @@ impl WindowedVulkanApp {
         self.frames[self.frame_index as usize] = Some(self.frame_graph.start(self.render_context.get_device(), descriptor_pool));
         let current_frame = self.frames[self.frame_index as usize].as_mut().unwrap();
 
-        if let Some(swapchain_image) = swapchain_image.clone() {
+        {
             let present_node = PresentPassNode::builder("present".to_string())
-                .swapchain_image(swapchain_image)
+                .swapchain_image(next_image.clone())
                 .build()
                 .expect("Failed to create Present Node");
 
@@ -274,15 +304,14 @@ impl WindowedVulkanApp {
         }
 
         {
-            let clear_node = clear::clear_color(swapchain_image.as_ref().unwrap().clone());
+            let clear_node = clear::clear_color(next_image.clone());
             current_frame.add_node(clear_node);
         }
 
 
         {
-            let image = swapchain_image.unwrap();
             let rt_ref = AttachmentReference::new(
-                image.clone(),
+                next_image.clone(),
                 vk::SampleCountFlags::TYPE_1);
 
             if let Some(index) = self.examples.active_example_index {
@@ -338,11 +367,15 @@ impl WindowedVulkanApp {
         // prepare present
         // flip
         {
-            self.render_context.flip(
+            let swapchain_status = self.render_context.flip(
                 &[self.render_semaphores[self.frame_index as usize]],
                 swapchain_index);
 
-            let swapchain = self.render_context.get_swapchain().as_ref().unwrap().get();
+            if swapchain_status == SwapchainStatus::Suboptimal {
+                self.render_context.recreate_swapchain(&self.window);
+            }
+
+            // let swapchain = self.render_context.get_swapchain().as_ref().unwrap().get();
 
             // let present = vk::PresentInfoKHR::builder()
             //     .wait_semaphores()
@@ -361,6 +394,8 @@ impl WindowedVulkanApp {
             }
         };
         self.frame_index = (self.frame_index + 1) % max_frames_in_flight;
+
+        self.render_context.end_frame();
     }
 
     // pub fn run(mut self, event_loop: EventLoop<()>) -> Result<u32, &'static str>{
