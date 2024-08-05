@@ -17,6 +17,7 @@ pub struct NextImage {
 }
 
 pub struct SwapchainWrapper {
+    device: Rc<RefCell<DeviceWrapper>>,
     loader: ash::extensions::khr::Swapchain,
     swapchain: vk::SwapchainKHR,
     images: Vec<Rc<RefCell<DeviceResource>>>,
@@ -27,6 +28,7 @@ pub struct SwapchainWrapper {
 
 impl SwapchainWrapper {
     pub fn new(
+        device: Rc<RefCell<DeviceWrapper>>,
         loader: ash::extensions::khr::Swapchain,
         swapchain: vk::SwapchainKHR,
         images: Vec<Rc<RefCell<DeviceResource>>>,
@@ -35,6 +37,7 @@ impl SwapchainWrapper {
         present_fences: Vec<vk::Fence>
     ) -> SwapchainWrapper {
         SwapchainWrapper {
+            device,
             loader,
             swapchain,
             images,
@@ -58,12 +61,12 @@ impl SwapchainWrapper {
         self.present_fences[index as usize].clone()
     }
 
-    pub fn can_destroy(&self, device: &DeviceWrapper) -> bool {
+    pub fn can_destroy(&self) -> bool {
         let mut can_destroy = true;
 
         unsafe {
             for fence in &self.present_fences {
-                let fence_status = device.get().get_fence_status(*fence)
+                let fence_status = self.device.borrow().get().get_fence_status(*fence)
                     .expect("Failed to get Present fence status");
                 match fence_status {
                     true => {}
@@ -139,6 +142,9 @@ impl SwapchainWrapper {
 impl Drop for SwapchainWrapper {
     fn drop(&mut self) {
         unsafe {
+            for fence in &self.present_fences {
+                self.device.borrow().get().destroy_fence(*fence, None);
+            }
             self.loader.destroy_swapchain(self.swapchain, None);
         }
     }
