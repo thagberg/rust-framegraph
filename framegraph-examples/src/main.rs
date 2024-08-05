@@ -208,12 +208,14 @@ impl WindowedVulkanApp {
 
     pub fn draw_frame(&mut self) {
         // wait for fence if necessary (can we avoid this using just semaphores?)
-        let wait_fence = self.frame_fences[self.frame_index as usize];
+        let frame_fence = self.frame_fences[self.frame_index as usize];
+        let wait_fences = [frame_fence];
         log::trace!(target: "frame", "Waiting for frame: {}", self.frame_index);
         unsafe {
             self.render_context.get_device().borrow().get()
                 .wait_for_fences(
-                    std::slice::from_ref(&wait_fence),
+                    // std::slice::from_ref(&wait_fence),
+                    &wait_fences,
                     true,
                     u64::MAX)
                 .expect("Failed to wait for Frame Fence");
@@ -222,7 +224,7 @@ impl WindowedVulkanApp {
         // clean up the completed frame
         self.frames[self.frame_index as usize] = None;
 
-        self.render_context.start_frame();
+        self.render_context.start_frame(self.frame_index);
 
         // get swapchain image for this frame
         let VulkanFrameObjects {
@@ -230,30 +232,12 @@ impl WindowedVulkanApp {
             swapchain_image,
             swapchain_semaphore,
             descriptor_pool,
-            frame_index: swapchain_index,
+            frame_index: render_ctx_frame_index,
         } = self.render_context.get_next_frame_objects();
 
-        // let next_image = &swapchain_image.unwrap();
         let next_image = match &swapchain_image {
             Some(next_image) => {
                 next_image.image.as_ref().unwrap().clone()
-                // match next_image.status {
-                //     SwapchainStatus::Ok => {
-                //         // if the status is OK then we know this is safe
-                //         next_image.image.as_ref().unwrap().clone()
-                //     }
-                //     SwapchainStatus::Suboptimal => {
-                //         // subobtimal, we can still use this image but
-                //         // should also recreate the swapchain
-                //         self.render_context.recreate_swapchain(&self.window);
-                //         next_image.image.as_ref().unwrap().clone()
-                //     }
-                //     SwapchainStatus::Outdated => {
-                //         // outdated, we can no longer use this image and
-                //         // it must be recreated before we can render
-                //         panic!("Outdated swapchain handling not yet supported")
-                //     }
-                // }
             }
             None => {
                 panic!("No swapchain exists")
@@ -352,14 +336,16 @@ impl WindowedVulkanApp {
         // queue submit
         {
             unsafe {
+                let fences_to_reset = [frame_fence];
                 self.render_context.get_device().borrow().get()
-                    .reset_fences(std::slice::from_ref(&wait_fence))
+                    // .reset_fences(std::slice::from_ref(&frame_fence))
+                    .reset_fences(&fences_to_reset)
                     .expect("Failed to reset Frame Fence");
             }
 
             self.render_context.submit_graphics(
                 &[command_buffer],
-                wait_fence,
+                frame_fence,
                 &[swapchain_semaphore],
                 &[self.render_semaphores[self.frame_index as usize]]);
         }
@@ -368,20 +354,14 @@ impl WindowedVulkanApp {
         // flip
         {
             let swapchain_status = self.render_context.flip(
-                &[self.render_semaphores[self.frame_index as usize]],
-                swapchain_index);
+                &[self.render_semaphores[self.frame_index as usize]]);
+
+            self.render_context.end_frame();
 
             if swapchain_status == SwapchainStatus::Suboptimal {
                 self.render_context.recreate_swapchain(&self.window);
             }
-
-            // let swapchain = self.render_context.get_swapchain().as_ref().unwrap().get();
-
-            // let present = vk::PresentInfoKHR::builder()
-            //     .wait_semaphores()
         }
-
-        // queue present (wait on semaphores)
 
         let max_frames_in_flight = {
             match self.render_context.get_swapchain() {
@@ -395,7 +375,6 @@ impl WindowedVulkanApp {
         };
         self.frame_index = (self.frame_index + 1) % max_frames_in_flight;
 
-        self.render_context.end_frame();
     }
 
     // pub fn run(mut self, event_loop: EventLoop<()>) -> Result<u32, &'static str>{
