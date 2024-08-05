@@ -13,7 +13,7 @@ use ash::vk::DebugUtilsMessageSeverityFlagsEXT as severity_flags;
 use ash::vk::DebugUtilsMessageTypeFlagsEXT as type_flags;
 
 use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper, DeviceWrapper, DeviceFramebuffer, DeviceResource, VulkanDebug};
-use crate::api_types::swapchain::SwapchainWrapper;
+use crate::api_types::swapchain::{NextImage, SwapchainStatus, SwapchainWrapper};
 use crate::api_types::image::ImageWrapper;
 use crate::api_types::surface::SurfaceWrapper;
 use crate::api_types::instance::InstanceWrapper;
@@ -426,7 +426,8 @@ fn create_swapchain(
     device: Rc<RefCell<DeviceWrapper>>,
     physical_device: &PhysicalDeviceWrapper,
     surface: &SurfaceWrapper,
-    window: &winit::window::Window
+    window: &winit::window::Window,
+    old_swapchain: &Option<OldSwapchain>
 ) -> SwapchainWrapper {
     let swapchain_capabilities = surface.get_surface_capabilities(physical_device);
 
@@ -495,6 +496,10 @@ fn create_swapchain(
     // TODO: using exclusive mode right now but might want to make this concurrent
     let image_sharing_mode = vk::SharingMode::EXCLUSIVE;
 
+    let old = match &old_swapchain {
+        Some(old) => {old.swapchain.get()}
+        None => {vk::SwapchainKHR::null()}
+    };
     let create_info = vk::SwapchainCreateInfoKHR {
         s_type: vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR,
         p_next: std::ptr::null(),
@@ -512,7 +517,7 @@ fn create_swapchain(
         composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
         present_mode: swapchain_present_mode,
         clipped: vk::TRUE,
-        old_swapchain: vk::SwapchainKHR::null(),
+        old_swapchain: old,
         image_array_layers: 1
     };
 
@@ -555,9 +560,14 @@ fn create_swapchain(
         swapchain_extent)
 }
 
+pub struct OldSwapchain {
+    pub swapchain: SwapchainWrapper,
+    pub frame_index: u32
+}
+
 pub struct VulkanFrameObjects {
     pub graphics_command_buffer: vk::CommandBuffer,
-    pub swapchain_image: Option<Rc<RefCell<DeviceResource>>>,
+    pub swapchain_image: Option<NextImage>,
     pub swapchain_semaphore: vk::Semaphore,
     pub descriptor_pool: vk::DescriptorPool,
     pub frame_index: u32
@@ -573,6 +583,7 @@ pub struct VulkanRenderContext {
     immediate_command_buffer: vk::CommandBuffer,
     descriptor_pools: Vec<vk::DescriptorPool>,
     swapchain: Option<SwapchainWrapper>,
+    old_swapchain: Option<OldSwapchain>,
     swapchain_semaphores: Vec<vk::Semaphore>,
     device: Rc<RefCell<DeviceWrapper>>,
     physical_device: PhysicalDeviceWrapper,
@@ -692,7 +703,8 @@ impl VulkanRenderContext {
                     logical_device.clone(),
                     &physical_device,
                     &surface_wrapper.as_ref().unwrap(),
-                    window.unwrap()))
+                    window.unwrap(),
+                    &None))
             } else {
                 None
             }
@@ -796,6 +808,7 @@ impl VulkanRenderContext {
             graphics_command_pool,
             surface: surface_wrapper,
             swapchain,
+            old_swapchain: None,
             swapchain_semaphores,
             descriptor_pools,
             graphics_command_buffers,
@@ -831,11 +844,40 @@ impl VulkanRenderContext {
 
     pub fn get_swapchain(&self) -> &Option<SwapchainWrapper> { &self.swapchain }
 
+    pub fn recreate_swapchain(
+        &mut self,
+        window: &winit::window::Window
+    ) {
+        match &self.surface {
+            Some(surface) => {
+                // Only rebuild the swapchain if we aren't already doing so
+                if let None = &self.old_swapchain {
+                    self.old_swapchain = Some(OldSwapchain {
+                        swapchain: self.swapchain.take().unwrap(),
+                        frame_index: self.frame_index,
+                    });
+                    let new_swapchain = create_swapchain(
+                        &self.instance,
+                        self.device.clone(),
+                        &self.physical_device,
+                        surface,
+                        window,
+                        &self.old_swapchain);
+
+                    self.swapchain = Some(new_swapchain);
+                }
+            }
+            None => {
+                panic!("Attempting to recreate swapchain when no surface exists");
+            }
+        }
+    }
+
     fn get_next_swapchain_image(
         &mut self,
         timeout: Option<u64>,
         semaphore: Option<vk::Semaphore>,
-        fence: Option<vk::Fence>) -> Option<(Rc<RefCell<DeviceResource>>)> {
+        fence: Option<vk::Fence>) -> Option<NextImage> {
 
         match &mut self.swapchain {
             Some(swapchain) => {
@@ -957,23 +999,66 @@ impl VulkanRenderContext {
     pub fn flip(
         &self,
         wait_semaphores: &[vk::Semaphore],
-        image_index: u32) {
+        image_index: u32) -> SwapchainStatus {
 
-        if let Some(swapchain) = &self.swapchain {
-            let present_info = vk::PresentInfoKHR::builder()
-                .wait_semaphores(wait_semaphores)
-                .swapchains(&[swapchain.get()])
-                .image_indices(&[image_index])
-                .build();
-
-            unsafe {
-                swapchain.get_loader().queue_present(
-                    self.get_present_queue(),
-                    &present_info)
-                    .expect("Failed to execute queue present");
+        let swapchain = {
+            // if we have an "old" swapchain, that means we have recreated
+            // the swapchain but are still presenting from the old one
+            match &self.swapchain {
+                Some(swapchain) => {
+                    swapchain
+                }
+                None => {
+                    panic!("Attempted to flip without a swapchain");
+                }
             }
-        } else {
-            panic!("Attempted to flip without a swapchain");
+            // match &self.old_swapchain {
+            //     Some(old_swapchain) => {
+            //         &old_swapchain.swapchain
+            //     }
+            //     None => {
+            //         match &self.swapchain {
+            //             Some(swapchain) => {
+            //                 swapchain
+            //             }
+            //             None => {
+            //                 panic!("Attempted to flip without a swapchain");
+            //             }
+            //         }
+            //     }
+            // }
+        };
+
+        let present_info = vk::PresentInfoKHR::builder()
+            .wait_semaphores(wait_semaphores)
+            .swapchains(&[swapchain.get()])
+            .image_indices(&[image_index])
+            .build();
+
+        let is_suboptimal = unsafe {
+            swapchain.get_loader().queue_present(
+                self.get_present_queue(),
+                &present_info)
+                .expect("Failed to execute queue present")
+        };
+
+        match is_suboptimal {
+            true => {SwapchainStatus::Suboptimal}
+            false => {SwapchainStatus::Ok}
         }
+    }
+
+    pub fn start_frame(&mut self) {
+        if let Some(old_swapchain) = &self.old_swapchain {
+            unsafe {
+                if old_swapchain.frame_index == self.frame_index {
+                    self.old_swapchain = None;
+                }
+            }
+        }
+    }
+
+    pub fn end_frame(&mut self) {
+
     }
 }
