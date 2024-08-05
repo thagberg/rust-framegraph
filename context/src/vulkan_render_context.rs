@@ -672,9 +672,9 @@ impl VulkanRenderContext {
         let instance_wrapper = InstanceWrapper::new(instance);
 
         let physical_device = pick_physical_device(
-    &instance_wrapper,
+            &instance_wrapper,
             &surface_wrapper,
-        &physical_device_extensions).expect("Failed to select a suitable physical device.");
+            &physical_device_extensions).expect("Failed to select a suitable physical device.");
 
         let logical_device = Rc::new(RefCell::new(create_logical_device(
             &instance_wrapper,
@@ -684,26 +684,6 @@ impl VulkanRenderContext {
             &layers,
             &logical_device_extensions
         )));
-
-        let graphics_queue = unsafe {
-            logical_device.borrow().get().get_device_queue(
-                logical_device.borrow().get_queue_family_indices().graphics.unwrap(),
-                0)
-        };
-        let present_queue = unsafe {
-            logical_device.borrow().get().get_device_queue(
-                logical_device.borrow().get_queue_family_indices().present.unwrap(),
-                0)
-        };
-        let compute_queue = unsafe {
-            logical_device.borrow().get().get_device_queue(
-                logical_device.borrow().get_queue_family_indices().compute.unwrap(),
-                0)
-        };
-
-        let graphics_command_pool = create_command_pool(
-            &logical_device.borrow(),
-            logical_device.borrow().get_queue_family_indices().graphics.unwrap());
 
         let swapchain = {
             if window.is_some() && surface_wrapper.is_some() {
@@ -735,6 +715,26 @@ impl VulkanRenderContext {
 
             semaphores
         };
+
+        let graphics_queue = unsafe {
+            logical_device.borrow().get().get_device_queue(
+                logical_device.borrow().get_queue_family_indices().graphics.unwrap(),
+                0)
+        };
+        let present_queue = unsafe {
+            logical_device.borrow().get().get_device_queue(
+                logical_device.borrow().get_queue_family_indices().present.unwrap(),
+                0)
+        };
+        let compute_queue = unsafe {
+            logical_device.borrow().get().get_device_queue(
+                logical_device.borrow().get_queue_family_indices().compute.unwrap(),
+                0)
+        };
+
+        let graphics_command_pool = create_command_pool(
+            &logical_device.borrow(),
+            logical_device.borrow().get_queue_family_indices().graphics.unwrap());
 
         let max_frames_in_flight = {
             if let Some(swapchain) = &swapchain {
