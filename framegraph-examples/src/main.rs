@@ -376,40 +376,6 @@ impl WindowedVulkanApp {
         self.frame_index = (self.frame_index + 1) % max_frames_in_flight;
 
     }
-
-    // pub fn run(mut self, event_loop: EventLoop<()>) -> Result<u32, &'static str>{
-    //     let mut last_frame = Instant::now();
-    //
-    //     // &self.event_loop.run(move |event, _, control_flow| {
-    //     event_loop.run(move |event, _, control_flow| {
-    //         match event {
-    //             Event::NewEvents(_) => {
-    //                 let now = Instant::now();
-    //                 self.imgui.io_mut().update_delta_time(now - last_frame);
-    //                 last_frame = now;
-    //             },
-    //             Event::MainEventsCleared => {
-    //                 self.platform.prepare_frame(self.imgui.io_mut(), &self.window)
-    //                     .expect("Failed to prepare frame");
-    //                 self.window.request_redraw();
-    //             },
-    //             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
-    //                 *control_flow = ControlFlow::Exit;
-    //             },
-    //             Event::RedrawRequested(_) => {
-    //                 self.draw_frame();
-    //             },
-    //             Event::LoopDestroyed => {
-    //                 self.shutdown();
-    //             },
-    //             event => {
-    //                 self.platform.handle_event(self.imgui.io_mut(), &self.window, &event);
-    //             }
-    //         }
-    //     });
-    //
-    //     Ok(0)
-    // }
 }
 
 fn run(mut app: WindowedVulkanApp, event_loop: EventLoop<()>) -> Result<(), EventLoopError> {
