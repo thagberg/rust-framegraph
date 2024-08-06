@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 use ash::vk::CommandBuffer;
 use context::api_types::device::DeviceResource;
@@ -11,6 +12,16 @@ pub struct CopyPassNode {
     pub copy_dests: Vec<Rc<RefCell<DeviceResource>>>,
     pub fill_callback: Box<FillCallback>,
     name: String
+}
+
+impl Debug for CopyPassNode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CopyPassNode")
+            .field("name", &self.name)
+            .field("copy sources", &self.copy_sources)
+            .field("copy dests", &self.copy_dests)
+            .finish()
+    }
 }
 
 impl CopyPassNode {

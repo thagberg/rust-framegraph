@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::fs;
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
 use ash::vk;
@@ -144,6 +145,14 @@ impl Shader
 pub struct ShaderManager
 {
     shader_cache: HashMap<String, Rc<RefCell<Shader>>>
+}
+
+impl Debug for ShaderManager {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ShaderManager")
+            .field("cached shaders", &self.shader_cache.keys().len())
+            .finish()
+    }
 }
 
 impl ShaderManager

@@ -6,6 +6,7 @@ use context::api_types::device::DeviceResource;
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::pass_node::PassNode;
 
+#[derive(Debug)]
 pub struct PresentPassNode {
     pub swapchain_image: Rc<RefCell<DeviceResource>>,
     name: String

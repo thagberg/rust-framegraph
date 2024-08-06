@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::char::MAX;
 use std::ffi::{c_void, CStr};
 use std::ffi::CString;
+use std::fmt::{Debug, Formatter};
 use std::os::raw::c_char;
 use std::rc::Rc;
 use ash::{vk};
@@ -579,6 +580,7 @@ fn create_swapchain(
         present_fences)
 }
 
+#[derive(Debug)]
 pub struct OldSwapchain {
     pub swapchain: SwapchainWrapper,
     pub frame_index: u32
@@ -592,6 +594,7 @@ pub struct VulkanFrameObjects {
     pub descriptor_pool: vk::DescriptorPool,
     pub frame_index: u32
 }
+
 
 // swapchain_index must be independent from frame_index since it will "reset"
 // whenever we recreate the swapchain
@@ -614,6 +617,13 @@ pub struct VulkanRenderContext {
     surface: Option<SurfaceWrapper>,
     instance: InstanceWrapper,
     entry: ash::Entry
+}
+
+impl Debug for VulkanRenderContext {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VulkanRenderContext")
+            .finish()
+    }
 }
 
 impl Drop for VulkanRenderContext {

@@ -1,10 +1,12 @@
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
 use ash::vk;
+use ash::vk::Handle;
 use context::api_types::device::{DevicePipeline, DeviceWrapper};
 use context::render_context::RenderContext;
 
@@ -83,6 +85,7 @@ impl PipelineDescription
 }
 
 
+#[derive(Debug)]
 pub struct ComputePipelineDescription
 {
     compute_name: String
@@ -111,6 +114,14 @@ pub struct Pipeline
     pub device_pipeline: DevicePipeline
 }
 
+impl Debug for Pipeline {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Pipeline")
+            .field("device pipeline", &self.device_pipeline.pipeline.as_raw())
+            .finish()
+    }
+}
+
 impl Pipeline {
     pub fn new(device_pipeline: DevicePipeline) -> Pipeline
     {
@@ -128,6 +139,7 @@ impl Pipeline {
     }
 }
 
+#[derive(Debug)]
 pub struct VulkanPipelineManager
 {
     pipeline_cache: HashMap<u64, Rc<RefCell<Pipeline>>>,
