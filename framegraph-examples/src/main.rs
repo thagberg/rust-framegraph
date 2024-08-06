@@ -4,7 +4,9 @@ mod model_example;
 
 extern crate alloc;
 extern crate nalgebra_glm as glm;
+extern crate core;
 
+use core::fmt::{Debug, Formatter};
 //use alloc::ffi::CString;
 use std::ffi::CString;
 use std::mem::swap;
@@ -13,6 +15,7 @@ use ash::vk;
 
 use simple_logger::SimpleLogger;
 
+use tracing_subscriber::layer::SubscriberExt;
 use winit;
 use winit::window::{Window, WindowBuilder};
 use winit::event::{Event, WindowEvent};
@@ -72,6 +75,13 @@ struct WindowedVulkanApp {
     frame_graph: VulkanFrameGraph,
 
     render_context: VulkanRenderContext
+}
+
+impl Debug for WindowedVulkanApp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("WindowedVulkanApp")
+            .finish()
+    }
 }
 
 impl WindowedVulkanApp {
@@ -206,6 +216,7 @@ impl WindowedVulkanApp {
         }
     }
 
+    #[tracing::instrument]
     pub fn draw_frame(&mut self) {
         // wait for fence if necessary (can we avoid this using just semaphores?)
         let frame_fence = self.frame_fences[self.frame_index as usize];
@@ -377,6 +388,7 @@ impl WindowedVulkanApp {
     }
 }
 
+#[tracing::instrument]
 fn run(mut app: WindowedVulkanApp, event_loop: EventLoop<()>) -> Result<(), EventLoopError> {
     let mut last_frame = Instant::now();
 
@@ -410,6 +422,10 @@ fn run(mut app: WindowedVulkanApp, event_loop: EventLoop<()>) -> Result<(), Even
 }
 
 fn main() {
+    tracing::subscriber::set_global_default(
+        tracing_subscriber::registry().with(tracing_tracy::TracyLayer::default())
+    ).expect("setup tracy layer");
+
     // create app
     let event_loop: EventLoop<()> = EventLoop::new().expect("Couldn't create EventLoop");
     let app = WindowedVulkanApp::new(&event_loop, "Examples", 1200, 800);
