@@ -259,7 +259,6 @@ impl WindowedVulkanApp {
 
         // update imgui UI
         let ui = self.imgui.new_frame();
-        let mut opened = true;
         if let Some(main_menu) = ui.begin_main_menu_bar() {
             if let Some(file_menu) = ui.begin_menu("File") {
 
@@ -414,7 +413,6 @@ fn main() {
     // create app
     let event_loop: EventLoop<()> = EventLoop::new().expect("Couldn't create EventLoop");
     let app = WindowedVulkanApp::new(&event_loop, "Examples", 1200, 800);
-    // let exit = app.run(event_loop);
     run(app, event_loop);
 
 }
