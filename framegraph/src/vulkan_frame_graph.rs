@@ -544,6 +544,7 @@ impl VulkanFrameGraph {
         command_lists
     }
 
+    #[tracing::instrument]
     fn execute_copy_node(
         &mut self,
         descriptor_sets: &mut Vec<vk::DescriptorSet>,
@@ -804,6 +805,7 @@ impl FrameGraph for VulkanFrameGraph {
     type RC = VulkanRenderContext;
     type Index = NodeIndex;
 
+    #[tracing::instrument]
     fn start(
         &mut self,
         device: Rc<RefCell<DeviceWrapper>>,
@@ -811,6 +813,7 @@ impl FrameGraph for VulkanFrameGraph {
         Box::new(Frame::new(device, descriptor_pool))
     }
 
+    #[tracing::instrument]
     fn end(
         &mut self,
         frame: &mut Frame,
