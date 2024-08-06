@@ -11,3 +11,4 @@ gpu-allocator   = "^0.25"
 rspirv-reflect = "0.8.0"
 context         =  {path="../context"}
 log             = "0.4.21"
+tracing         = "0.1.40"

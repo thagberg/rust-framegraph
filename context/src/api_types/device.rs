@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::ffi::{CString};
 use core::ffi::c_void;
 use std::alloc::alloc;
+use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 use ash::{Device, vk};
 use ash::extensions::ext::DebugUtils;
@@ -18,7 +19,14 @@ pub struct VulkanDebug {
     pub debug_messenger: DebugUtilsMessengerEXT
 }
 
-#[derive(Copy, Clone)]
+impl Debug for VulkanDebug {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VulkanDebug")
+            .finish()
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
 pub struct QueueFamilies {
     pub graphics: Option<u32>,
     pub compute: Option<u32>,
@@ -31,7 +39,7 @@ impl QueueFamilies {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct PhysicalDeviceWrapper {
     physical_device: vk::PhysicalDevice,
 }
@@ -50,6 +58,13 @@ impl PhysicalDeviceWrapper {
 /// ash::Device::destroy_device gets called
 pub struct DeviceLifetime {
     device: ash::Device
+}
+
+impl Debug for DeviceLifetime {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DeviceLifetime")
+            .finish()
+    }
 }
 
 impl Drop for DeviceLifetime {
@@ -72,6 +87,7 @@ impl DeviceLifetime {
     }
 }
 
+#[derive(Debug)]
 pub struct DeviceWrapper {
     handle_generator: u64,
     debug: Option<VulkanDebug>,
@@ -105,6 +121,14 @@ pub struct DeviceResource {
 
     handle: u64,
     device: Rc<RefCell<DeviceWrapper>>
+}
+
+impl Debug for DeviceResource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DeviceResource")
+            .field("handle", &self.handle)
+            .finish()
+    }
 }
 
 impl Drop for DeviceResource {

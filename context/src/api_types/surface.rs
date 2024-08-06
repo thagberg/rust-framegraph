@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Formatter};
 use std::os::raw::{c_char};
 use ash::vk;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
@@ -9,9 +10,18 @@ pub fn get_required_surface_extensions(window: &winit::window::Window) -> &'stat
     ash_window::enumerate_required_extensions(window.raw_display_handle())
         .expect("Failed to find required surface extension names")
 }
+
 pub struct SurfaceWrapper {
     surface: vk::SurfaceKHR,
     surface_loader: ash::extensions::khr::Surface
+}
+
+impl Debug for SurfaceWrapper {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SurfaceWrapper")
+            .field("surface", &self.surface)
+            .finish()
+    }
 }
 
 pub struct SurfaceCapabilities {

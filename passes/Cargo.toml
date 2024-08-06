@@ -9,6 +9,7 @@ edition = "2021"
 ash             = {version = "^0.37", features = ["linked"]}
 glam            = "0.21.2"
 log             = "0.4.21"
+tracing         = "0.1.40"
 
 # released versions of imgui-winit-support use an older version of winit which
 # incorrectly fires a window resize event when a window is initialized on macOS

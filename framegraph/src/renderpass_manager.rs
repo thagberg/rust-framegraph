@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
 use context::render_context::{RenderContext};
@@ -25,6 +26,14 @@ pub struct AttachmentInfo {
 
 pub struct VulkanRenderpassManager {
     renderpass_map: HashMap<String, Rc<RefCell<DeviceRenderpass>>>
+}
+
+impl Debug for VulkanRenderpassManager {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VulkanRenderpassManager")
+            .field("num renderpasses", &self.renderpass_map.len())
+            .finish()
+    }
 }
 
 impl VulkanRenderpassManager {

@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 use ash::vk::CommandBuffer;
 use context::api_types::device::DeviceResource;
@@ -13,6 +14,17 @@ pub struct ComputePassNode {
     pub fill_callback: Box<FillCallback>,
     pub pipeline_description: ComputePipelineDescription,
     name: String
+}
+
+impl Debug for ComputePassNode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ComputePassNode")
+            .field("name", &self.name)
+            .field("inputs", &self.inputs)
+            .field("outputs", &self.outputs)
+            .field("pipeline description", &self.pipeline_description)
+            .finish()
+    }
 }
 
 impl ComputePassNode {

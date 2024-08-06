@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 use ash::prelude::VkResult;
 use ash::vk;
@@ -24,6 +25,13 @@ pub struct SwapchainWrapper {
     format: vk::Format,
     extent: vk::Extent2D,
     present_fences: Vec<vk::Fence>
+}
+
+impl Debug for SwapchainWrapper {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SwapchainWrapper")
+            .finish()
+    }
 }
 
 impl SwapchainWrapper {

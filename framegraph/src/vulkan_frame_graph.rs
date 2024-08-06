@@ -20,6 +20,7 @@ use crate::pipeline::{Pipeline, VulkanPipelineManager};
 use crate::renderpass_manager::VulkanRenderpassManager;
 
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 use std::rc::Rc;
 use ash::vk::DeviceSize;
@@ -251,6 +252,16 @@ pub struct NodeBarriers {
     buffer_barriers: Vec<BufferBarrier>
 }
 
+impl Debug for NodeBarriers {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NodeBarriers")
+            .field("image barriers", &self.image_barriers.len())
+            .field("buffer barriers", &self.buffer_barriers.len())
+            .finish()
+    }
+}
+
+#[derive(Debug)]
 pub struct VulkanFrameGraph {
     pipeline_manager: VulkanPipelineManager,
     renderpass_manager: VulkanRenderpassManager,
@@ -275,6 +286,7 @@ impl VulkanFrameGraph {
         }
     }
 
+    #[tracing::instrument]
     fn compile(&mut self, nodes: &mut StableDiGraph<PassType, u32>, root_index: NodeIndex) -> Vec<NodeIndex>{
         // create input/output maps to detect graph edges
         let mut input_map = MultiMap::new();
@@ -344,6 +356,7 @@ impl VulkanFrameGraph {
         sorted_nodes
     }
 
+    #[tracing::instrument]
     fn link(
         &mut self,
         nodes: &mut StableDiGraph<PassType, u32>,
@@ -531,25 +544,6 @@ impl VulkanFrameGraph {
         command_lists
     }
 
-    /// The purpose of finalize is to either generate new "finalized" nodes or mutate the existing
-    /// nodes to add framebuffer and renderpass. This is to ensure that framebuffer objects are getting
-    /// deleted after a frame completes rendering
-    fn finalize(
-        &mut self,
-        nodes: &StableDiGraph<GraphicsPassNode, u32>,
-        sorted_nodes: &Vec<NodeIndex>) {
-
-        for index in sorted_nodes {
-            let _node = nodes.node_weight(*index).unwrap();
-
-            // generate renderpass
-
-            // generate framebuffer
-
-            // add to passnode?
-        }
-    }
-
     fn execute_copy_node(
         &mut self,
         descriptor_sets: &mut Vec<vk::DescriptorSet>,
@@ -564,6 +558,7 @@ impl VulkanFrameGraph {
             command_buffer);
     }
 
+    #[tracing::instrument]
     fn execute_compute_node(
         &mut self,
         descriptor_sets: &mut Vec<vk::DescriptorSet>,
@@ -628,6 +623,7 @@ impl VulkanFrameGraph {
             command_buffer);
     }
 
+    #[tracing::instrument]
     fn execute_graphics_node(
         &mut self,
         descriptor_sets: &mut Vec<vk::DescriptorSet>,

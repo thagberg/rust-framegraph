@@ -13,6 +13,7 @@ use crate::pass_node::PassNode;
 use crate::pipeline::PipelineDescription;
 use crate::present_pass_node::PresentPassNode;
 
+#[derive(Debug)]
 pub enum PassType {
     Graphics(GraphicsPassNode),
     Copy(CopyPassNode),

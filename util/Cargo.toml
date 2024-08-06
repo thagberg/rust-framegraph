@@ -11,3 +11,4 @@ gpu-allocator       = "^0.25"
 nalgebra-glm        = "0.18.0"
 context             = {path="../context"}
 image               = "0.25.2"
+tracing             = "0.1.40"
