@@ -720,6 +720,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tracing-tracy",
+ "tracy-client",
  "util",
  "winapi",
  "winit",

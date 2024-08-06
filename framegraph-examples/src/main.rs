@@ -23,6 +23,7 @@ use winit::event_loop::{EventLoop, ControlFlow};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use imgui;
 use imgui::BackendFlags;
+use tracy_client::span_location;
 use winit::error::EventLoopError;
 use winit::platform::macos::WindowBuilderExtMacOS;
 use context::api_types::swapchain::{NextImage, SwapchainStatus, SwapchainWrapper};
@@ -74,7 +75,9 @@ struct WindowedVulkanApp {
     imgui_renderer: ImguiRender,
     frame_graph: VulkanFrameGraph,
 
-    render_context: VulkanRenderContext
+    render_context: VulkanRenderContext,
+
+    tracy: tracy_client::Client
 }
 
 impl Debug for WindowedVulkanApp {
@@ -86,6 +89,8 @@ impl Debug for WindowedVulkanApp {
 
 impl WindowedVulkanApp {
     pub fn new(event_loop: &EventLoop<()>, title: &str, width: u32, height: u32) -> WindowedVulkanApp {
+        let tracy = tracy_client::Client::start();
+
         // SimpleLogger::new().init().unwrap();
         simple_logger::init_with_level(log::Level::Warn).unwrap();
 
@@ -194,6 +199,7 @@ impl WindowedVulkanApp {
             frame_fences,
             frame_index: 0,
             render_context,
+            tracy
         }
     }
 
@@ -223,6 +229,7 @@ impl WindowedVulkanApp {
         let wait_fences = [frame_fence];
         log::trace!(target: "frame", "Waiting for frame: {}", self.frame_index);
         unsafe {
+            let _span = tracy_client::span!("Wait on Frame fence");
             self.render_context.get_device().borrow().get()
                 .wait_for_fences(
                     // std::slice::from_ref(&wait_fence),
@@ -270,14 +277,15 @@ impl WindowedVulkanApp {
 
         // update imgui UI
         let ui = self.imgui.new_frame();
-        if let Some(main_menu) = ui.begin_main_menu_bar() {
-            if let Some(file_menu) = ui.begin_menu("File") {
-
-            }
-            if let Some(examples_menu) = ui.begin_menu("Examples") {
-                for (i, example) in &mut self.examples.examples.iter().enumerate() {
-                    if ui.menu_item(example.get_name()) {
-                        self.examples.active_example_index = Some(i);
+        {
+            let _span = tracy_client::span!("Build UI");
+            if let Some(main_menu) = ui.begin_main_menu_bar() {
+                if let Some(file_menu) = ui.begin_menu("File") {}
+                if let Some(examples_menu) = ui.begin_menu("Examples") {
+                    for (i, example) in &mut self.examples.examples.iter().enumerate() {
+                        if ui.menu_item(example.get_name()) {
+                            self.examples.active_example_index = Some(i);
+                        }
                     }
                 }
             }
@@ -289,48 +297,52 @@ impl WindowedVulkanApp {
         let current_frame = self.frames[self.frame_index as usize].as_mut().unwrap();
 
         {
-            let present_node = PresentPassNode::builder("present".to_string())
-                .swapchain_image(next_image.clone())
-                .build()
-                .expect("Failed to create Present Node");
+            let _span = tracy_client::span!("Build Framegraph");
+            {
+                let present_node = PresentPassNode::builder("present".to_string())
+                    .swapchain_image(next_image.clone())
+                    .build()
+                    .expect("Failed to create Present Node");
 
-            current_frame.start(PassType::Present(present_node));
-        }
+                current_frame.start(PassType::Present(present_node));
+            }
 
-        {
-            let clear_node = clear::clear_color(next_image.clone());
-            current_frame.add_node(clear_node);
-        }
+            {
+                let clear_node = clear::clear_color(next_image.clone());
+                current_frame.add_node(clear_node);
+            }
 
 
-        {
-            let rt_ref = AttachmentReference::new(
-                next_image.clone(),
-                vk::SampleCountFlags::TYPE_1);
+            {
+                let rt_ref = AttachmentReference::new(
+                    next_image.clone(),
+                    vk::SampleCountFlags::TYPE_1);
 
-            if let Some(index) = self.examples.active_example_index {
-                if let Some(active_example) = self.examples.examples.get(index) {
-                    let nodes = active_example.execute(
-                        self.render_context.get_device(),
-                        ui,
-                        rt_ref.clone());
-                    for node in nodes {
-                        current_frame.add_node(node);
+                if let Some(index) = self.examples.active_example_index {
+                    if let Some(active_example) = self.examples.examples.get(index) {
+                        let nodes = active_example.execute(
+                            self.render_context.get_device(),
+                            ui,
+                            rt_ref.clone());
+                        for node in nodes {
+                            current_frame.add_node(node);
+                        }
                     }
                 }
-            }
 
-            let imgui_draw_data = self.imgui.render();
+                let imgui_draw_data = self.imgui.render();
 
-            let imgui_nodes = self.imgui_renderer.generate_passes(
-                imgui_draw_data,
-                rt_ref.clone(),
-                self.render_context.get_device());
+                let imgui_nodes = self.imgui_renderer.generate_passes(
+                    imgui_draw_data,
+                    rt_ref.clone(),
+                    self.render_context.get_device());
 
-            for imgui_node in imgui_nodes {
-                current_frame.add_node(imgui_node);
+                for imgui_node in imgui_nodes {
+                    current_frame.add_node(imgui_node);
+                }
             }
         }
+
         self.frame_graph.end(
             current_frame,
             &mut self.render_context,
@@ -363,15 +375,19 @@ impl WindowedVulkanApp {
         // prepare present
         // flip
         {
+            let _span = tracy_client::span!("Present");
+
             let swapchain_status = self.render_context.flip(
                 &[self.render_semaphores[self.frame_index as usize]]);
 
             self.render_context.end_frame();
 
+
             if swapchain_status == SwapchainStatus::Suboptimal {
                 self.render_context.recreate_swapchain(&self.window);
             }
         }
+        self.tracy.frame_mark();
 
         let max_frames_in_flight = {
             match self.render_context.get_swapchain() {

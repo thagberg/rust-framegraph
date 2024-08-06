@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 use ash::vk;
 use petgraph::stable_graph::{StableDiGraph, NodeIndex};
@@ -6,7 +7,7 @@ use context::api_types::device::DeviceWrapper;
 use crate::graphics_pass_node::GraphicsPassNode;
 use crate::pass_type::PassType;
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Debug)]
 enum FrameState {
     New,
     Started,
@@ -21,6 +22,14 @@ pub struct Frame {
     device: Rc<RefCell<DeviceWrapper>>,
     pub(crate) descriptor_pool: vk::DescriptorPool,
     pub descriptor_sets: Vec<vk::DescriptorSet>
+}
+
+impl Debug for Frame {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Frame")
+            .field("state", &self.state)
+            .finish()
+    }
 }
 
 impl Drop for Frame {
