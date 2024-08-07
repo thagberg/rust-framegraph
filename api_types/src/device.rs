@@ -10,9 +10,8 @@ use ash::vk::{DebugUtilsLabelEXT, DebugUtilsMessengerEXT, DebugUtilsObjectNameIn
 use gpu_allocator::vulkan::*;
 use gpu_allocator::MemoryLocation;
 use log::trace;
-
-use crate::api_types::image::{ImageWrapper, ImageCreateInfo, ImageType};
-use crate::api_types::buffer::{BufferWrapper, BufferCreateInfo};
+use crate::buffer::{BufferCreateInfo, BufferWrapper};
+use crate::image::{ImageCreateInfo, ImageType, ImageWrapper};
 
 pub struct VulkanDebug {
     pub debug_utils: DebugUtils,

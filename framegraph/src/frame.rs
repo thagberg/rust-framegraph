@@ -3,7 +3,7 @@ use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 use ash::vk;
 use petgraph::stable_graph::{StableDiGraph, NodeIndex};
-use context::api_types::device::DeviceWrapper;
+use api_types::device::DeviceWrapper;
 use crate::graphics_pass_node::GraphicsPassNode;
 use crate::pass_type::PassType;
 

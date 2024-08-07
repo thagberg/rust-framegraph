@@ -5,13 +5,9 @@ use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
 use ash::vk;
-use ash::vk::ShaderModule;
 use rspirv_reflect;
 use rspirv_reflect::BindingCount;
-use context::api_types::device::{DeviceShader, DeviceWrapper};
-
-use context::render_context::RenderContext;
-use context::vulkan_render_context::VulkanRenderContext;
+use api_types::device::{DeviceShader, DeviceWrapper};
 
 fn create_shader_module(device: Rc<RefCell<DeviceWrapper>>, file_name: &str) -> Shader
 {

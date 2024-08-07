@@ -1,16 +1,8 @@
-use std::cell::RefCell;
 use std::ops::Deref;
-use std::rc::Rc;
-use ash::vk;
-use context::api_types::device::DeviceResource;
-use context::vulkan_render_context::VulkanRenderContext;
-use crate::attachment::AttachmentReference;
-use crate::binding::ResourceBinding;
 use crate::compute_pass_node::ComputePassNode;
 use crate::copy_pass_node::CopyPassNode;
 use crate::graphics_pass_node::GraphicsPassNode;
 use crate::pass_node::PassNode;
-use crate::pipeline::PipelineDescription;
 use crate::present_pass_node::PresentPassNode;
 
 #[derive(Debug)]

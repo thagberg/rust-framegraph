@@ -26,9 +26,9 @@ use std::rc::Rc;
 use ash::vk::DeviceSize;
 use petgraph::data::DataMap;
 use petgraph::visit::Dfs;
-use context::api_types::buffer::BufferWrapper;
-use context::api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
-use context::api_types::image::ImageWrapper;
+use api_types::buffer::BufferWrapper;
+use api_types::device::{DeviceWrapper, ResourceType};
+use api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
 use util::enter_span;
 use crate::attachment::AttachmentReference;
@@ -866,6 +866,7 @@ impl FrameGraph for VulkanFrameGraph {
                 // Prepare and execute resource barriers
                 let barriers = self.node_barriers.get(index);
                 if let Some(barriers) = barriers {
+                    enter_span!(tracing::Level::TRACE, "Generate barriers");
                     // Create the source and dest stage masks
                     let mut source_stage = vk::PipelineStageFlags::NONE;
                     let mut dest_stage = vk::PipelineStageFlags::NONE;

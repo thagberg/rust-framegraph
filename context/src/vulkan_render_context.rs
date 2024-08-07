@@ -1,24 +1,20 @@
 use std::cell::RefCell;
-use std::char::MAX;
 use std::ffi::{c_void, CStr};
-use std::ffi::CString;
 use std::fmt::{Debug, Formatter};
 use std::os::raw::c_char;
 use std::rc::Rc;
 use ash::{vk};
-use ash::vk::{DebugUtilsMessengerEXT, Fence, PresentModeKHR};
-use ash::extensions::ext::DebugUtils;
-use winit::window::Window;
+use ash::vk::{PresentModeKHR};
 
 use ash::vk::DebugUtilsMessageSeverityFlagsEXT as severity_flags;
 use ash::vk::DebugUtilsMessageTypeFlagsEXT as type_flags;
+use api_types::device::{DeviceFramebuffer, DeviceResource, DeviceWrapper, PhysicalDeviceWrapper, QueueFamilies, VulkanDebug};
+use api_types::image::ImageWrapper;
+use api_types::instance::InstanceWrapper;
+use api_types::surface;
+use api_types::surface::SurfaceWrapper;
+use api_types::swapchain::{NextImage, SwapchainStatus, SwapchainWrapper};
 
-use crate::api_types::device::{QueueFamilies, PhysicalDeviceWrapper, DeviceWrapper, DeviceFramebuffer, DeviceResource, VulkanDebug};
-use crate::api_types::swapchain::{NextImage, SwapchainStatus, SwapchainWrapper};
-use crate::api_types::image::ImageWrapper;
-use crate::api_types::surface::SurfaceWrapper;
-use crate::api_types::instance::InstanceWrapper;
-use crate::api_types::surface;
 use crate::render_context::RenderContext;
 
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
@@ -104,10 +100,6 @@ fn create_vulkan_instance(
     application_info: &vk::ApplicationInfo,
     required_layer_names: &[&CStr],
     required_extension_names: &[&CStr]) -> ash::Instance {
-
-    // let layer_names_raw: Vec<CString> = required_layer_names
-    //     .iter()
-    //     .
 
     let raw_layer_names: Vec<*const c_char> = required_layer_names
         .iter()

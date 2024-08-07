@@ -1,7 +1,7 @@
 use alloc::rc::Rc;
 use std::cell::RefCell;
 use imgui::Ui;
-use context::api_types::device::DeviceWrapper;
+use api_types::device::DeviceWrapper;
 use framegraph::attachment::AttachmentReference;
 use framegraph::pass_type::PassType;
 

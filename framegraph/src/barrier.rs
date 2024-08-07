@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use ash::vk;
-use context::api_types::device::DeviceResource;
+use api_types::device::DeviceResource;
 
 pub struct ImageBarrier {
     pub resource: Rc<RefCell<DeviceResource>>,

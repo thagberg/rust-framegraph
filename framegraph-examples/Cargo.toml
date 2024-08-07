@@ -16,6 +16,7 @@ context             = {path="../context"}
 framegraph          = {path="../framegraph"}
 passes              = {path="../passes"}
 util                = {path="../util"}
+api_types           = {path="../api_types"}
 glam                = "0.21.2"
 gpu-allocator       = "^0.25"
 log                 = "0.4.21"
