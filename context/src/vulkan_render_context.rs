@@ -1009,6 +1009,7 @@ impl VulkanRenderContext {
         }
     }
 
+    #[tracing::instrument]
     pub fn submit_graphics(
         &self,
         command_buffers: &[vk::CommandBuffer],
@@ -1033,6 +1034,7 @@ impl VulkanRenderContext {
         }
     }
 
+    #[tracing::instrument]
     pub fn flip(
         &self,
         wait_semaphores: &[vk::Semaphore]) -> SwapchainStatus {

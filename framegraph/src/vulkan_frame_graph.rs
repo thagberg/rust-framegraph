@@ -30,6 +30,7 @@ use context::api_types::buffer::BufferWrapper;
 use context::api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
 use context::api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
+use util::enter_span;
 use crate::attachment::AttachmentReference;
 use crate::barrier::{BufferBarrier, ImageBarrier};
 use crate::command_list::{CommandList, QueueWait};
@@ -855,7 +856,9 @@ impl FrameGraph for VulkanFrameGraph {
         // excute nodes
         // let sorted_nodes = &frame.sorted_nodes;
         for command_list in command_lists {
+            enter_span!(tracing::Level::TRACE, "Filling command lists");
             for index in &command_list.nodes {
+                enter_span!(tracing::Level::TRACE, "Node", "{}", index.index());
                 let nodes = &mut frame.nodes;
                 let node = nodes.node_weight_mut(*index).unwrap();
                 render_context.get_device().borrow().push_debug_label(*command_buffer, node.get_name());

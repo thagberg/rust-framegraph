@@ -688,6 +688,7 @@ dependencies = [
  "petgraph",
  "rspirv-reflect",
  "tracing",
+ "util",
 ]
 
 [[package]]
