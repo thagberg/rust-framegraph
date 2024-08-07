@@ -141,6 +141,7 @@ fn link_inputs(inputs: &[ResourceBinding], node_barrier: &mut NodeBarriers, usag
 
 fn resolve_render_targets(
     attachments: &[AttachmentReference]) -> Vec<ImageWrapper> {
+    enter_span!(tracing::Level::TRACE, "Resolve RTs");
 
     let mut rts: Vec<ImageWrapper> = Vec::new();
     for attachment in attachments {
@@ -213,6 +214,7 @@ fn resolve_descriptors<'a, 'b>(
     pipeline: &Pipeline,
     descriptor_sets: &[vk::DescriptorSet],
     descriptor_updates: &mut DescriptorUpdate) {
+    enter_span!(tracing::Level::TRACE, "Resolve descriptors");
 
     for binding in bindings {
         let binding_ref = binding.resource.borrow();
@@ -719,6 +721,7 @@ impl VulkanFrameGraph {
                     &mut descriptor_updates);
 
                 unsafe {
+                    enter_span!(tracing::Level::TRACE, "Update and bind descriptor sets");
                     // TODO: support descriptor copies?
                     render_context.get_device().borrow().get().update_descriptor_sets(
                         &descriptor_updates.descriptor_writes,
@@ -749,6 +752,7 @@ impl VulkanFrameGraph {
                     .clear_values(std::slice::from_ref(&clear_value));
 
                 unsafe {
+                    enter_span!(tracing::Level::TRACE, "Begin renderpass & bind pipeline");
                     render_context.get_device().borrow().get().cmd_begin_render_pass(
                         *command_buffer,
                         &render_pass_begin,

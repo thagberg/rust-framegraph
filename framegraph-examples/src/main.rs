@@ -263,6 +263,7 @@ impl WindowedVulkanApp {
 
         // begin commandbuffer
         unsafe {
+            let _span = tracy_client::span!("Begin commandbuffer");
             self.render_context.get_device().borrow().get().reset_command_buffer(
                 command_buffer,
                 vk::CommandBufferResetFlags::empty())
@@ -409,6 +410,7 @@ fn run(mut app: WindowedVulkanApp, event_loop: EventLoop<()>) -> Result<(), Even
 
     // &self.event_loop.run(move |event, _, control_flow| {
     event_loop.run(move |event, event_loop| {
+        let _span = tracy_client::span!("Event Loop");
         match event {
             Event::NewEvents(_) => {
                 let now = Instant::now();

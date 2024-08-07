@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use ash::{vk};
 use api_types::device::{DeviceRenderpass, DeviceWrapper};
+use context::enter_span;
 use crate::attachment::AttachmentReference;
 
 pub struct StencilAttachmentInfo {
@@ -47,6 +48,7 @@ impl VulkanRenderpassManager {
         color_attachments: &[AttachmentReference],
         depth_attachment: &Option<AttachmentReference>,
         device: Rc<RefCell<DeviceWrapper>>) -> Rc<RefCell<DeviceRenderpass>> {
+        enter_span!(tracing::Level::TRACE, "Create or Fetch Renderpass");
 
         let renderpass = self.renderpass_map.entry(pass_name.to_string()).or_insert_with_key(|_| {
             // no cached renderpass found, create it and cache it now

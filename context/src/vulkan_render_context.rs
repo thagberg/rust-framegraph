@@ -14,6 +14,7 @@ use api_types::instance::InstanceWrapper;
 use api_types::surface;
 use api_types::surface::SurfaceWrapper;
 use api_types::swapchain::{NextImage, SwapchainStatus, SwapchainWrapper};
+use crate::enter_span;
 
 use crate::render_context::RenderContext;
 
@@ -917,6 +918,7 @@ impl VulkanRenderContext {
         }
     }
 
+    #[tracing::instrument]
     pub fn get_next_frame_objects(&mut self) -> VulkanFrameObjects {
         let old_index = self.frame_index;
 
@@ -948,6 +950,7 @@ impl VulkanRenderContext {
         &self,
         layouts: &[vk::DescriptorSetLayout],
         descriptor_pool: vk::DescriptorPool) -> Vec<vk::DescriptorSet> {
+        enter_span!(tracing::Level::TRACE, "Create Descriptorsets");
 
         if layouts.len() > 0 {
             let alloc_info = vk::DescriptorSetAllocateInfo {
@@ -975,6 +978,7 @@ impl VulkanRenderContext {
         extent: &vk::Extent3D,
         images: &[ImageWrapper],
         depth: &Option<ImageWrapper>) -> DeviceFramebuffer {
+        enter_span!(tracing::Level::TRACE, "Create framebuffer");
 
         let mut image_views: Vec<vk::ImageView> = Vec::new();
         image_views.reserve(images.len() + 1);
@@ -1053,6 +1057,7 @@ impl VulkanRenderContext {
         // wait for and reset the presentation fence
         let present_fence = swapchain.get_present_fence(self.swapchain_index);
         unsafe {
+            enter_span!(tracing::Level::TRACE, "Waiting for Present fence");
             self.device.borrow().get().wait_for_fences(
                 std::slice::from_ref(&present_fence),
                 true,

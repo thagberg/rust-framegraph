@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::ffi::c_void;
+use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
 use ash::vk;
@@ -8,6 +9,7 @@ use gpu_allocator::MemoryLocation;
 use imgui::{DrawData, DrawVert, DrawIdx};
 use api_types::buffer::BufferCreateInfo;
 use api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
+use context::enter_span;
 
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
@@ -61,6 +63,13 @@ pub struct ImguiRender {
     vertex_shader: Rc<RefCell<Shader>>,
     fragment_shader: Rc<RefCell<Shader>>,
     font_texture: Rc<RefCell<DeviceResource>>
+}
+
+impl Debug for ImguiRender {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ImguiRender")
+            .finish()
+    }
 }
 
 impl Drop for ImguiRender {
@@ -155,6 +164,8 @@ impl ImguiRender {
         draw_data: &DrawData,
         render_target: AttachmentReference,
         device: Rc<RefCell<DeviceWrapper>>) -> Vec<PassType> {
+
+        enter_span!(tracing::Level::TRACE, "Generate Imgui Passes");
 
         let mut pass_nodes: Vec<PassType> = Vec::new();
         // one passnode per drawlist
@@ -322,6 +333,7 @@ impl ImguiRender {
                     move |render_ctx: &VulkanRenderContext,
                           command_buffer: &vk::CommandBuffer | {
                         unsafe {
+                            enter_span!(tracing::Level::TRACE, "Imgui Draw");
                             // set vertex buffer
                             {
                                 if let ResourceType::Buffer(vb) = &vtx_buffer.borrow().resource_type.as_ref().unwrap() {
