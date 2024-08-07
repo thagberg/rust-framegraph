@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use ash::vk;
-use context::api_types::device::DeviceResource;
+use api_types::device::DeviceResource;
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::binding::{BindingInfo, BindingType, ImageBindingInfo, ResourceBinding};

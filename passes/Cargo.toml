@@ -20,6 +20,7 @@ gpu-allocator   = "^0.25"
 context         =  {path="../context"}
 framegraph      = {path="../framegraph"}
 util            = {path="../util"}
+api_types       = {path="../api_types"}
 
 [build-dependencies]
 glob            = "0.3.1"

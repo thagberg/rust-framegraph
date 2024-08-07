@@ -7,7 +7,6 @@ extern crate nalgebra_glm as glm;
 extern crate core;
 
 use core::fmt::{Debug, Formatter};
-//use alloc::ffi::CString;
 use std::ffi::CString;
 use std::mem::swap;
 use std::time::Instant;
@@ -26,7 +25,7 @@ use imgui::BackendFlags;
 use tracy_client::span_location;
 use winit::error::EventLoopError;
 use winit::platform::macos::WindowBuilderExtMacOS;
-use context::api_types::swapchain::{NextImage, SwapchainStatus, SwapchainWrapper};
+use api_types::swapchain::SwapchainStatus;
 use context::render_context::RenderContext;
 use context::vulkan_render_context::{VulkanFrameObjects, VulkanRenderContext};
 use framegraph::attachment::AttachmentReference;

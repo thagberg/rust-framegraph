@@ -1,12 +1,6 @@
-use std::cell::RefCell;
-use std::fmt::{Debug, Formatter};
-use std::rc::Rc;
+use std::fmt::{Debug};
 use ash::vk;
-use context::api_types::device::DeviceResource;
 use context::vulkan_render_context::VulkanRenderContext;
-use crate::attachment::AttachmentReference;
-use crate::binding::{ResourceBinding};
-use crate::pipeline::PipelineDescription;
 
 pub type FillCallback = dyn (
 Fn(

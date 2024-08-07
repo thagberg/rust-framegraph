@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 use ash::vk;
-use context::api_types::device::{DeviceFramebuffer, DeviceResource};
+use api_types::device::{DeviceFramebuffer, DeviceResource};
 use crate::pass_node::{PassNode, FillCallback};
 use crate::binding::{ResourceBinding};
 use context::vulkan_render_context::VulkanRenderContext;

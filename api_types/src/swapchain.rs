@@ -3,7 +3,7 @@ use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 use ash::prelude::VkResult;
 use ash::vk;
-use crate::api_types::device::{DeviceResource, DeviceWrapper};
+use crate::device::{DeviceResource, DeviceWrapper};
 
 #[derive(PartialEq, Eq)]
 pub enum SwapchainStatus {

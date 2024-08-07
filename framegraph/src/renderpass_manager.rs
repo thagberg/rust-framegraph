@@ -3,11 +3,8 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
-use context::render_context::{RenderContext};
-
-use ash::{Device, vk};
-use context::api_types::device::{DeviceRenderpass, DeviceWrapper};
-use context::vulkan_render_context::VulkanRenderContext;
+use ash::{vk};
+use api_types::device::{DeviceRenderpass, DeviceWrapper};
 use crate::attachment::AttachmentReference;
 
 pub struct StencilAttachmentInfo {

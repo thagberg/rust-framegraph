@@ -13,6 +13,7 @@ gpu-allocator   = "^0.25"
 image           = "^0.23"
 num             = "^0.4"
 tracing         = "0.1.40"
+api_types       = {path="../api_types"}
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "^0.3", features = ["windef", "libloaderapi"] }

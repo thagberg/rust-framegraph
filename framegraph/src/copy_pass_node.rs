@@ -2,9 +2,8 @@ use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 use ash::vk::CommandBuffer;
-use context::api_types::device::DeviceResource;
+use api_types::device::DeviceResource;
 use context::vulkan_render_context::VulkanRenderContext;
-use crate::binding::ResourceBinding;
 use crate::pass_node::{FillCallback, PassNode};
 
 pub struct CopyPassNode {

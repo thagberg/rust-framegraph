@@ -92,6 +92,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b3d1d046238990b9cf5bcde22a3fb3584ee5cf65fb2765f454ed428c7a0063da"
 
 [[package]]
+name = "api_types"
+version = "0.1.0"
+dependencies = [
+ "ash",
+ "ash-window",
+ "gpu-allocator",
+ "log",
+ "raw-window-handle 0.5.2",
+ "tracing",
+ "winit",
+]
+
+[[package]]
 name = "approx"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -439,6 +452,7 @@ dependencies = [
 name = "context"
 version = "0.1.0"
 dependencies = [
+ "api_types",
  "ash",
  "ash-window",
  "gpu-allocator",
@@ -680,6 +694,7 @@ checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
 name = "framegraph"
 version = "0.1.0"
 dependencies = [
+ "api_types",
  "ash",
  "context",
  "gpu-allocator",
@@ -695,6 +710,7 @@ dependencies = [
 name = "framegraph-examples"
 version = "0.0.1"
 dependencies = [
+ "api_types",
  "ash",
  "ash-window",
  "cgmath",
@@ -1614,6 +1630,7 @@ dependencies = [
 name = "passes"
 version = "0.1.0"
 dependencies = [
+ "api_types",
  "ash",
  "context",
  "framegraph",
@@ -2616,6 +2633,7 @@ checksum = "daf8dba3b7eb870caf1ddeed7bc9d2a049f3cfdfae7cb521b087cc33ae4c49da"
 name = "util"
 version = "0.1.0"
 dependencies = [
+ "api_types",
  "ash",
  "context",
  "gpu-allocator",

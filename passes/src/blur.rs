@@ -3,9 +3,9 @@ use std::rc::Rc;
 
 use ash::vk;
 use gpu_allocator::MemoryLocation;
+use api_types::device::{DeviceResource, DeviceWrapper};
+use api_types::image::{ImageCreateInfo, ImageType};
 
-use context::api_types::device::{DeviceResource, DeviceWrapper};
-use context::api_types::image::{ImageCreateInfo, ImageType};
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::binding::{BindingInfo, BindingType, ImageBindingInfo, ResourceBinding};

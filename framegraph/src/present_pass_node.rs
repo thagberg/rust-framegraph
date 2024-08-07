@@ -1,9 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
-use ash::vk;
-use ash::vk::CommandBuffer;
-use context::api_types::device::DeviceResource;
-use context::vulkan_render_context::VulkanRenderContext;
+use api_types::device::DeviceResource;
 use crate::pass_node::PassNode;
 
 #[derive(Debug)]

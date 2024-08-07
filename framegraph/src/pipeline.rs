@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use ash::vk;
 use ash::vk::Handle;
-use context::api_types::device::{DevicePipeline, DeviceWrapper};
+use api_types::device::{DevicePipeline, DeviceWrapper};
 use context::render_context::RenderContext;
 
 use crate::shader::{Shader, ShaderManager};

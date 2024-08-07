@@ -6,10 +6,9 @@ use ash::vk;
 use ash::vk::{DeviceSize, Handle};
 use gpu_allocator::MemoryLocation;
 use imgui::{DrawData, DrawVert, DrawIdx};
+use api_types::buffer::BufferCreateInfo;
+use api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
 
-use context::api_types::image::ImageCreateInfo;
-use context::api_types::buffer::BufferCreateInfo;
-use context::api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::attachment::AttachmentReference;
