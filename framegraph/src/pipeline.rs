@@ -8,6 +8,7 @@ use std::rc::Rc;
 use ash::vk;
 use ash::vk::Handle;
 use api_types::device::{DevicePipeline, DeviceWrapper};
+use context::enter_span;
 use context::render_context::RenderContext;
 
 use crate::shader::{Shader, ShaderManager};
@@ -414,6 +415,7 @@ impl VulkanPipelineManager {
         render_context: &VulkanRenderContext,
         render_pass: vk::RenderPass,
         pipeline_description: &PipelineDescription) -> Rc<RefCell<Pipeline>> {
+        enter_span!(tracing::Level::TRACE, "Create or fetch Pipeline");
 
         // TODO: define a PipelineKey type and require the consumer to provide it here
         //  to avoid needing to calculate a hash for each used pipeline each frame?

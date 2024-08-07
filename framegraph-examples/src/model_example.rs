@@ -26,6 +26,7 @@ use gltf::json::accessor::{Type};
 use api_types::buffer::BufferCreateInfo;
 use api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
 use api_types::image::{ImageCreateInfo, ImageType};
+use context::enter_span;
 use context::render_context::RenderContext;
 use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding};
 use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
@@ -307,6 +308,8 @@ impl Example for ModelExample {
     }
 
     fn execute(&self, device: Rc<RefCell<DeviceWrapper>>, imgui_ui: &mut Ui, back_buffer: AttachmentReference) -> Vec<PassType> {
+        enter_span!(tracing::Level::TRACE, "Generating Model Pass");
+
         // build UI
         imgui_ui.window("glTF Model")
             .size([300.0, 300.0], Condition::Once)
@@ -467,6 +470,7 @@ impl Example for ModelExample {
                         move | render_ctx: &VulkanRenderContext,
                                command_buffer: &vk::CommandBuffer | {
                             unsafe {
+                                enter_span!(tracing::Level::TRACE, "Model Draw");
                                 // set vertex buffer
                                 {
                                     if let ResourceType::Buffer(vb) = vbo.borrow().resource_type.as_ref().unwrap() {
