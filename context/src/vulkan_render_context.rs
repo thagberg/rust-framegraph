@@ -4,7 +4,7 @@ use std::fmt::{Debug, Formatter};
 use std::os::raw::c_char;
 use std::rc::Rc;
 use ash::{vk};
-use ash::vk::{PresentModeKHR};
+use ash::vk::{ExtendsPhysicalDeviceFeatures2, PFN_vkGetPhysicalDeviceFeatures2, PhysicalDeviceFeatures2, PhysicalDeviceFeatures2Builder, PresentModeKHR};
 
 use ash::vk::DebugUtilsMessageSeverityFlagsEXT as severity_flags;
 use ash::vk::DebugUtilsMessageTypeFlagsEXT as type_flags;
@@ -95,6 +95,42 @@ fn get_instance_flags() -> vk::InstanceCreateFlags {
     vk::InstanceCreateFlags::empty()
 }
 
+trait PhysicalDeviceFeatureChecker {
+    fn add_feature<'a>(&'a mut self, device_features: vk::PhysicalDeviceFeatures2Builder<'a>) -> vk::PhysicalDeviceFeatures2Builder<'a>;
+
+    fn check_feature(&self, device_features: &vk::PhysicalDeviceFeatures2) -> bool;
+}
+
+struct HostQueryResetPhysicalDeviceFeature {
+    feature: vk::PhysicalDeviceHostQueryResetFeatures
+}
+
+impl HostQueryResetPhysicalDeviceFeature {
+    pub fn new() -> Self {
+        let feature = vk::PhysicalDeviceHostQueryResetFeatures::builder()
+            .host_query_reset(true)
+            .build();
+        HostQueryResetPhysicalDeviceFeature {
+            feature: feature
+        }
+    }
+}
+
+impl PhysicalDeviceFeatureChecker for HostQueryResetPhysicalDeviceFeature {
+    fn add_feature<'a>(&'a mut self, device_features: PhysicalDeviceFeatures2Builder<'a>) -> vk::PhysicalDeviceFeatures2Builder<'a> {
+        device_features.push_next(&mut self.feature)
+    }
+
+    fn check_feature(&self, device_features: &PhysicalDeviceFeatures2) -> bool {
+        self.feature.host_query_reset > 0
+    }
+}
+
+fn get_required_physical_device_features() -> Vec<Box<dyn PhysicalDeviceFeatureChecker>> {
+    vec![
+        Box::new(HostQueryResetPhysicalDeviceFeature::new())
+    ]
+}
 
 fn create_vulkan_instance(
     entry: &ash::Entry,
@@ -234,14 +270,37 @@ fn is_physical_device_suitable(
         physical_device,
         required_extensions);
 
+    let mut required_features = get_required_physical_device_features();
+
+    let mut physical_device_features = vk::PhysicalDeviceFeatures2::builder();
+    for mut required_feature in &mut required_features {
+        physical_device_features = required_feature.add_feature(physical_device_features);
+    }
+
+    let mut resolved_physical_device_features = physical_device_features.build();
+
+    unsafe {
+        instance.get().get_physical_device_features2(
+            physical_device,
+            &mut resolved_physical_device_features);
+    }
+
+    let mut required_features_supported = true;
+    for mut required_feature in required_features {
+        if !required_feature.check_feature(&resolved_physical_device_features) {
+            required_features_supported = false;
+        }
+    }
+
     match surface {
         Some(_) => {
-            queue_families.is_complete() && extensions_supported
+            queue_families.is_complete() && extensions_supported && required_features_supported
         },
         None => {
             queue_families.graphics.is_some() &&
                 queue_families.compute.is_some() &&
-                extensions_supported
+                extensions_supported &&
+                required_features_supported
         }
     }
 }
@@ -330,9 +389,15 @@ fn create_logical_device(
         queue_create_infos.push(queue_create_info);
     }
 
-    let physical_device_features = vk::PhysicalDeviceFeatures {
-        ..Default::default()
-    };
+    let mut core_physical_device_features = vk::PhysicalDeviceFeatures::builder().build();
+    let mut physical_device_features = vk::PhysicalDeviceFeatures2::builder();
+    // TODO: make this an argument rather than a function call here
+    let mut required_features = get_required_physical_device_features();
+    for mut required_feature in &mut required_features {
+        physical_device_features = required_feature.add_feature(physical_device_features);
+    }
+
+    let mut resolved_physical_device_features = physical_device_features.build();
 
     // convert layer names to const char*
     let p_layers: Vec<*const c_char> = layers.iter().map(|c_layer| {
@@ -348,7 +413,9 @@ fn create_logical_device(
         .queue_create_infos(&queue_create_infos)
         .enabled_layer_names(&p_layers)
         .enabled_extension_names(&p_extensions)
-        .enabled_features(&physical_device_features)
+        // .enabled_features(&physical_device_features)
+        // .enabled_features(&core_physical_device_features)
+        .push_next(&mut resolved_physical_device_features)
         .build();
 
     let device = unsafe {
