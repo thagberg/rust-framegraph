@@ -59,13 +59,13 @@ use ash::vk;
 use tracy_client::{GpuContext, GpuContextType, GpuSpan};
 
 struct ClosedGpuSpan {
-    span: Arc<Mutex<GpuSpan>>,
+    span: Option<GpuSpan>,
     start_query_id: u32,
     end_query_id: u32
 }
 
 impl ClosedGpuSpan {
-    fn new(span: Arc<Mutex<GpuSpan>>, start_query_id: u32, end_query_id: u32) -> Self {
+    fn new(span: Option<GpuSpan>, start_query_id: u32, end_query_id: u32) -> Self {
         ClosedGpuSpan{
             span,
             start_query_id,
@@ -79,7 +79,10 @@ pub struct OpenGpuSpan<'a> {
     device: &'a ash::Device,
     command_buffer: &'a vk::CommandBuffer,
     pipeline_stage: vk::PipelineStageFlags,
-    span: Arc<Mutex<GpuSpan>>
+    // the span is not actually optional, but this gives us something that
+    // implements Default so we can use std::mem::take on it to move the
+    // GpuSpan out on Drop
+    span: Option<GpuSpan>
 }
 
 impl Drop for OpenGpuSpan<'_> {
@@ -91,7 +94,7 @@ impl Drop for OpenGpuSpan<'_> {
             }
             Some(span_manager) => {
                 span_manager.close_gpu_span(
-                    self.span.clone(),
+                    std::mem::take(&mut self.span),
                     self.query_id,
                     self.command_buffer,
                     self.device,
@@ -103,7 +106,7 @@ impl Drop for OpenGpuSpan<'_> {
 
 impl<'a> OpenGpuSpan<'a> {
     fn new(
-        span: Arc<Mutex<GpuSpan>>,
+        span: GpuSpan,
         query_id: u32,
         device: &'a ash::Device,
         command_buffer: &'a vk::CommandBuffer,
@@ -114,7 +117,7 @@ impl<'a> OpenGpuSpan<'a> {
             device,
             command_buffer,
             pipeline_stage,
-            span
+            span: Some(span)
         }
     }
 }
@@ -140,6 +143,7 @@ impl FrameSpans {
                 self.max_queries-1
             );
         }
+        self.active_spans.clear();
         self.ready = true;
     }
 
@@ -156,19 +160,21 @@ impl FrameSpans {
                     .expect("Failed to retrieve query results");
             }
 
-            for active_span in &self.active_spans {
+            for active_span in &mut self.active_spans {
                 let start_timestamp = self.data[active_span.start_query_id as usize];
                 let end_timestamp = self.data[active_span.end_query_id as usize];
 
-                // let mut span_mutex = crate::GPU_SPAN_MANAGER.lock().unwrap();
-                // match span_mutex.as_mut() {
-                let x = Arc::try_unwrap(active_span.span);
-                let mut span_mutex = x.lock().unwrap();
-                // let mut span_mutex = &active_span.span.lock().unwrap();
-                span_mutex.upload_timestamp(start_timestamp as i64, end_timestamp as i64);
+                let mut gpu_span = None;
+                std::mem::swap(&mut gpu_span, &mut active_span.span);
 
-                // active_span.span.lock().unwrap().upload_timestamp(start_timestamp as i64, end_timestamp as i64);
-                // active_span.span.lock().as_mut().unwrap().upload_timestamp(start_timestamp, end_timestamp);
+                match gpu_span {
+                    None => {
+                        panic!("Attempting to upload an invalid GPU span");
+                    }
+                    Some(span) => {
+                        span.upload_timestamp(start_timestamp as i64, end_timestamp as i64);
+                    }
+                }
             }
         }
         self.ready = false;
@@ -191,19 +197,21 @@ impl FrameSpans {
         let new_span = gpu_context.span_alloc(name, function, file, line_number)
             .expect("Failed to create new GPU span");
 
+        let query_index = self.query_index;
+
         unsafe {
             device.cmd_write_timestamp(
                 *command_buffer,
                 pipeline_stage,
                 self.query_pool.clone(),
-                self.query_index
+                query_index
             );
         }
 
         self.query_index += 1;
         OpenGpuSpan::new(
-            Arc::new(Mutex::new(new_span)),
-            self.query_index,
+            new_span,
+            query_index,
             device,
             command_buffer,
             pipeline_stage)
@@ -211,7 +219,7 @@ impl FrameSpans {
 
     pub fn close_gpu_span(
         &mut self,
-        mut span: Arc<Mutex<GpuSpan>>,
+        mut span: Option<GpuSpan>,
         start_query_id: u32,
         command_buffer: &vk::CommandBuffer,
         device: &ash::Device,
@@ -220,7 +228,7 @@ impl FrameSpans {
         assert!(self.ready, "Attempting to close GPU span before resetting the query pool");
         assert!(self.query_index < self.max_queries, "Overallocating GPU timespan queries");
 
-        span.lock().unwrap().end_zone();
+        span.as_mut().unwrap().end_zone();
 
         unsafe {
             device.cmd_write_timestamp(
@@ -231,11 +239,12 @@ impl FrameSpans {
             );
         }
 
-        self.active_spans.push(ClosedGpuSpan {
-            span: span.clone(),
+        self.active_spans.push(ClosedGpuSpan::new(
+            span,
             start_query_id,
-            end_query_id: self.query_index,
-        });
+             self.query_index,
+        ));
+
         self.query_index += 1;
 
     }
@@ -349,7 +358,7 @@ impl GpuSpanManager {
 
     fn close_gpu_span(
         &mut self,
-        span: Arc<Mutex<GpuSpan>>,
+        span: Option<GpuSpan>,
         start_query_id: u32,
         command_buffer: &vk::CommandBuffer,
         device: &ash::Device,

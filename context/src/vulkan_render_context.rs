@@ -789,11 +789,6 @@ impl VulkanRenderContext {
             &logical_device_extensions
         )));
 
-        {
-            let borrowed_device = logical_device.borrow();
-            init_gpu_profiling!(borrowed_device.get());
-        }
-
         let swapchain = {
             if window.is_some() && surface_wrapper.is_some() {
                 Some(create_swapchain(
@@ -825,6 +820,17 @@ impl VulkanRenderContext {
 
             semaphores
         };
+
+        {
+            let borrowed_device = logical_device.borrow();
+            let num_frames = match &swapchain {
+                None => { MAX_FRAMES_IN_FLIGHT }
+                Some(swapchain) => {
+                    swapchain.get_images().len() as u32
+                }
+            };
+            init_gpu_profiling!(borrowed_device.get(), num_frames);
+        }
 
         let graphics_queue = unsafe {
             logical_device.borrow().get().get_device_queue(
