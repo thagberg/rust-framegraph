@@ -6,4 +6,5 @@ members = [
     "passes",
     "util",
     "framegraph-examples",
-    "api_types"]
+    "api_types",
+    "profiling"]
