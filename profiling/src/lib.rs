@@ -85,25 +85,11 @@ impl Drop for OpenGpuSpan<'_> {
                 panic!("Attempting to close GPU span before GpuSpanManager was initialized")
             }
             Some(span_manager) => {
-                assert!(span_manager.ready, "Attempting to close GPU span before resetting the query pool");
-                let end_query_id = span_manager.query_index;
-                assert!(end_query_id < span_manager.max_queries, "Overallocating GPU timespan queries");
-
-                unsafe {
-                    self.device.cmd_write_timestamp(
-                        *self.command_buffer,
-                        self.pipeline_stage,
-                        span_manager.query_pool.clone(),
-                        end_query_id
-                    );
-                }
-
-                span_manager.active_spans.push(ClosedGpuSpan {
-                    start_query_id: self.query_id,
-                    end_query_id,
-                });
-                span_manager.query_index += 1;
-
+                span_manager.close_gpu_span(
+                    self.query_id,
+                    self.command_buffer,
+                    self.device,
+                    self.pipeline_stage);
             }
         }
     }
@@ -126,7 +112,7 @@ impl<'a> OpenGpuSpan<'a> {
 
 const MAX_QUERIES: u32 = 128;
 
-pub struct GpuSpanManager {
+struct FrameSpans {
     query_pool: vk::QueryPool,
     active_spans: Vec<ClosedGpuSpan>,
     max_queries: u32,
@@ -135,35 +121,8 @@ pub struct GpuSpanManager {
     data: [u64; MAX_QUERIES as usize]
 }
 
-static GPU_SPAN_MANAGER: Mutex<Option<GpuSpanManager>> = Mutex::new(None);
-
-impl GpuSpanManager {
-    pub fn init(device: &ash::Device) {
-        unsafe {
-            assert!(GPU_SPAN_MANAGER.lock().unwrap().is_none(), "Can only initialize a single GpuSpanManagera");
-
-            let query_pool_create = vk::QueryPoolCreateInfo::builder()
-                .query_type(vk::QueryType::TIMESTAMP)
-                .query_count(MAX_QUERIES)
-                .build();
-
-            let query_pool = device.create_query_pool(
-                    &query_pool_create,
-                    None
-                ).expect("Failed to create query pool");
-
-            *GPU_SPAN_MANAGER.lock().unwrap() = Some(GpuSpanManager {
-                query_pool,
-                active_spans: Vec::new(),
-                max_queries: MAX_QUERIES,
-                query_index: 0,
-                ready: false,
-                data: [0; MAX_QUERIES as usize],
-            });
-        }
-    }
-
-    fn reset(&mut self, device: &ash::Device) {
+impl FrameSpans {
+    pub fn reset(&mut self, device: &ash::Device) {
         self.query_index = 0;
         unsafe {
             device.reset_query_pool(
@@ -175,15 +134,168 @@ impl GpuSpanManager {
         self.ready = true;
     }
 
-    fn flush(&mut self, device: &ash::Device) {
+    pub fn flush(&mut self, device: &ash::Device) {
+        // if query_index is still 0, we haven't written a query yet
+        if (self.query_index > 0) {
+            unsafe {
+                device.get_query_pool_results(
+                    self.query_pool,
+                    0,
+                    self.query_index,
+                    &mut self.data,
+                    vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT)
+                    .expect("Failed to retrieve query results");
+            }
+        }
+        self.ready = false;
+    }
+
+    pub fn new_gpu_span<'a>(
+        &mut self,
+        device: &'a ash::Device,
+        command_buffer: &'a vk::CommandBuffer,
+        pipeline_stage: vk::PipelineStageFlags) -> OpenGpuSpan<'a> {
+
+        assert!(self.ready, "Attempting to create GPU span before resetting the query pool");
+        assert!(self.query_index < self.max_queries, "Overallocating GPU timespan queries");
+
         unsafe {
-            device.get_query_pool_results(
-                self.query_pool,
-                0,
-                self.query_index-1,
-                &mut self.data,
-                vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT)
-                .expect("Failed to retrieve query results");
+            device.cmd_write_timestamp(
+                *command_buffer,
+                pipeline_stage,
+                self.query_pool.clone(),
+                self.query_index
+            );
+        }
+
+        self.query_index += 1;
+        OpenGpuSpan::new(self.query_index, device, command_buffer, pipeline_stage)
+    }
+
+    pub fn close_gpu_span(
+        &mut self,
+        start_query_id: u32,
+        command_buffer: &vk::CommandBuffer,
+        device: &ash::Device,
+        pipeline_stage: vk::PipelineStageFlags) {
+
+        assert!(self.ready, "Attempting to close GPU span before resetting the query pool");
+        assert!(self.query_index < self.max_queries, "Overallocating GPU timespan queries");
+
+        unsafe {
+            device.cmd_write_timestamp(
+                *command_buffer,
+                pipeline_stage,
+                self.query_pool.clone(),
+                self.query_index
+            );
+        }
+
+        self.active_spans.push(ClosedGpuSpan {
+            start_query_id,
+            end_query_id: self.query_index,
+        });
+        self.query_index += 1;
+
+    }
+}
+
+pub struct GpuSpanManager {
+    frames: Vec<FrameSpans>,
+    frame_index: usize
+}
+
+static GPU_SPAN_MANAGER: Mutex<Option<GpuSpanManager>> = Mutex::new(None);
+
+impl GpuSpanManager {
+    pub fn init(device: &ash::Device, num_frames: u32) {
+        unsafe {
+            assert!(GPU_SPAN_MANAGER.lock().unwrap().is_none(), "Can only initialize a single GpuSpanManagera");
+
+            let mut frames: Vec<FrameSpans> = Vec::new();
+
+            let query_pool_create = vk::QueryPoolCreateInfo::builder()
+                .query_type(vk::QueryType::TIMESTAMP)
+                .query_count(MAX_QUERIES)
+                .build();
+
+            for _i in 0..num_frames {
+                let query_pool = device.create_query_pool(
+                    &query_pool_create,
+                    None
+                ).expect("Failed to create query pool");
+
+                frames.push(FrameSpans {
+                    query_pool,
+                    active_spans: vec![],
+                    max_queries: MAX_QUERIES,
+                    query_index: 0,
+                    ready: false,
+                    data: [0; MAX_QUERIES as usize],
+                })
+            }
+
+            *GPU_SPAN_MANAGER.lock().unwrap() = Some(GpuSpanManager {
+                frames,
+                frame_index: 0
+            });
+        }
+    }
+
+    fn reset(&mut self, device: &ash::Device) {
+        self.frame_index = (self.frame_index + 1) % self.frames.len();
+        match self.frames.get_mut(self.frame_index) {
+            None => {
+                panic!("Attempting to reset GpuSpanManager frame with invalid index");
+            }
+            Some(frame) => {
+                frame.flush(device);
+                frame.reset(device);
+            }
+        }
+    }
+
+    fn flush(&mut self, device: &ash::Device) {
+        match self.frames.get_mut(self.frame_index) {
+            None => {
+                panic!("Attempting to flush GpuSpanManager frame with invalid index");
+            }
+            Some(frame) => {
+                frame.flush(device);
+            }
+        }
+    }
+
+    fn new_gpu_span<'a>(
+        &mut self,
+        device: &'a ash::Device,
+        command_buffer: &'a vk::CommandBuffer,
+        pipeline_stage: vk::PipelineStageFlags) -> OpenGpuSpan<'a> {
+
+        match self.frames.get_mut(self.frame_index) {
+            None => {
+                panic!("Attempting to flush GpuSpanManager frame with invalid index");
+            }
+            Some(frame) => {
+                frame.new_gpu_span(device, command_buffer, pipeline_stage)
+            }
+        }
+    }
+
+    fn close_gpu_span(
+        &mut self,
+        start_query_id: u32,
+        command_buffer: &vk::CommandBuffer,
+        device: &ash::Device,
+        pipeline_stage: vk::PipelineStageFlags) {
+
+        match self.frames.get_mut(self.frame_index) {
+            None => {
+                panic!("Attempting to flush GpuSpanManager frame with invalid index");
+            }
+            Some(frame) => {
+                frame.close_gpu_span(start_query_id, command_buffer, device, pipeline_stage);
+            }
         }
     }
 }
@@ -211,30 +323,15 @@ pub fn new_gpu_span<'a>(
             panic!("Attempting to enter GPU span before GpuSpanManager was initialized")
         }
         Some(span_manager) => {
-            assert!(span_manager.ready, "Attempting to create GPU span before resetting the query pool");
-            let query_id = span_manager.query_index;
-            assert!(query_id < span_manager.max_queries, "Overallocating GPU timespan queries");
-
-            unsafe {
-                device.cmd_write_timestamp(
-                    *command_buffer,
-                    pipeline_stage,
-                    span_manager.query_pool.clone(),
-                    query_id
-                );
-            }
-
-            span_manager.query_index += 1;
-            OpenGpuSpan::new(query_id, device, command_buffer, pipeline_stage)
-
+            span_manager.new_gpu_span(device, command_buffer, pipeline_stage)
         }
     }
 }
 
 #[macro_export]
 macro_rules! init_gpu_profiling {
-    ($device:expr) => {
-        profiling::GpuSpanManager::init($device);
+    ($device:expr, $num_frames:expr) => {
+        profiling::GpuSpanManager::init($device, $num_frames);
     }
 }
 
