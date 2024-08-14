@@ -337,7 +337,7 @@ impl ImguiRender {
                             // let x = render_ctx.get_device().borrow().get()
                             let device = render_ctx.get_device();
                             let borrowed_device = device.borrow();
-                            enter_gpu_span!(borrowed_device.get(), command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
+                            enter_gpu_span!("Imgui Draw GPU", "UI", borrowed_device.get(), command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
                             // set vertex buffer
                             {
                                 if let ResourceType::Buffer(vb) = &vtx_buffer.borrow().resource_type.as_ref().unwrap() {
