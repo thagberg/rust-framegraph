@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::ops::DerefMut;
 use std::rc::Rc;
 use api_types::device::DeviceWrapper;
+use tracy_client;
 
 /// Context for creating gpu spans.
 ///
@@ -53,17 +54,20 @@ pub fn get_gpu_timestamp(device: Rc<RefCell<DeviceWrapper>>) {
     }
 }
 
-use std::sync::{LockResult, Mutex, MutexGuard};
+use std::sync::{Arc, LockResult, Mutex, MutexGuard};
 use ash::vk;
+use tracy_client::{GpuContext, GpuContextType, GpuSpan};
 
 struct ClosedGpuSpan {
+    span: Arc<Mutex<GpuSpan>>,
     start_query_id: u32,
     end_query_id: u32
 }
 
 impl ClosedGpuSpan {
-    fn new(start_query_id: u32, end_query_id: u32) -> Self {
+    fn new(span: Arc<Mutex<GpuSpan>>, start_query_id: u32, end_query_id: u32) -> Self {
         ClosedGpuSpan{
+            span,
             start_query_id,
             end_query_id,
         }
@@ -74,7 +78,8 @@ pub struct OpenGpuSpan<'a> {
     query_id: u32,
     device: &'a ash::Device,
     command_buffer: &'a vk::CommandBuffer,
-    pipeline_stage: vk::PipelineStageFlags
+    pipeline_stage: vk::PipelineStageFlags,
+    span: Arc<Mutex<GpuSpan>>
 }
 
 impl Drop for OpenGpuSpan<'_> {
@@ -86,6 +91,7 @@ impl Drop for OpenGpuSpan<'_> {
             }
             Some(span_manager) => {
                 span_manager.close_gpu_span(
+                    self.span.clone(),
                     self.query_id,
                     self.command_buffer,
                     self.device,
@@ -97,15 +103,18 @@ impl Drop for OpenGpuSpan<'_> {
 
 impl<'a> OpenGpuSpan<'a> {
     fn new(
+        span: Arc<Mutex<GpuSpan>>,
         query_id: u32,
         device: &'a ash::Device,
         command_buffer: &'a vk::CommandBuffer,
         pipeline_stage: vk::PipelineStageFlags) -> Self {
+
         OpenGpuSpan {
             query_id,
             device,
             command_buffer,
-            pipeline_stage
+            pipeline_stage,
+            span
         }
     }
 }
@@ -146,18 +155,41 @@ impl FrameSpans {
                     vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT)
                     .expect("Failed to retrieve query results");
             }
+
+            for active_span in &self.active_spans {
+                let start_timestamp = self.data[active_span.start_query_id as usize];
+                let end_timestamp = self.data[active_span.end_query_id as usize];
+
+                // let mut span_mutex = crate::GPU_SPAN_MANAGER.lock().unwrap();
+                // match span_mutex.as_mut() {
+                let x = Arc::try_unwrap(active_span.span);
+                let mut span_mutex = x.lock().unwrap();
+                // let mut span_mutex = &active_span.span.lock().unwrap();
+                span_mutex.upload_timestamp(start_timestamp as i64, end_timestamp as i64);
+
+                // active_span.span.lock().unwrap().upload_timestamp(start_timestamp as i64, end_timestamp as i64);
+                // active_span.span.lock().as_mut().unwrap().upload_timestamp(start_timestamp, end_timestamp);
+            }
         }
         self.ready = false;
     }
 
     pub fn new_gpu_span<'a>(
         &mut self,
+        name: &str,
+        file: &str,
+        function: &str,
+        line_number: u32,
+        gpu_context: &GpuContext,
         device: &'a ash::Device,
         command_buffer: &'a vk::CommandBuffer,
         pipeline_stage: vk::PipelineStageFlags) -> OpenGpuSpan<'a> {
 
         assert!(self.ready, "Attempting to create GPU span before resetting the query pool");
         assert!(self.query_index < self.max_queries, "Overallocating GPU timespan queries");
+
+        let new_span = gpu_context.span_alloc(name, function, file, line_number)
+            .expect("Failed to create new GPU span");
 
         unsafe {
             device.cmd_write_timestamp(
@@ -169,11 +201,17 @@ impl FrameSpans {
         }
 
         self.query_index += 1;
-        OpenGpuSpan::new(self.query_index, device, command_buffer, pipeline_stage)
+        OpenGpuSpan::new(
+            Arc::new(Mutex::new(new_span)),
+            self.query_index,
+            device,
+            command_buffer,
+            pipeline_stage)
     }
 
     pub fn close_gpu_span(
         &mut self,
+        mut span: Arc<Mutex<GpuSpan>>,
         start_query_id: u32,
         command_buffer: &vk::CommandBuffer,
         device: &ash::Device,
@@ -181,6 +219,8 @@ impl FrameSpans {
 
         assert!(self.ready, "Attempting to close GPU span before resetting the query pool");
         assert!(self.query_index < self.max_queries, "Overallocating GPU timespan queries");
+
+        span.lock().unwrap().end_zone();
 
         unsafe {
             device.cmd_write_timestamp(
@@ -192,6 +232,7 @@ impl FrameSpans {
         }
 
         self.active_spans.push(ClosedGpuSpan {
+            span: span.clone(),
             start_query_id,
             end_query_id: self.query_index,
         });
@@ -202,7 +243,8 @@ impl FrameSpans {
 
 pub struct GpuSpanManager {
     frames: Vec<FrameSpans>,
-    frame_index: usize
+    frame_index: usize,
+    gpu_context: GpuContext
 }
 
 static GPU_SPAN_MANAGER: Mutex<Option<GpuSpanManager>> = Mutex::new(None);
@@ -235,10 +277,29 @@ impl GpuSpanManager {
                 })
             }
 
+            let tc = tracy_client::Client::start();
+            let gpu_context = tc.new_gpu_context(
+                Some("VulkanContext"),
+                GpuContextType::Vulkan,
+                0,
+                0.0)
+                .expect("Failed to create GPU profiling context");
+
+            let mut new_span = gpu_context.span_alloc(
+                "NewSpan",
+                "SomeWork",
+                "Drawing.rs", 0)
+                .expect("Failed to create GPU span");
+
+            new_span.end_zone();
+            new_span.upload_timestamp(1, 2);
+
             *GPU_SPAN_MANAGER.lock().unwrap() = Some(GpuSpanManager {
                 frames,
-                frame_index: 0
+                frame_index: 0,
+                gpu_context
             });
+
         }
     }
 
@@ -268,6 +329,10 @@ impl GpuSpanManager {
 
     fn new_gpu_span<'a>(
         &mut self,
+        name: &str,
+        file: &str,
+        function: &str,
+        line_number: u32,
         device: &'a ash::Device,
         command_buffer: &'a vk::CommandBuffer,
         pipeline_stage: vk::PipelineStageFlags) -> OpenGpuSpan<'a> {
@@ -277,13 +342,14 @@ impl GpuSpanManager {
                 panic!("Attempting to flush GpuSpanManager frame with invalid index");
             }
             Some(frame) => {
-                frame.new_gpu_span(device, command_buffer, pipeline_stage)
+                frame.new_gpu_span(name, file, function, line_number, &self.gpu_context, device, command_buffer, pipeline_stage)
             }
         }
     }
 
     fn close_gpu_span(
         &mut self,
+        span: Arc<Mutex<GpuSpan>>,
         start_query_id: u32,
         command_buffer: &vk::CommandBuffer,
         device: &ash::Device,
@@ -294,7 +360,7 @@ impl GpuSpanManager {
                 panic!("Attempting to flush GpuSpanManager frame with invalid index");
             }
             Some(frame) => {
-                frame.close_gpu_span(start_query_id, command_buffer, device, pipeline_stage);
+                frame.close_gpu_span(span, start_query_id, command_buffer, device, pipeline_stage);
             }
         }
     }
@@ -313,6 +379,10 @@ pub fn reset_span_manager(device: &ash::Device) {
 }
 
 pub fn new_gpu_span<'a>(
+    name: &str,
+    file: &str,
+    function: &str,
+    line_number: u32,
     device: &'a ash::Device,
     command_buffer: &'a vk::CommandBuffer,
     pipeline_stage: vk::PipelineStageFlags) -> OpenGpuSpan<'a> {
@@ -323,7 +393,7 @@ pub fn new_gpu_span<'a>(
             panic!("Attempting to enter GPU span before GpuSpanManager was initialized")
         }
         Some(span_manager) => {
-            span_manager.new_gpu_span(device, command_buffer, pipeline_stage)
+            span_manager.new_gpu_span(name, file, function, line_number, device, command_buffer, pipeline_stage)
         }
     }
 }
@@ -344,8 +414,8 @@ macro_rules! reset_gpu_profiling {
 
 #[macro_export]
 macro_rules! enter_gpu_span {
-    ($device:expr, $command_buffer:expr, $pipeline_stage:expr) => {
-        let _gpu_span = profiling::new_gpu_span($device, $command_buffer, $pipeline_stage);
+    ($name:expr, $function:expr, $device:expr, $command_buffer:expr, $pipeline_stage:expr) => {
+        let _gpu_span = profiling::new_gpu_span($name, file!(), $function, line!(), $device, $command_buffer, $pipeline_stage);
     }
 }
 
