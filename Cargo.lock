@@ -459,6 +459,7 @@ dependencies = [
  "image 0.23.14",
  "log",
  "num",
+ "profiling 0.1.0",
  "raw-window-handle 0.5.2",
  "tracing",
  "winapi",
@@ -701,6 +702,7 @@ dependencies = [
  "log",
  "multimap",
  "petgraph",
+ "profiling 0.1.0",
  "rspirv-reflect",
  "tracing",
  "util",
@@ -731,6 +733,7 @@ dependencies = [
  "once_cell",
  "passes",
  "phf",
+ "profiling 0.1.0",
  "raw-window-handle 0.5.2",
  "simple_logger",
  "tobj",
@@ -1639,6 +1642,7 @@ dependencies = [
  "gpu-allocator",
  "imgui",
  "log",
+ "profiling 0.1.0",
  "tracing",
  "util",
 ]
@@ -1799,6 +1803,16 @@ dependencies = [
 
 [[package]]
 name = "profiling"
+version = "0.1.0"
+dependencies = [
+ "api_types",
+ "ash",
+ "tracing",
+ "tracy-client",
+]
+
+[[package]]
+name = "profiling"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43d84d1d7a6ac92673717f9f6d1518374ef257669c24ebc5ac25d5033828be58"
@@ -1904,7 +1918,7 @@ dependencies = [
  "num-traits",
  "once_cell",
  "paste",
- "profiling",
+ "profiling 1.0.15",
  "rand",
  "rand_chacha",
  "simd_helpers",

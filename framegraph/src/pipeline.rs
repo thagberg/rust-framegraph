@@ -8,13 +8,13 @@ use std::rc::Rc;
 use ash::vk;
 use ash::vk::Handle;
 use api_types::device::{DevicePipeline, DeviceWrapper};
-use context::enter_span;
 use context::render_context::RenderContext;
 
 use crate::shader::{Shader, ShaderManager};
 
 extern crate context;
 use context::vulkan_render_context::VulkanRenderContext;
+use profiling::enter_span;
 
 #[derive(Copy, Clone)]
 pub enum BlendType

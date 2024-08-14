@@ -26,11 +26,11 @@ use gltf::json::accessor::{Type};
 use api_types::buffer::BufferCreateInfo;
 use api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
 use api_types::image::{ImageCreateInfo, ImageType};
-use context::enter_span;
 use context::render_context::RenderContext;
 use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding};
 use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
 use framegraph::shader;
+use profiling::enter_span;
 use crate::example::Example;
 
 #[derive(Default)]

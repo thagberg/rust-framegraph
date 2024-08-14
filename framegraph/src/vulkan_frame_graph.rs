@@ -30,7 +30,7 @@ use api_types::buffer::BufferWrapper;
 use api_types::device::{DeviceWrapper, ResourceType};
 use api_types::image::ImageWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
-use context::enter_span;
+use profiling::enter_span;
 use crate::attachment::AttachmentReference;
 use crate::barrier::{BufferBarrier, ImageBarrier};
 use crate::command_list::{CommandList, QueueWait};

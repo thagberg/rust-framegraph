@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use ash::{vk};
 use api_types::device::{DeviceRenderpass, DeviceWrapper};
-use context::enter_span;
+use profiling::enter_span;
 use crate::attachment::AttachmentReference;
 
 pub struct StencilAttachmentInfo {
