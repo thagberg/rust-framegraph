@@ -9,7 +9,6 @@ use gpu_allocator::MemoryLocation;
 use imgui::{DrawData, DrawVert, DrawIdx};
 use api_types::buffer::BufferCreateInfo;
 use api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
-use context::enter_span;
 
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
@@ -20,6 +19,7 @@ use framegraph::pass_type::PassType;
 use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
 use framegraph::shader;
 use framegraph::shader::Shader;
+use profiling::{enter_gpu_span, enter_span};
 use util::image;
 
 const IMGUI_VERTEX_BINDING: vk::VertexInputBindingDescription = vk::VertexInputBindingDescription{
@@ -334,6 +334,10 @@ impl ImguiRender {
                           command_buffer: &vk::CommandBuffer | {
                         unsafe {
                             enter_span!(tracing::Level::TRACE, "Imgui Draw");
+                            // let x = render_ctx.get_device().borrow().get()
+                            let device = render_ctx.get_device();
+                            let borrowed_device = device.borrow();
+                            enter_gpu_span!(borrowed_device.get(), command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
                             // set vertex buffer
                             {
                                 if let ResourceType::Buffer(vb) = &vtx_buffer.borrow().resource_type.as_ref().unwrap() {

@@ -21,6 +21,7 @@ context         =  {path="../context"}
 framegraph      = {path="../framegraph"}
 util            = {path="../util"}
 api_types       = {path="../api_types"}
+profiling       = {path="../profiling"}
 
 [build-dependencies]
 glob            = "0.3.1"

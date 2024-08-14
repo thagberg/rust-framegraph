@@ -14,3 +14,4 @@ log             = "0.4.21"
 tracing         = "0.1.40"
 util            = {path="../util"}
 api_types       = {path="../api_types"}
+profiling       = {path="../profiling"}

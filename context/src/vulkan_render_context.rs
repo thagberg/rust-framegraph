@@ -14,7 +14,7 @@ use api_types::instance::InstanceWrapper;
 use api_types::surface;
 use api_types::surface::SurfaceWrapper;
 use api_types::swapchain::{NextImage, SwapchainStatus, SwapchainWrapper};
-use crate::enter_span;
+use profiling::{enter_span, init_gpu_profiling, reset_gpu_profiling};
 
 use crate::render_context::RenderContext;
 
@@ -717,7 +717,6 @@ impl VulkanRenderContext {
         debug_enabled: bool,
         window: Option<&winit::window::Window>
     ) -> VulkanRenderContext {
-
         let layers = [
             unsafe { ::std::ffi::CStr::from_bytes_with_nul_unchecked(b"VK_LAYER_KHRONOS_validation\0") }
         ];
@@ -789,6 +788,11 @@ impl VulkanRenderContext {
             &layers,
             &logical_device_extensions
         )));
+
+        {
+            let borrowed_device = logical_device.borrow();
+            init_gpu_profiling!(borrowed_device.get());
+        }
 
         let swapchain = {
             if window.is_some() && surface_wrapper.is_some() {
@@ -1155,6 +1159,8 @@ impl VulkanRenderContext {
     }
 
     pub fn start_frame(&mut self, frame_index: u32) {
+        let borrowed_device = self.device.borrow();
+        reset_gpu_profiling!(borrowed_device.get());
     }
 
     pub fn end_frame(&mut self) {
