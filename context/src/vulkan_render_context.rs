@@ -51,13 +51,17 @@ fn get_instance_extensions() -> Vec<&'static CStr> {
     // Need to support portability drivers for MoltenVK
     vec![
         vk::KhrPortabilityEnumerationFn::name(),
-        vk::KhrGetPhysicalDeviceProperties2Fn::name()
+        vk::KhrGetPhysicalDeviceProperties2Fn::name(),
+        vk::ExtSurfaceMaintenance1Fn::name(), // dependency of device extension EXTSwapchainMaintenance1
     ]
 }
 
 #[cfg(not(target_os = "macos"))]
 fn get_instance_extensions() -> Vec<&'static CStr> {
-    vec![vk::KhrGetPhysicalDeviceProperties2Fn::name()]
+    vec![
+        vk::KhrGetPhysicalDeviceProperties2Fn::name(),
+        vk::ExtSurfaceMaintenance1Fn::name(), // dependency of device extension EXTSwapchainMaintenance1
+    ]
     // instance_extensions.push(vk::KhrPortabilityEnumerationFn::name());
     // instance_extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
 }
@@ -82,6 +86,7 @@ fn get_physical_device_extensions() -> Vec<&'static CStr> {
     vec![
         ash::extensions::khr::Swapchain::name(),
         vk::ExtSwapchainMaintenance1Fn::name()  // required for present signaling
+
     ]
 }
 
@@ -736,8 +741,8 @@ impl VulkanRenderContext {
 
         instance_extensions.append(&mut get_instance_extensions());
 
-        let physical_device_extensions = get_physical_device_extensions();
-        let logical_device_extensions = get_logical_device_extensions();
+        let mut physical_device_extensions = get_physical_device_extensions();
+        let mut logical_device_extensions = get_logical_device_extensions();
 
         let entry = ash::Entry::linked();
         let instance = create_vulkan_instance(
@@ -779,6 +784,8 @@ impl VulkanRenderContext {
             &instance_wrapper,
             &surface_wrapper,
             &physical_device_extensions).expect("Failed to select a suitable physical device.");
+
+        logical_device_extensions.append(&mut physical_device_extensions);
 
         let logical_device = Rc::new(RefCell::new(create_logical_device(
             &instance_wrapper,
