@@ -1,60 +1,6 @@
-use std::cell::RefCell;
 use std::ops::DerefMut;
-use std::rc::Rc;
-use api_types::device::DeviceWrapper;
 use tracy_client;
-
-/// Context for creating gpu spans.
-///
-/// Generally corresponds to a single hardware queue.
-///
-/// The flow of creating and using gpu context generally looks like this:
-///
-/// ```rust,no_run
-/// # let client = tracy_client::Client::start();
-/// // The period of the gpu clock in nanoseconds, as provided by your GPU api.
-/// // This value corresponds to 1GHz.
-/// let period: f32 = 1_000_000_000.0;
-///
-/// // GPU API: Record writing a timestamp and resolve that to a mappable buffer.
-/// // GPU API: Submit the command buffer writing the timestamp.
-/// // GPU API: Immediately block until the submission is finished.
-/// // GPU API: Map buffer, get timestamp value.
-/// let starting_timestamp: i64 = /* whatever you get from this timestamp */ 0;
-///
-/// // Create the gpu context
-/// let gpu_context = client.new_gpu_context(
-///     Some("MyContext"),
-///     tracy_client::GpuContextType::Vulkan,
-///     starting_timestamp,
-///     period
-/// ).unwrap();
-///
-/// // Now you have some work that you want to time on the gpu.
-///
-/// // GPU API: Record writing a timestamp before the work.
-/// let mut span = gpu_context.span_alloc("MyGpuSpan1", "My::Work", "myfile.rs", 12).unwrap();
-///
-/// // GPU API: Record work.
-///
-/// // GPU API: Record writing a timestamp after the work.
-/// span.end_zone();
-///
-/// // Some time later, once the written timestamp values are available on the cpu.
-/// # let (starting_timestamp, ending_timestamp) = (0, 0);
-///
-/// // Consumes span.
-/// span.upload_timestamp(starting_timestamp, ending_timestamp);
-///
-
-// function for getting initial timestamp (I believe this is used for timeline synchronization?)
-pub fn get_gpu_timestamp(device: Rc<RefCell<DeviceWrapper>>) {
-    unsafe {
-        device.borrow().get().cmd_write_timestamp(Default::default(), Default::default(), Default::default(), 0)
-    }
-}
-
-use std::sync::{Arc, LockResult, Mutex, MutexGuard};
+use std::sync::{Mutex};
 use ash::vk;
 use tracy_client::{GpuContext, GpuContextType, GpuSpan};
 
@@ -130,7 +76,7 @@ struct FrameSpans {
     max_queries: u32,
     query_index: u32,
     ready: bool,
-    data: [u64; MAX_QUERIES as usize]
+    data: [i64; MAX_QUERIES as usize]
 }
 
 impl FrameSpans {
@@ -259,7 +205,13 @@ pub struct GpuSpanManager {
 static GPU_SPAN_MANAGER: Mutex<Option<GpuSpanManager>> = Mutex::new(None);
 
 impl GpuSpanManager {
-    pub fn init(device: &ash::Device, num_frames: u32) {
+    pub fn init(
+        device: &ash::Device,
+        timestamp_period: f32,
+        command_buffer: &vk::CommandBuffer,
+        queue: &vk::Queue,
+        num_frames: u32) {
+
         unsafe {
             assert!(GPU_SPAN_MANAGER.lock().unwrap().is_none(), "Can only initialize a single GpuSpanManagera");
 
@@ -286,22 +238,58 @@ impl GpuSpanManager {
                 })
             }
 
+            // initial timestamp query
+            let mut timestamp_value: i64 = 0;
+            unsafe {
+                device.reset_query_pool(
+                    frames[0].query_pool,
+                    0,
+                    1
+                );
+
+                let begin_info = vk::CommandBufferBeginInfo::builder()
+                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
+                    .build();
+                device.begin_command_buffer(*command_buffer, &begin_info);
+
+                device.cmd_write_timestamp(
+                    *command_buffer,
+                    vk::PipelineStageFlags::ALL_GRAPHICS,
+                    frames[0].query_pool.clone(),
+                    0
+                );
+
+                device.end_command_buffer(*command_buffer);
+
+                let submit_info = vk::SubmitInfo::builder()
+                    .command_buffers(std::slice::from_ref(command_buffer))
+                    .build();
+
+                device.queue_submit(
+                    queue.clone(),
+                    std::slice::from_ref(&submit_info),
+                    vk::Fence::null()
+                ).expect("Failed to submit queue for profiling");
+
+                device.device_wait_idle()
+                    .expect("Failed to wait for idle for profiling");
+
+                device.get_query_pool_results(
+                    frames[0].query_pool,
+                    0,
+                    1,
+                    std::slice::from_mut(&mut timestamp_value),
+                    vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT
+                ).expect("Failed to retrieve initial GPU timestamp");
+            }
+
             let tc = tracy_client::Client::start();
             let gpu_context = tc.new_gpu_context(
                 Some("VulkanContext"),
                 GpuContextType::Vulkan,
-                0,
-                0.0)
+                timestamp_value as i64,
+                timestamp_period)
                 .expect("Failed to create GPU profiling context");
-
-            let mut new_span = gpu_context.span_alloc(
-                "NewSpan",
-                "SomeWork",
-                "Drawing.rs", 0)
-                .expect("Failed to create GPU span");
-
-            new_span.end_zone();
-            new_span.upload_timestamp(1, 2);
 
             *GPU_SPAN_MANAGER.lock().unwrap() = Some(GpuSpanManager {
                 frames,
@@ -409,8 +397,8 @@ pub fn new_gpu_span<'a>(
 
 #[macro_export]
 macro_rules! init_gpu_profiling {
-    ($device:expr, $num_frames:expr) => {
-        profiling::GpuSpanManager::init($device, $num_frames);
+    ($device:expr, $period:expr, $cb:expr, $queue:expr, $num_frames:expr) => {
+        profiling::GpuSpanManager::init($device, $period, $cb, $queue, $num_frames);
     }
 }
 
