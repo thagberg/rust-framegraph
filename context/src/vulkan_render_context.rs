@@ -52,6 +52,7 @@ fn get_instance_extensions() -> Vec<&'static CStr> {
     vec![
         vk::KhrPortabilityEnumerationFn::name(),
         vk::KhrGetPhysicalDeviceProperties2Fn::name(),
+        vk::KhrGetSurfaceCapabilities2Fn::name(), // dependency of EXTSurfaceMaintenance1
         vk::ExtSurfaceMaintenance1Fn::name(), // dependency of device extension EXTSwapchainMaintenance1
     ]
 }
@@ -60,7 +61,10 @@ fn get_instance_extensions() -> Vec<&'static CStr> {
 fn get_instance_extensions() -> Vec<&'static CStr> {
     vec![
         vk::KhrGetPhysicalDeviceProperties2Fn::name(),
-        vk::ExtSurfaceMaintenance1Fn::name(), // dependency of device extension EXTSwapchainMaintenance1
+        vk::KhrGetSurfaceCapabilities2Fn::name(), // dependency of EXTSurfaceMaintenance1
+        vk::ExtSurfaceMaintenance1Fn::name() // dependency of device extension EXTSwapchainMaintenance1
+        // use winit::platform::macos::WindowBuilderExtMacOS;
+
     ]
     // instance_extensions.push(vk::KhrPortabilityEnumerationFn::name());
     // instance_extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
