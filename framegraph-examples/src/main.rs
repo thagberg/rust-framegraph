@@ -24,7 +24,6 @@ use imgui;
 use imgui::BackendFlags;
 use tracy_client::span_location;
 use winit::error::EventLoopError;
-use winit::platform::macos::WindowBuilderExtMacOS;
 use api_types::swapchain::SwapchainStatus;
 use context::render_context::RenderContext;
 use context::vulkan_render_context::{VulkanFrameObjects, VulkanRenderContext};
