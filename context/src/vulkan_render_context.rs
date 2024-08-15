@@ -821,17 +821,6 @@ impl VulkanRenderContext {
             semaphores
         };
 
-        {
-            let borrowed_device = logical_device.borrow();
-            let num_frames = match &swapchain {
-                None => { MAX_FRAMES_IN_FLIGHT }
-                Some(swapchain) => {
-                    swapchain.get_images().len() as u32
-                }
-            };
-            init_gpu_profiling!(borrowed_device.get(), num_frames);
-        }
-
         let graphics_queue = unsafe {
             logical_device.borrow().get().get_device_queue(
                 logical_device.borrow().get_queue_family_indices().graphics.unwrap(),
@@ -859,6 +848,7 @@ impl VulkanRenderContext {
                 MAX_FRAMES_IN_FLIGHT
             }
         };
+
 
         let ubo_pool_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::UNIFORM_BUFFER,
@@ -900,6 +890,30 @@ impl VulkanRenderContext {
             max_frames_in_flight);
 
         let frame_index = 0;
+
+        {
+            let borrowed_device = logical_device.borrow();
+            let num_frames = match &swapchain {
+                None => { MAX_FRAMES_IN_FLIGHT }
+                Some(swapchain) => {
+                    swapchain.get_images().len() as u32
+                }
+            };
+
+            let device_properties = unsafe {
+                instance_wrapper.get().get_physical_device_properties(
+                    physical_device.get().clone()
+                )
+            };
+
+            init_gpu_profiling!(
+                borrowed_device.get(),
+                device_properties.limits.timestamp_period,
+                &immediate_command_buffer[0],
+                &graphics_queue,
+                num_frames);
+        }
+
 
         VulkanRenderContext {
             entry,
