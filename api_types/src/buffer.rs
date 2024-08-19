@@ -20,13 +20,15 @@ impl BufferCreateInfo {
 
 #[derive(Clone)]
 pub struct BufferWrapper {
-    pub buffer: vk::Buffer
+    pub buffer: vk::Buffer,
+    pub create_info: vk::BufferCreateInfo
 }
 
 impl BufferWrapper {
-    pub fn new(buffer: vk::Buffer) -> BufferWrapper {
+    pub fn new(buffer: vk::Buffer, create_info: vk::BufferCreateInfo) -> BufferWrapper {
         BufferWrapper {
-            buffer
+            buffer,
+            create_info
         }
     }
 
