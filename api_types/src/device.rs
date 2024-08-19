@@ -93,6 +93,7 @@ pub struct DeviceWrapper {
     queue_family_indices: QueueFamilies,
     allocator: Allocator,
     device: DeviceLifetime,
+    device_limits: vk::PhysicalDeviceLimits
 }
 
 impl Drop for DeviceWrapper {
@@ -266,6 +267,7 @@ impl DeviceWrapper {
         device: ash::Device,
         instance: &ash::Instance,
         physical_device: &PhysicalDeviceWrapper,
+        physical_device_properties: vk::PhysicalDeviceProperties,
         debug: Option<VulkanDebug>,
         queue_family_indices: QueueFamilies) -> DeviceWrapper {
 
@@ -283,7 +285,8 @@ impl DeviceWrapper {
             debug,
             queue_family_indices,
             allocator,
-            handle_generator: 0
+            handle_generator: 0,
+            device_limits: physical_device_properties.limits,
         }
     }
     pub fn get(&self) -> &ash::Device {
@@ -550,7 +553,7 @@ impl DeviceWrapper {
                     .expect("Failed to bind buffer to memory");
             }
 
-            let buffer_wrapper = BufferWrapper::new(buffer);
+            let buffer_wrapper = BufferWrapper::new(buffer, buffer_desc.get_create_info().clone());
             device.borrow().set_buffer_name(&buffer_wrapper, buffer_desc.get_name());
             DeviceResource {
                 allocation: Some(allocation),
@@ -575,7 +578,7 @@ impl DeviceWrapper {
             }
         };
         if let Some(resolved_resource) = &device_buffer.resource_type {
-            if let ResourceType::Buffer(_) = &resolved_resource {
+            if let ResourceType::Buffer(resolved_buffer) = &resolved_resource {
                 let mapped_range = unsafe {
                     vk::MappedMemoryRange::builder()
                         .memory(allocation.memory())
@@ -597,9 +600,16 @@ impl DeviceWrapper {
                         self.device.get().unmap_memory(allocation.memory());
                     }
                 }
-                unsafe {
-                    self.device.get().flush_mapped_memory_ranges(std::slice::from_ref(&mapped_range))
-                        .expect("Failed to flush mapped memory");
+                // If this buffer was not allocated in host-coherent memory then we need
+                // to flush the mapped ranges before the changes will be visible.
+                // This shouldn't be done on host-coherent memory because coherent memory
+                // allocations might not be aligned with vkPhysicalDeviceLimits::nonCoherentAtomSize,
+                // which is required for vkFlushMappedMemoryRanges
+                if !allocation.memory_properties().contains(vk::MemoryPropertyFlags::HOST_COHERENT) {
+                    unsafe {
+                        self.device.get().flush_mapped_memory_ranges(std::slice::from_ref(&mapped_range))
+                            .expect("Failed to flush mapped memory");
+                    }
                 }
             } else {
                 panic!("Cannot update a non-buffer resource as a buffer");
