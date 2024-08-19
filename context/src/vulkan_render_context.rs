@@ -241,7 +241,7 @@ pub fn are_extensions_supported(
 ) -> bool {
     // let available_extensions: Vec<&CStr> = unsafe {
     let extension_properties;
-    let mut available_extensions = unsafe {
+    let mut available_extensions: Vec<&CStr> = unsafe {
         extension_properties = instance.get().enumerate_device_extension_properties(physical_device)
         .expect("Failed to enumerate extensions from physical device.");
 
@@ -250,21 +250,28 @@ pub fn are_extensions_supported(
         .map(|extension| {
             CStr::from_ptr(extension.extension_name.as_ptr())
         })
-        // .collect()
+        .collect()
     };
 
-
-    for extension in required_extensions.iter() {
-        let found = available_extensions.find(|available| {
-            available.eq(extension)
-        });
-
-        if found.is_none() {
-            return false;
-        }
+    let available_extensions_length = available_extensions.len();
+    for ext in &available_extensions {
+        let s = ext.to_str().unwrap().to_string();
     }
 
-    true
+
+    let mut all_extensions_found = true;
+    for extension in required_extensions.iter() {
+        let mut extension_found = false;
+        for ext in available_extensions.iter() {
+            if extension.eq(ext) {
+                extension_found = true;
+                break;
+            }
+        }
+        all_extensions_found &= extension_found;
+    }
+
+    all_extensions_found
 }
 
 fn is_physical_device_suitable(
@@ -366,6 +373,7 @@ fn pick_physical_device(
 
 fn create_logical_device(
     instance: &InstanceWrapper,
+    physical_device_properties: vk::PhysicalDeviceProperties,
     debug: Option<VulkanDebug>,
     physical_device: &PhysicalDeviceWrapper,
     surface: &Option<SurfaceWrapper>,
@@ -422,8 +430,6 @@ fn create_logical_device(
         .queue_create_infos(&queue_create_infos)
         .enabled_layer_names(&p_layers)
         .enabled_extension_names(&p_extensions)
-        // .enabled_features(&physical_device_features)
-        // .enabled_features(&core_physical_device_features)
         .push_next(&mut resolved_physical_device_features)
         .build();
 
@@ -432,7 +438,13 @@ fn create_logical_device(
             .expect("Failed to create logical device.")
     };
 
-    DeviceWrapper::new(device, instance.get(), &physical_device, debug, queue_family_indices)
+    DeviceWrapper::new(
+        device,
+        instance.get(),
+        &physical_device,
+        physical_device_properties,
+        debug,
+        queue_family_indices)
 }
 
 fn create_command_pool(
@@ -789,10 +801,18 @@ impl VulkanRenderContext {
             &surface_wrapper,
             &physical_device_extensions).expect("Failed to select a suitable physical device.");
 
+        let device_properties = unsafe {
+            instance_wrapper.get().get_physical_device_properties(
+                physical_device.get().clone()
+            )
+        };
+
+
         logical_device_extensions.append(&mut physical_device_extensions);
 
         let logical_device = Rc::new(RefCell::new(create_logical_device(
             &instance_wrapper,
+            device_properties.clone(),
             debug,
             &physical_device,
             &surface_wrapper,
@@ -909,12 +929,6 @@ impl VulkanRenderContext {
                 Some(swapchain) => {
                     swapchain.get_images().len() as u32
                 }
-            };
-
-            let device_properties = unsafe {
-                instance_wrapper.get().get_physical_device_properties(
-                    physical_device.get().clone()
-                )
             };
 
             init_gpu_profiling!(
