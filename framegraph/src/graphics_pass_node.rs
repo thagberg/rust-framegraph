@@ -128,6 +128,10 @@ impl GraphicsPassNode  {
         &mut self.render_targets
     }
 
+    pub fn get_depth_mut(&mut self) -> &mut Option<AttachmentReference> {
+        &mut self.depth_target
+    }
+
     pub fn execute(
         &self,
         render_context: &mut VulkanRenderContext,

@@ -387,6 +387,34 @@ impl VulkanFrameGraph {
                         link_inputs(gn.get_inputs(), &mut node_barrier, &mut usage_cache);
                         link_inputs(&gn.outputs, &mut node_barrier, &mut usage_cache);
 
+                        if let Some(dt) = gn.get_depth_mut() {
+                            let handle = dt.resource_image.borrow().get_handle();
+                            let last_usage = usage_cache.get(&handle);
+                            // TODO: handle separate depth and stencil targets
+                            let new_usage = ResourceUsage {
+                                access: vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE |
+                                    vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ,
+                                stage: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
+                                layout: Some(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                            };
+                            if let Some(usage) = last_usage {
+                                // The RenderPassManager expects the RT layout to be in the
+                                // post-barrier (i.e. new) layout
+                                dt.layout = new_usage.layout.unwrap();
+
+                                let image_barrier = ImageBarrier {
+                                    resource: dt.resource_image.clone(),
+                                    source_stage: usage.stage,
+                                    dest_stage: new_usage.stage,
+                                    source_access: usage.access,
+                                    dest_access: new_usage.access,
+                                    old_layout: usage.layout.expect("Tried to get image layout from non-image"),
+                                    new_layout: dt.layout
+                                };
+                                node_barrier.image_barriers.push(image_barrier);
+                            }
+                        }
+
                         for rt in gn.get_rendertargets_mut() {
                             // rendertargets always write, so if this isn't the first usage of this resource
                             // then we know we need a barrier
