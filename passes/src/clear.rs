@@ -60,7 +60,10 @@ pub fn clear(
                             *command_buffer,
                             target.borrow().get_image().image,
                             vk::ImageLayout::GENERAL,
-                            &Default::default(),
+                            &vk::ClearDepthStencilValue::builder()
+                                .depth(1.0)
+                                .stencil(0)
+                                .build(),
                             std::slice::from_ref(&range));
                     } else {
                         panic!("Invalid aspect mask for clear: {:?}", aspect_mask);
