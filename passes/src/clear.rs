@@ -24,7 +24,17 @@ pub fn clear(
         }
     };
 
-    let pass_node = GraphicsPassNode::builder("Color Clear".to_string())
+    let pass_name = {
+        if aspect_mask == vk::ImageAspectFlags::COLOR {
+            "Color clear".to_string()
+        } else if aspect_mask & vk::ImageAspectFlags::DEPTH == vk::ImageAspectFlags::DEPTH {
+            "Depth clear".to_string()
+        } else {
+            panic!("Invalid aspect mask for clear");
+        }
+    };
+
+    let pass_node = GraphicsPassNode::builder(pass_name)
         .write(target_binding)
         .fill_commands(Box::new(
             move |render_ctx: &VulkanRenderContext,
