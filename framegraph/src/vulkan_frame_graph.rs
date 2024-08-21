@@ -312,10 +312,13 @@ impl VulkanFrameGraph {
                 // input/output match defines a graph edge
                 for matched_output in matched_outputs {
                     // use update_edge instead of add_edge to avoid duplicates
-                    nodes.update_edge(
-                        *node_index,
-                        *matched_output,
-                        0);
+                    // if matched_output.index() != node_index.index() {
+                    if matched_output != node_index {
+                        nodes.update_edge(
+                            *node_index,
+                            *matched_output,
+                            0);
+                    }
                 }
             }
         }
