@@ -330,7 +330,9 @@ impl Example for ModelExample {
                     // .initial_layout(vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL)
                     .initial_layout(vk::ImageLayout::UNDEFINED)
                     .samples(vk::SampleCountFlags::TYPE_1)
-                    .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
+                    // transfer_dst required for this to be clearable via vkCmdClearDepthStencilImage
+                    // https://vulkan.lunarg.com/doc/view/1.3.290.0/windows/1.3-extensions/vkspec.html#VUID-vkCmdClearDepthStencilImage-pRanges-02660
+                    .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST)
                     .extent(rt_extent)
                     .mip_levels(1)
                     .array_layers(1)
