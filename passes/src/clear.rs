@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use ash::vk;
+use ash::vk::{wl_display, ImageAspectFlags};
 use api_types::device::DeviceResource;
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
@@ -8,8 +9,9 @@ use framegraph::binding::{BindingInfo, BindingType, ImageBindingInfo, ResourceBi
 use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::pass_type::PassType;
 
-pub fn clear_color(
-    target: Rc<RefCell<DeviceResource>>) -> PassType{
+pub fn clear(
+    target: Rc<RefCell<DeviceResource>>,
+    aspect_mask: vk::ImageAspectFlags) -> PassType{
 
     let target_binding = ResourceBinding {
         resource: target.clone(),
@@ -28,7 +30,7 @@ pub fn clear_color(
             move |render_ctx: &VulkanRenderContext,
                   command_buffer: &vk::CommandBuffer | {
                 let range = vk::ImageSubresourceRange::builder()
-                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .aspect_mask(aspect_mask)
                     .level_count(1)
                     .base_mip_level(0)
                     .layer_count(1)
@@ -36,12 +38,23 @@ pub fn clear_color(
                     .build();
 
                 unsafe {
-                    render_ctx.get_device().borrow().get().cmd_clear_color_image(
-                        *command_buffer,
-                        target.borrow().get_image().image,
-                        vk::ImageLayout::GENERAL,
-                        &Default::default(),
-                        std::slice::from_ref(&range));
+                    if aspect_mask == vk::ImageAspectFlags::COLOR {
+                        render_ctx.get_device().borrow().get().cmd_clear_color_image(
+                            *command_buffer,
+                            target.borrow().get_image().image,
+                            vk::ImageLayout::GENERAL,
+                            &Default::default(),
+                            std::slice::from_ref(&range));
+                    } else if aspect_mask & vk::ImageAspectFlags::DEPTH == vk::ImageAspectFlags::DEPTH {
+                        render_ctx.get_device().borrow().get().cmd_clear_depth_stencil_image(
+                            *command_buffer,
+                            target.borrow().get_image().image,
+                            vk::ImageLayout::GENERAL,
+                            &Default::default(),
+                            std::slice::from_ref(&range));
+                    } else {
+                        panic!("Invalid aspect mask for clear: {:?}", aspect_mask);
+                    }
                 };
             }
         ))

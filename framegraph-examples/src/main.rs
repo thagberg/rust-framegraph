@@ -307,10 +307,9 @@ impl WindowedVulkanApp {
             }
 
             {
-                let clear_node = clear::clear_color(next_image.clone());
+                let clear_node = clear::clear(next_image.clone(), vk::ImageAspectFlags::COLOR);
                 current_frame.add_node(clear_node);
             }
-
 
             {
                 let rt_ref = AttachmentReference::new(
