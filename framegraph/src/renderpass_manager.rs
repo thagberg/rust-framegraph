@@ -73,13 +73,13 @@ impl VulkanRenderpassManager {
                     .load_op(load_op)
                     .store_op(vk::AttachmentStoreOp::STORE)
                     .initial_layout(depth_attachment.layout)
-                    // TODO: add support for seprateDepthStencilLayouts
+                    // TODO: add support for separateDepthStencilLayouts
                     .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
                     .build());
 
                 depth_ref = Some(vk::AttachmentReference::builder()
                     .attachment(attachment_index)
-                    // TODO: add support for seprateDepthStencilLayouts
+                    // TODO: add support for separateDepthStencilLayouts
                     // .layout(vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL)
                     .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
                     .build());
