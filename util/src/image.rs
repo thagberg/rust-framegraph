@@ -171,6 +171,10 @@ pub fn create_from_bytes(
                 std::slice::from_ref(&submit),
                 vk::Fence::null())
                 .expect("Failed to execute buffer->image copy");
+
+            // TODO: this is very bad and we should figure something else out
+            device.borrow().get().device_wait_idle()
+                .expect("Error when waiting for buffer->image copy");
         }
 
         image
