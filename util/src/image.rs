@@ -3,7 +3,7 @@ use std::ffi::c_void;
 use std::rc::Rc;
 
 use ash::vk;
-use ash::vk::DeviceSize;
+use ash::vk::{DeviceSize, Format};
 use gpu_allocator::MemoryLocation;
 use image::{DynamicImage, GenericImageView, ImageReader};
 use image::DynamicImage::*;
@@ -236,4 +236,27 @@ pub fn create_from_uri(
         .build();
 
     create_from_bytes(device, render_context, texture_create, img.as_bytes(), uri)
+}
+
+pub fn get_aspect_mask_from_format(format: vk::Format) -> vk::ImageAspectFlags {
+    match format {
+        vk::Format::D16_UNORM |
+        vk::Format::D32_SFLOAT => {
+            vk::ImageAspectFlags::DEPTH
+        },
+        vk::Format::D16_UNORM_S8_UINT |
+        vk::Format::D24_UNORM_S8_UINT |
+        vk::Format::D32_SFLOAT_S8_UINT => {
+            vk::ImageAspectFlags::DEPTH | vk::ImageAspectFlags::STENCIL
+        },
+        vk::Format::S8_UINT => {
+            vk::ImageAspectFlags::STENCIL
+        },
+        vk::Format::UNDEFINED => {
+            panic!("Can't get aspect mask from undefined image format")
+        },
+        _ => {
+            vk::ImageAspectFlags::COLOR
+        }
+    }
 }
