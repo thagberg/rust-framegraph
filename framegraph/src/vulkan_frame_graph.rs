@@ -909,15 +909,17 @@ impl FrameGraph for VulkanFrameGraph {
                     let transformed_image_barriers: Vec<vk::ImageMemoryBarrier> = barriers.image_barriers.iter().map(|ib| {
                         let image = ib.resource.borrow();
                         let resolved = image.resource_type.as_ref().expect("Invalid image in ImageBarrier");
-                        // TODO: the range needs to be parameterized
-                        let range = vk::ImageSubresourceRange::builder()
-                            .level_count(1)
-                            .base_mip_level(0)
-                            .layer_count(1)
-                            .base_array_layer(0)
-                            .aspect_mask(vk::ImageAspectFlags::COLOR)
-                            .build();
                         if let ResourceType::Image(resolved_image) = resolved {
+                            let aspect_mask = util::image::get_aspect_mask_from_format(
+                                resolved_image.format);
+                            // TODO: the range needs to be parameterized
+                            let range = vk::ImageSubresourceRange::builder()
+                                .level_count(1)
+                                .base_mip_level(0)
+                                .layer_count(1)
+                                .base_array_layer(0)
+                                .aspect_mask(aspect_mask)
+                                .build();
                             vk::ImageMemoryBarrier::builder()
                                 .image(resolved_image.image)
                                 .src_access_mask(ib.source_access)
