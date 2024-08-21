@@ -49,6 +49,13 @@ impl PassNode for GraphicsPassNode  {
         for input in &self.inputs {
            reads.push(input.resource.borrow().get_handle());
         }
+        // color and depth targets also likely depend on previous writes
+        for rt in &self.render_targets {
+            reads.push(rt.resource_image.borrow().get_handle());
+        }
+        if let Some(dt) = &self.depth_target {
+            reads.push(dt.resource_image.borrow().get_handle());
+        }
 
         reads
     }
@@ -60,6 +67,9 @@ impl PassNode for GraphicsPassNode  {
         }
         for rt in &self.render_targets {
             writes.push(rt.resource_image.borrow().get_handle());
+        }
+        if let Some(dt) = &self.depth_target {
+            writes.push(dt.resource_image.borrow().get_handle());
         }
 
         writes
