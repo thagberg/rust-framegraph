@@ -31,6 +31,7 @@ use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBind
 use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
 use framegraph::shader;
 use profiling::enter_span;
+use passes::clear;
 use crate::example::Example;
 
 #[derive(Default)]
@@ -353,6 +354,11 @@ impl Example for ModelExample {
                 vk::SampleCountFlags::TYPE_1
             )
         };
+
+        // add depth clear pass
+        passes.push(clear::clear(
+            depth_attachment.resource_image.clone(),
+            vk::ImageAspectFlags::DEPTH));
 
         for render_mesh in &self.render_meshes {
             // create UBO for MVP
