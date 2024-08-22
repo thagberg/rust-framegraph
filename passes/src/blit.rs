@@ -8,6 +8,7 @@ use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::copy_pass_node::CopyPassNode;
 use framegraph::pass_type::PassType;
+use profiling::{enter_gpu_span, enter_span};
 
 pub fn generate_pass(
     source: Rc<RefCell<DeviceResource>>,
@@ -22,6 +23,11 @@ pub fn generate_pass(
         .fill_commands(Box::new(
             move |render_ctx: &VulkanRenderContext,
                     command_buffer: &vk::CommandBuffer| {
+
+                enter_span!(tracing::Level::TRACE, "Blit");
+                let device = render_ctx.get_device();
+                let borrowed_device = device.borrow();
+                enter_gpu_span!("Blit GPU", "Passes", borrowed_device.get(), command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
 
                 unsafe {
                     let resolved_source = source.borrow();

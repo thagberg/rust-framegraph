@@ -14,6 +14,7 @@ use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::pass_type::PassType;
 use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
 use framegraph::shader;
+use profiling::{enter_gpu_span, enter_span};
 use crate::example::Example;
 
 pub struct UBO {
@@ -67,6 +68,12 @@ impl Example for UboExample {
             .fill_commands(Box::new(
                 move |render_ctx: &VulkanRenderContext,
                      command_buffer: &vk::CommandBuffer | {
+
+                    enter_span!(tracing::Level::TRACE, "Draw Triangle");
+                    let device = render_ctx.get_device();
+                    let borrowed_device = device.borrow();
+                    enter_gpu_span!("Draw Triangle GPU", "examples", borrowed_device.get(), command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
+
                     let viewport = vk::Viewport::builder()
                         .x(0.0)
                         .y(0.0)

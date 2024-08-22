@@ -8,6 +8,7 @@ use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::binding::{BindingInfo, BindingType, ImageBindingInfo, ResourceBinding};
 use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::pass_type::PassType;
+use profiling::{enter_gpu_span, enter_span};
 
 pub fn clear(
     target: Rc<RefCell<DeviceResource>>,
@@ -34,11 +35,17 @@ pub fn clear(
         }
     };
 
-    let pass_node = GraphicsPassNode::builder(pass_name)
+    let pass_node = GraphicsPassNode::builder(pass_name.clone())
         .write(target_binding)
         .fill_commands(Box::new(
             move |render_ctx: &VulkanRenderContext,
                   command_buffer: &vk::CommandBuffer | {
+
+                enter_span!(tracing::Level::TRACE, "clear");
+                let device = render_ctx.get_device();
+                let borrowed_device = device.borrow();
+                enter_gpu_span!(&pass_name, "misc", borrowed_device.get(), command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
+
                 let range = vk::ImageSubresourceRange::builder()
                     .aspect_mask(aspect_mask)
                     .level_count(1)

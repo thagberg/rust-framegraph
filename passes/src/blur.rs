@@ -12,6 +12,7 @@ use framegraph::binding::{BindingInfo, BindingType, ImageBindingInfo, ResourceBi
 use framegraph::compute_pass_node::ComputePassNode;
 use framegraph::pass_type::PassType;
 use framegraph::pipeline::ComputePipelineDescription;
+use profiling::{enter_gpu_span, enter_span};
 
 pub fn generate_pass(
     device: Rc<RefCell<DeviceWrapper>>,
@@ -75,7 +76,11 @@ pub fn generate_pass(
             move |render_ctx: &VulkanRenderContext,
                   command_buffer: &vk::CommandBuffer | {
 
-                println!("Performing blur");
+                enter_span!(tracing::Level::TRACE, "Blur");
+                let device = render_ctx.get_device();
+                let borrowed_device = device.borrow();
+                enter_gpu_span!("Blur GPU", "Passes", borrowed_device.get(), command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
+
                 unsafe {
                     render_ctx.get_device().borrow().get().cmd_dispatch(
                         *command_buffer,

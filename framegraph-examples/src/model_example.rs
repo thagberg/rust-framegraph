@@ -30,7 +30,7 @@ use context::render_context::RenderContext;
 use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding};
 use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
 use framegraph::shader;
-use profiling::enter_span;
+use profiling::{enter_gpu_span, enter_span};
 use passes::clear;
 use crate::example::Example;
 
@@ -477,6 +477,12 @@ impl Example for ModelExample {
                     .fill_commands(Box::new(
                         move | render_ctx: &VulkanRenderContext,
                                command_buffer: &vk::CommandBuffer | {
+
+                            enter_span!(tracing::Level::TRACE, "Draw RenderMesh");
+                            let device = render_ctx.get_device();
+                            let borrowed_device = device.borrow();
+                            enter_gpu_span!("RenderMesh GPU", "examples", borrowed_device.get(), command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
+
                             unsafe {
                                 enter_span!(tracing::Level::TRACE, "Model Draw");
                                 // set vertex buffer
