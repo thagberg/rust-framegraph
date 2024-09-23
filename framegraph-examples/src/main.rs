@@ -108,7 +108,7 @@ impl WindowedVulkanApp {
         let mut platform = WinitPlatform::init(&mut imgui);
         platform.attach_window(imgui.io_mut(), &window, HiDpiMode::Default);
 
-        let render_context = {
+        let mut render_context = {
             let c_title = CString::new(title).unwrap();
             let application_info = vk::ApplicationInfo::builder()
                 .application_name(&c_title)
@@ -117,24 +117,13 @@ impl WindowedVulkanApp {
             VulkanRenderContext::new(
                 &application_info,
                 true,
+                8,
                 Some(&window))
         };
 
         let frame_graph = VulkanFrameGraph::new(
             VulkanRenderpassManager::new(),
             VulkanPipelineManager::new());
-
-        let imgui_renderer = {
-            let font_texture = {
-                let fonts = imgui.fonts();
-                fonts.build_rgba32_texture()
-            };
-
-            ImguiRender::new(
-                render_context.get_device().clone(),
-                &render_context,
-                font_texture)
-        };
 
         let max_frames_in_flight = {
             match render_context.get_swapchain() {
@@ -177,9 +166,24 @@ impl WindowedVulkanApp {
             }
         }
 
+        let immediate_command_buffer = render_context.get_immediate_command_buffer();
+
+        let imgui_renderer = {
+            let font_texture = {
+                let fonts = imgui.fonts();
+                fonts.build_rgba32_texture()
+            };
+
+            ImguiRender::new(
+                render_context.get_device().clone(),
+                &render_context,
+                &immediate_command_buffer,
+                font_texture)
+        };
+
         let examples: Vec<Box<dyn Example>> = vec![
             Box::new(UboExample::new(render_context.get_device().clone())),
-            Box::new(ModelExample::new(render_context.get_device().clone(), &render_context))
+            Box::new(ModelExample::new(render_context.get_device().clone(), &render_context, &immediate_command_buffer))
         ];
 
         let mut frames: Vec<Option<Box<Frame>>> = Vec::new();
@@ -249,6 +253,7 @@ impl WindowedVulkanApp {
             swapchain_semaphore,
             descriptor_pool,
             frame_index: render_ctx_frame_index,
+            ..
         } = self.render_context.get_next_frame_objects();
 
         let next_image = match &swapchain_image {

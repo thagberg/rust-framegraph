@@ -82,6 +82,7 @@ impl ImguiRender {
     pub fn new(
         device: Rc<RefCell<DeviceWrapper>>,
         render_context: &VulkanRenderContext,
+        immediate_command_buffer: &vk::CommandBuffer,
         font_atlas: imgui::FontAtlasTexture) -> ImguiRender {
 
         let vert_shader = Rc::new(RefCell::new(
@@ -109,6 +110,7 @@ impl ImguiRender {
         let mut font_texture = image::create_from_bytes(
             device.clone(),
             render_context,
+            immediate_command_buffer,
             font_texture_create,
             font_atlas.data,
             "font-atlas"

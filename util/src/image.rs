@@ -15,6 +15,7 @@ use context::vulkan_render_context::VulkanRenderContext;
 pub fn create_from_bytes(
     device: Rc<RefCell<DeviceWrapper>>,
     render_context: &VulkanRenderContext,
+    immediate_command_buffer: &vk::CommandBuffer,
     image_info: vk::ImageCreateInfo,
     image_bytes: &[u8],
     name: &str) -> DeviceResource {
@@ -122,20 +123,19 @@ pub fn create_from_bytes(
             .build();
 
         unsafe {
-            let cb = render_context.get_immediate_command_buffer();
             device.borrow().get().reset_command_buffer(
-                cb,
+                *immediate_command_buffer,
                 vk::CommandBufferResetFlags::empty())
                 .expect("Failed to reset command buffer");
 
             let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
                 .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
                 .build();
-            device.borrow().get().begin_command_buffer(cb, &command_buffer_begin_info)
+            device.borrow().get().begin_command_buffer(*immediate_command_buffer, &command_buffer_begin_info)
                 .expect("Failed to begin recording command buffer");
 
             device.borrow().get().cmd_pipeline_barrier(
-                cb,
+                *immediate_command_buffer,
                 vk::PipelineStageFlags::TOP_OF_PIPE,
                 vk::PipelineStageFlags::TRANSFER,
                 vk::DependencyFlags::empty(),
@@ -144,14 +144,14 @@ pub fn create_from_bytes(
                 std::slice::from_ref(&pre_barrier));
 
             device.borrow().get().cmd_copy_buffer_to_image(
-                cb,
+                *immediate_command_buffer,
                 resolved_buffer.buffer,
                 resolved_texture.image,
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 std::slice::from_ref(&copy_region));
 
             device.borrow().get().cmd_pipeline_barrier(
-                cb,
+                *immediate_command_buffer,
                 vk::PipelineStageFlags::TRANSFER,
                 vk::PipelineStageFlags::VERTEX_SHADER,
                 vk::DependencyFlags::empty(),
@@ -159,11 +159,11 @@ pub fn create_from_bytes(
                 &[],
                 std::slice::from_ref(&post_barrier));
 
-            device.borrow().get().end_command_buffer(cb)
+            device.borrow().get().end_command_buffer(*immediate_command_buffer)
                 .expect("Failed to record command buffer");
 
             let submit = vk::SubmitInfo::builder()
-                .command_buffers(std::slice::from_ref(&cb))
+                .command_buffers(std::slice::from_ref(immediate_command_buffer))
                 .build();
 
             device.borrow().get().queue_submit(
@@ -183,6 +183,7 @@ pub fn create_from_bytes(
 pub fn create_from_uri(
     device: Rc<RefCell<DeviceWrapper>>,
     render_context: &VulkanRenderContext,
+    immediate_command_buffer: &vk::CommandBuffer,
     uri: &str,
     is_linear: bool
 ) -> DeviceResource {
@@ -235,7 +236,7 @@ pub fn create_from_uri(
         .array_layers(1)
         .build();
 
-    create_from_bytes(device, render_context, texture_create, img.as_bytes(), uri)
+    create_from_bytes(device, render_context, immediate_command_buffer, texture_create, img.as_bytes(), uri)
 }
 
 pub fn get_aspect_mask_from_format(format: vk::Format) -> vk::ImageAspectFlags {

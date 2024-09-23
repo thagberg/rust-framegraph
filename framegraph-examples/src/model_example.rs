@@ -562,7 +562,8 @@ fn gltf_to_decomposed_matrix(t: gltf::scene::Transform) -> DecomposedMatrix {
 impl ModelExample {
     pub fn new(
         device: Rc<RefCell<DeviceWrapper>>,
-        render_context: &VulkanRenderContext) -> Self {
+        render_context: &VulkanRenderContext,
+        immediate_command_buffer: &vk::CommandBuffer) -> Self {
 
         let duck_import = gltf::import("assets/models/gltf/duck/Duck.gltf");
         // let duck_import = gltf::import("assets/models/gltf/Box/glTF/Box.gltf");
@@ -885,6 +886,7 @@ impl ModelExample {
                                                 let mut tex = util::image::create_from_uri(
                                                     device.clone(),
                                                     render_context,
+                                                    immediate_command_buffer,
                                                     &format!("{}{}", "assets/models/gltf/duck/", uri),
                                                     true
                                                 );

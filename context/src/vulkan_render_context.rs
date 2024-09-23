@@ -3,11 +3,13 @@ use std::ffi::{c_void, CStr};
 use std::fmt::{Debug, Formatter};
 use std::os::raw::c_char;
 use std::rc::Rc;
+use std::thread::Thread;
 use ash::{vk};
 use ash::vk::{ExtendsPhysicalDeviceFeatures2, PFN_vkGetPhysicalDeviceFeatures2, PhysicalDeviceFeatures2, PhysicalDeviceFeatures2Builder, PresentModeKHR};
 
 use ash::vk::DebugUtilsMessageSeverityFlagsEXT as severity_flags;
 use ash::vk::DebugUtilsMessageTypeFlagsEXT as type_flags;
+use num::complex::ComplexFloat;
 use api_types::device::{DeviceFramebuffer, DeviceResource, DeviceWrapper, PhysicalDeviceWrapper, QueueFamilies, VulkanDebug};
 use api_types::image::ImageWrapper;
 use api_types::instance::InstanceWrapper;
@@ -17,6 +19,7 @@ use api_types::swapchain::{NextImage, SwapchainStatus, SwapchainWrapper};
 use profiling::{enter_span, init_gpu_profiling, reset_gpu_profiling};
 
 use crate::render_context::RenderContext;
+use crate::per_thread::{PerThread, ThreadType};
 
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 
@@ -464,20 +467,42 @@ fn create_command_pool(
     }
 }
 
-fn create_command_buffers(
-    device: &DeviceWrapper,
-    command_pool: vk::CommandPool,
-    num_command_buffers: u32) -> Vec<vk::CommandBuffer> {
-    let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
-        .command_buffer_count(num_command_buffers)
-        .command_pool(command_pool)
-        .level(vk::CommandBufferLevel::PRIMARY)
-        .build();
 
-    unsafe {
-        device.get().allocate_command_buffers(&command_buffer_allocate_info)
-            .expect("Failed to allocate Command Buffers")
-    }
+fn create_per_thread_objects(
+    device: Rc<RefCell<DeviceWrapper>>,
+    descriptor_pool_sizes: &[vk::DescriptorPoolSize],
+    max_descriptor_sets: u32,
+    thread_type: ThreadType) -> PerThread {
+
+    let graphics_command_pool = create_command_pool(
+        &device.borrow(),
+        device.borrow().get_queue_family_indices().graphics.unwrap());
+
+    let compute_command_pool = create_command_pool(
+        &device.borrow(),
+        device.borrow().get_queue_family_indices().compute.unwrap());
+
+    let descriptor_pool = unsafe {
+        let descriptor_pool_create = vk::DescriptorPoolCreateInfo::builder()
+            .flags(vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET)
+            .max_sets(max_descriptor_sets)
+            .pool_sizes(&descriptor_pool_sizes);
+
+        device.borrow().get().create_descriptor_pool(
+            &descriptor_pool_create,
+            None)
+            .expect("Failed to create descriptor pool for PerThread object")
+    };
+
+    PerThread::new(
+        device,
+        thread_type,
+        graphics_command_pool,
+        compute_command_pool,
+        descriptor_pool,
+        1,
+        1
+    )
 }
 
 fn create_debug_util(
@@ -670,6 +695,8 @@ pub struct OldSwapchain {
 
 pub struct VulkanFrameObjects {
     pub graphics_command_buffer: vk::CommandBuffer,
+    pub immediate_command_buffer: vk::CommandBuffer,
+    pub compute_command_buffer: vk::CommandBuffer,
     pub swapchain_image: Option<NextImage>,
     pub swapchain_semaphore: vk::Semaphore,
     pub descriptor_pool: vk::DescriptorPool,
@@ -686,10 +713,8 @@ pub struct VulkanRenderContext {
     graphics_queue: vk::Queue,
     present_queue: vk::Queue,
     compute_queue: vk::Queue,
-    graphics_command_pool: vk::CommandPool,
-    graphics_command_buffers: Vec<vk::CommandBuffer>,
-    immediate_command_buffer: vk::CommandBuffer,
-    descriptor_pools: Vec<vk::DescriptorPool>,
+    main_thread_objects: Vec<PerThread>,
+    worker_thread_objects: Vec<PerThread>,
     swapchain: Option<SwapchainWrapper>,
     old_swapchain: Option<OldSwapchain>,
     swapchain_semaphores: Vec<vk::Semaphore>,
@@ -714,12 +739,6 @@ impl Drop for VulkanRenderContext {
             for semaphore in &self.swapchain_semaphores {
                 device.get().destroy_semaphore(*semaphore, None);
             }
-            device.get().free_command_buffers(self.graphics_command_pool, &[self.immediate_command_buffer]);
-            device.get().free_command_buffers(self.graphics_command_pool, &self.graphics_command_buffers);
-            device.get().destroy_command_pool(self.graphics_command_pool, None);
-            for pool in &self.descriptor_pools {
-                device.get().destroy_descriptor_pool(*pool, None);
-            }
         }
     }
 }
@@ -736,6 +755,7 @@ impl VulkanRenderContext {
     pub fn new(
         application_info: &vk::ApplicationInfo,
         debug_enabled: bool,
+        max_threads: usize,
         window: Option<&winit::window::Window>
     ) -> VulkanRenderContext {
         let layers = [
@@ -868,18 +888,13 @@ impl VulkanRenderContext {
                 0)
         };
 
-        let graphics_command_pool = create_command_pool(
-            &logical_device.borrow(),
-            logical_device.borrow().get_queue_family_indices().graphics.unwrap());
-
         let max_frames_in_flight = {
             if let Some(swapchain) = &swapchain {
-               swapchain.get_images().len() as u32
+                swapchain.get_images().len() as u32
             } else {
                 MAX_FRAMES_IN_FLIGHT
             }
         };
-
 
         let ubo_pool_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::UNIFORM_BUFFER,
@@ -894,31 +909,27 @@ impl VulkanRenderContext {
             .descriptor_count(16)
             .build();
         let descriptor_pool_sizes = [ubo_pool_size, image_pool_size, combined_sampler_pool_size];
-        let descriptor_pool_create = vk::DescriptorPoolCreateInfo::builder()
-            .flags(vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET)
-            .max_sets(8)
-            .pool_sizes(&descriptor_pool_sizes);
 
-        let mut descriptor_pools: Vec<vk::DescriptorPool> = Vec::new();
-        for i in (0..max_frames_in_flight) {
-            let descriptor_pool = unsafe {
-                logical_device.borrow().get().create_descriptor_pool(
-                    &descriptor_pool_create,
-                    None)
-                    .expect("Failed to create descriptor pool")
-            };
-            descriptor_pools.push(descriptor_pool);
+        let mut main_thread_objects: Vec<PerThread> = Vec::new();
+        main_thread_objects.reserve(max_frames_in_flight as usize);
+        for i in (0..main_thread_objects.capacity()) {
+            main_thread_objects.push(create_per_thread_objects(
+                logical_device.clone(),
+                &descriptor_pool_sizes,
+                8,
+                ThreadType::Main
+            ));
         }
-
-        let immediate_command_buffer = create_command_buffers(
-            &logical_device.borrow(),
-            graphics_command_pool,
-            1);
-
-        let graphics_command_buffers = create_command_buffers(
-            &logical_device.borrow(),
-            graphics_command_pool,
-            max_frames_in_flight);
+        let mut worker_thread_objects: Vec<PerThread> = Vec::new();
+        worker_thread_objects.reserve(max_threads);
+        for i in (0..worker_thread_objects.capacity()) {
+            worker_thread_objects.push(create_per_thread_objects(
+                logical_device.clone(),
+                &descriptor_pool_sizes,
+                8,
+                ThreadType::Worker
+            ));
+        }
 
         let frame_index = 0;
 
@@ -934,7 +945,8 @@ impl VulkanRenderContext {
             init_gpu_profiling!(
                 borrowed_device.get(),
                 device_properties.limits.timestamp_period,
-                &immediate_command_buffer[0],
+                // &main_thread_objects.immediate_graphics_buffer,
+                &main_thread_objects[0].immediate_graphics_buffer,
                 &graphics_queue,
                 num_frames);
         }
@@ -948,16 +960,14 @@ impl VulkanRenderContext {
             graphics_queue,
             present_queue,
             compute_queue,
-            graphics_command_pool,
             surface: surface_wrapper,
             swapchain,
             old_swapchain: None,
             swapchain_semaphores,
-            descriptor_pools,
-            graphics_command_buffers,
-            immediate_command_buffer: immediate_command_buffer[0],
             frame_index,
             swapchain_index: 0,
+            main_thread_objects,
+            worker_thread_objects
         }
     }
 
@@ -979,12 +989,6 @@ impl VulkanRenderContext {
     pub fn get_present_queue(&self) -> vk::Queue {
         self.present_queue
     }
-
-    pub fn get_graphics_command_pool(&self) -> vk::CommandPool { self.graphics_command_pool }
-
-    fn get_graphics_command_buffer(&self, index: usize) -> vk::CommandBuffer { self.graphics_command_buffers[index] }
-
-    pub fn get_immediate_command_buffer(&self) -> vk::CommandBuffer { self.immediate_command_buffer }
 
     pub fn get_swapchain(&self) -> &Option<SwapchainWrapper> { &self.swapchain }
 
@@ -1053,13 +1057,25 @@ impl VulkanRenderContext {
             }
         }
 
+        let main_thread_objects = self.main_thread_objects.get(old_index as usize)
+            .expect("No main_thread_objects exist at this frame index");
+
         VulkanFrameObjects {
-            graphics_command_buffer: self.graphics_command_buffers[old_index as usize],
+            graphics_command_buffer: main_thread_objects.graphics_command_buffers[0],
+            immediate_command_buffer: main_thread_objects.immediate_graphics_buffer,
+            compute_command_buffer: main_thread_objects.compute_command_buffers[0],
             swapchain_image: image,
             swapchain_semaphore: semaphore,
-            descriptor_pool: self.descriptor_pools[old_index as usize], // TODO: this should be per-frame
+            descriptor_pool: main_thread_objects.descriptor_pool,
             frame_index: old_index
         }
+    }
+
+    pub fn get_immediate_command_buffer(&self) -> vk::CommandBuffer {
+        let main_thread_objects = self.main_thread_objects.get(self.frame_index as usize)
+            .expect("No main_thread_objects exist at this frame index");
+
+        main_thread_objects.immediate_graphics_buffer
     }
 
     pub fn create_descriptor_sets(
