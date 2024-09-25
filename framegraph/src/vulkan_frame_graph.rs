@@ -594,11 +594,6 @@ impl VulkanFrameGraph {
         let mut usage_cache: HashMap<u64, ResourceUsage> = HashMap::new();
         for node_index in sorted_nodes {
             if let Some(node) = nodes.node_weight_mut(*node_index) {
-                let mut node_barrier = NodeBarriers {
-                    image_barriers: vec![],
-                    buffer_barriers: vec![]
-                };
-
                 let node_barrier = match node {
                     PassType::Graphics(gn) => {
                         link_graphics_node(gn, &mut usage_cache)
