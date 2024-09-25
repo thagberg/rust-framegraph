@@ -506,6 +506,13 @@ impl VulkanFrameGraph {
         }
     }
 
+    /// Compile the framegraph nodes
+    ///
+    /// The goal of compiling is to process all of each node's inputs
+    /// and outputs, use these to generate a topological graph, and
+    /// finally sort the nodes from begin -> end. We are also able
+    /// to elide any node which does not contribute to the root
+    /// node (which is identified by the root_index)
     #[tracing::instrument]
     fn compile(&mut self, nodes: &mut StableDiGraph<PassType, u32>, root_index: NodeIndex) -> Vec<NodeIndex>{
         // create input/output maps to detect graph edges
@@ -579,6 +586,17 @@ impl VulkanFrameGraph {
         sorted_nodes
     }
 
+    /// Links the nodes in the framegraph based on their dependencies
+    ///
+    /// The goal of linking is to ensure that where there are matching
+    /// outputs of one pass into the inputs of another pass, we apply
+    /// appropriate memory barriers and also ensure that resource
+    /// transitions are correct.
+    ///
+    /// Currently this must be done synchronously (though not necessarily
+    /// on the main thread), although it's possible in the future we could
+    /// identify multiple non-overlapping paths through the topoligically-
+    /// sorted graph to link separately.
     #[tracing::instrument]
     fn link(
         &mut self,
