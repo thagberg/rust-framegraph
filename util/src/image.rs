@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::ffi::c_void;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use ash::vk;
 use ash::vk::{DeviceSize, Format};
@@ -13,7 +14,7 @@ use api_types::image::{ImageCreateInfo, ImageType};
 use context::vulkan_render_context::VulkanRenderContext;
 
 pub fn create_from_bytes(
-    device: Rc<RefCell<DeviceWrapper>>,
+    device: Arc<RefCell<DeviceWrapper>>,
     render_context: &VulkanRenderContext,
     immediate_command_buffer: &vk::CommandBuffer,
     image_info: vk::ImageCreateInfo,
@@ -181,7 +182,7 @@ pub fn create_from_bytes(
     }
 }
 pub fn create_from_uri(
-    device: Rc<RefCell<DeviceWrapper>>,
+    device: Arc<RefCell<DeviceWrapper>>,
     render_context: &VulkanRenderContext,
     immediate_command_buffer: &vk::CommandBuffer,
     uri: &str,

@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 use ash::vk;
 use api_types::device::DeviceWrapper;
 
@@ -9,7 +10,7 @@ pub enum ThreadType {
 }
 
 pub struct PerThread {
-    device: Rc<RefCell<DeviceWrapper>>,
+    device: Arc<RefCell<DeviceWrapper>>,
     // TODO: how do I make this member private?
     thread_type: ThreadType,
     graphics_pool: vk::CommandPool,
@@ -56,7 +57,7 @@ impl Drop for PerThread {
 
 impl PerThread {
     pub fn new(
-        device: Rc<RefCell<DeviceWrapper>>,
+        device: Arc<RefCell<DeviceWrapper>>,
         thread_type: ThreadType,
         graphics_pool: vk::CommandPool,
         compute_pool: vk::CommandPool,

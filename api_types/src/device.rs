@@ -4,6 +4,7 @@ use core::ffi::c_void;
 use std::alloc::alloc;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
+use std::sync::Arc;
 use ash::{Device, vk};
 use ash::extensions::ext::DebugUtils;
 use ash::vk::{DebugUtilsLabelEXT, DebugUtilsMessengerEXT, DebugUtilsObjectNameInfoEXT, Handle, ObjectType};
@@ -120,7 +121,7 @@ pub struct DeviceResource {
     pub resource_type: Option<ResourceType>,
 
     handle: u64,
-    device: Rc<RefCell<DeviceWrapper>>
+    device: Arc<RefCell<DeviceWrapper>>
 }
 
 impl Debug for DeviceResource {
@@ -238,7 +239,7 @@ impl DeviceResource {
 
 pub struct DeviceFramebuffer {
     framebuffer: vk::Framebuffer,
-    device: Rc<RefCell<DeviceWrapper>>
+    device: Arc<RefCell<DeviceWrapper>>
 }
 
 impl Drop for DeviceFramebuffer {
@@ -252,7 +253,7 @@ impl Drop for DeviceFramebuffer {
 }
 
 impl DeviceFramebuffer {
-    pub fn new(framebuffer: vk::Framebuffer, device: Rc<RefCell<DeviceWrapper>>) -> Self {
+    pub fn new(framebuffer: vk::Framebuffer, device: Arc<RefCell<DeviceWrapper>>) -> Self {
         DeviceFramebuffer {
             framebuffer: framebuffer,
             device: device
@@ -406,7 +407,7 @@ impl DeviceWrapper {
     // }
 
     pub fn create_image(
-        device: Rc<RefCell<DeviceWrapper>>,
+        device: Arc<RefCell<DeviceWrapper>>,
         image_desc: &ImageCreateInfo,
         memory_location: MemoryLocation) -> DeviceResource {
 
@@ -481,7 +482,7 @@ impl DeviceWrapper {
     }
 
     pub fn wrap_image(
-        device: Rc<RefCell<DeviceWrapper>>,
+        device: Arc<RefCell<DeviceWrapper>>,
         image: vk::Image,
         format: vk::Format,
         image_aspect_flags: vk::ImageAspectFlags,
@@ -521,7 +522,7 @@ impl DeviceWrapper {
     }
 
     pub fn create_buffer(
-        device: Rc<RefCell<DeviceWrapper>>,
+        device: Arc<RefCell<DeviceWrapper>>,
         buffer_desc: &BufferCreateInfo,
         memory_location: MemoryLocation) -> DeviceResource {
 
@@ -620,7 +621,7 @@ impl DeviceWrapper {
     }
 
     pub fn create_shader(
-        device: Rc<RefCell<DeviceWrapper>>,
+        device: Arc<RefCell<DeviceWrapper>>,
         name: &str,
         shader_create: &vk::ShaderModuleCreateInfo) -> DeviceShader {
 
@@ -634,7 +635,7 @@ impl DeviceWrapper {
     }
 
     pub fn create_pipeline(
-        device: Rc<RefCell<DeviceWrapper>>,
+        device: Arc<RefCell<DeviceWrapper>>,
         create_info: &vk::GraphicsPipelineCreateInfo,
         pipeline_layout: vk::PipelineLayout,
         descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
@@ -659,7 +660,7 @@ impl DeviceWrapper {
     }
 
     pub fn create_compute_pipeline(
-        device: Rc<RefCell<DeviceWrapper>>,
+        device: Arc<RefCell<DeviceWrapper>>,
         create_info: &vk::ComputePipelineCreateInfo,
         pipeline_layout: vk::PipelineLayout,
         descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
@@ -684,7 +685,7 @@ impl DeviceWrapper {
     }
 
     pub fn create_renderpass(
-        device: Rc<RefCell<DeviceWrapper>>,
+        device: Arc<RefCell<DeviceWrapper>>,
         create_info: &vk::RenderPassCreateInfo,
         name: &str
     ) -> DeviceRenderpass {
@@ -731,7 +732,7 @@ impl DeviceWrapper {
 #[derive(Clone)]
 pub struct DeviceShader {
     pub shader_module: vk::ShaderModule,
-    pub device: Rc<RefCell<DeviceWrapper>>
+    pub device: Arc<RefCell<DeviceWrapper>>
 }
 
 impl Drop for DeviceShader {
@@ -743,7 +744,7 @@ impl Drop for DeviceShader {
 }
 
 impl DeviceShader {
-    pub fn new(shader_module: vk::ShaderModule, device: Rc<RefCell<DeviceWrapper>>) -> Self {
+    pub fn new(shader_module: vk::ShaderModule, device: Arc<RefCell<DeviceWrapper>>) -> Self {
         DeviceShader {
             shader_module,
             device
@@ -756,7 +757,7 @@ pub struct DevicePipeline {
     pub pipeline: vk::Pipeline,
     pub pipeline_layout: vk::PipelineLayout,
     pub descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
-    pub device: Rc<RefCell<DeviceWrapper>>
+    pub device: Arc<RefCell<DeviceWrapper>>
 }
 
 impl Drop for DevicePipeline {
@@ -776,7 +777,7 @@ impl DevicePipeline {
         pipeline: vk::Pipeline,
         pipeline_layout: vk::PipelineLayout,
         descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
-        device: Rc<RefCell<DeviceWrapper>>) -> Self {
+        device: Arc<RefCell<DeviceWrapper>>) -> Self {
 
         DevicePipeline {
             pipeline,
@@ -790,7 +791,7 @@ impl DevicePipeline {
 #[derive(Clone)]
 pub struct DeviceRenderpass {
     pub renderpass: vk::RenderPass,
-    pub device: Rc<RefCell<DeviceWrapper>>
+    pub device: Arc<RefCell<DeviceWrapper>>
 }
 
 impl Drop for DeviceRenderpass {
@@ -804,7 +805,7 @@ impl Drop for DeviceRenderpass {
 impl DeviceRenderpass {
     pub fn new(
         renderpass: vk::RenderPass,
-        device: Rc<RefCell<DeviceWrapper>>) -> Self {
+        device: Arc<RefCell<DeviceWrapper>>) -> Self {
 
         DeviceRenderpass {
             renderpass,

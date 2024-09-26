@@ -3,6 +3,7 @@ use std::ffi::{c_void, CStr};
 use std::fmt::{Debug, Formatter};
 use std::os::raw::c_char;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::thread::Thread;
 use ash::{vk};
 use ash::vk::{ExtendsPhysicalDeviceFeatures2, PFN_vkGetPhysicalDeviceFeatures2, PhysicalDeviceFeatures2, PhysicalDeviceFeatures2Builder, PresentModeKHR};
@@ -469,7 +470,7 @@ fn create_command_pool(
 
 
 fn create_per_thread_objects(
-    device: Rc<RefCell<DeviceWrapper>>,
+    device: Arc<RefCell<DeviceWrapper>>,
     descriptor_pool_sizes: &[vk::DescriptorPoolSize],
     max_descriptor_sets: u32,
     thread_type: ThreadType) -> PerThread {
@@ -531,7 +532,7 @@ fn create_debug_util(
 
 fn create_swapchain(
     instance: &InstanceWrapper,
-    device: Rc<RefCell<DeviceWrapper>>,
+    device: Arc<RefCell<DeviceWrapper>>,
     physical_device: &PhysicalDeviceWrapper,
     surface: &SurfaceWrapper,
     window: &winit::window::Window,
@@ -718,7 +719,7 @@ pub struct VulkanRenderContext {
     swapchain: Option<SwapchainWrapper>,
     old_swapchain: Option<OldSwapchain>,
     swapchain_semaphores: Vec<vk::Semaphore>,
-    device: Rc<RefCell<DeviceWrapper>>,
+    device: Arc<RefCell<DeviceWrapper>>,
     physical_device: PhysicalDeviceWrapper,
     surface: Option<SurfaceWrapper>,
     instance: InstanceWrapper,
@@ -747,7 +748,7 @@ impl RenderContext for VulkanRenderContext {
     type Create = vk::RenderPassCreateInfo;
     type RP = vk::RenderPass;
 
-    fn get_device(&self) -> Rc<RefCell<DeviceWrapper>> { self.device.clone() }
+    fn get_device(&self) -> Arc<RefCell<DeviceWrapper>> { self.device.clone() }
 
 }
 
@@ -830,7 +831,7 @@ impl VulkanRenderContext {
 
         logical_device_extensions.append(&mut physical_device_extensions);
 
-        let logical_device = Rc::new(RefCell::new(create_logical_device(
+        let logical_device = Arc::new(RefCell::new(create_logical_device(
             &instance_wrapper,
             device_properties.clone(),
             debug,

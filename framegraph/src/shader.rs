@@ -3,13 +3,14 @@ use std::fs;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use ash::vk;
 use rspirv_reflect;
 use rspirv_reflect::BindingCount;
 use api_types::device::{DeviceShader, DeviceWrapper};
 
-fn create_shader_module(device: Rc<RefCell<DeviceWrapper>>, file_name: &str) -> Shader
+fn create_shader_module(device: Arc<RefCell<DeviceWrapper>>, file_name: &str) -> Shader
 {
     let (reflection_module, shader) = {
         let bytes = fs::read(file_name)
@@ -65,7 +66,7 @@ fn create_shader_module(device: Rc<RefCell<DeviceWrapper>>, file_name: &str) -> 
     Shader::new(shader, binding_map)
 }
 
-pub fn create_shader_module_from_bytes(device: Rc<RefCell<DeviceWrapper>>, name: &str, bytes: &[u8]) -> Shader
+pub fn create_shader_module_from_bytes(device: Arc<RefCell<DeviceWrapper>>, name: &str, bytes: &[u8]) -> Shader
 {
     let (reflection_module, shader) = {
         let reflection_module = rspirv_reflect::Reflection::new_from_spirv(bytes)
@@ -160,7 +161,7 @@ impl ShaderManager
         }
     }
 
-    pub fn load_shader(&mut self, device: Rc<RefCell<DeviceWrapper>>, file_name: &str) -> Rc<RefCell<Shader>>
+    pub fn load_shader(&mut self, device: Arc<RefCell<DeviceWrapper>>, file_name: &str) -> Rc<RefCell<Shader>>
     {
         // TODO: can this return a &ShaderModule without a double mutable borrow error in PipelineManager::create_pipeline?
         //let full_path = concat!(concat!(env!("OUT_DIR"), "/shaders/"), file_name);

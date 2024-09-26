@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
+use std::sync::Arc;
 use ash::prelude::VkResult;
 use ash::vk;
 use crate::device::{DeviceResource, DeviceWrapper};
@@ -18,7 +19,7 @@ pub struct NextImage {
 }
 
 pub struct SwapchainWrapper {
-    device: Rc<RefCell<DeviceWrapper>>,
+    device: Arc<RefCell<DeviceWrapper>>,
     loader: ash::extensions::khr::Swapchain,
     swapchain: vk::SwapchainKHR,
     images: Vec<Rc<RefCell<DeviceResource>>>,
@@ -36,7 +37,7 @@ impl Debug for SwapchainWrapper {
 
 impl SwapchainWrapper {
     pub fn new(
-        device: Rc<RefCell<DeviceWrapper>>,
+        device: Arc<RefCell<DeviceWrapper>>,
         loader: ash::extensions::khr::Swapchain,
         swapchain: vk::SwapchainKHR,
         images: Vec<Rc<RefCell<DeviceResource>>>,
