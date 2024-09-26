@@ -4,7 +4,7 @@ use core::ffi::c_void;
 use std::alloc::alloc;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use ash::{Device, vk};
 use ash::extensions::ext::DebugUtils;
 use ash::vk::{DebugUtilsLabelEXT, DebugUtilsMessengerEXT, DebugUtilsObjectNameInfoEXT, Handle, ObjectType};
@@ -121,7 +121,7 @@ pub struct DeviceResource {
     pub resource_type: Option<ResourceType>,
 
     handle: u64,
-    device: Arc<RefCell<DeviceWrapper>>
+    device: Arc<Mutex<DeviceWrapper>>
 }
 
 impl Debug for DeviceResource {
@@ -134,21 +134,23 @@ impl Debug for DeviceResource {
 
 impl Drop for DeviceResource {
     fn drop(&mut self) {
+        let mut device = self.device.lock()
+            .expect("Failed to lock device when dropping resource");
         if let Some(resource_type) = &mut self.resource_type {
             match resource_type {
                 ResourceType::Buffer(buffer) => {
                     log::trace!(target: "resource", "Destroying buffer: {}", self.handle);
-                    self.device.borrow_mut().destroy_buffer(buffer);
+                    device.destroy_buffer(buffer);
                 },
                 ResourceType::Image(image) => {
                     log::trace!(target: "resource", "Destroying image: {}", self.handle);
-                    self.device.borrow_mut().destroy_image(image);
+                    device.destroy_image(image);
                 }
             }
         }
         if let Some(alloc) = &mut self.allocation {
             let moved = std::mem::replace(alloc, Allocation::default());
-            self.device.borrow_mut().free_allocation(moved);
+            device.free_allocation(moved);
         }
     }
 }
@@ -239,21 +241,22 @@ impl DeviceResource {
 
 pub struct DeviceFramebuffer {
     framebuffer: vk::Framebuffer,
-    device: Arc<RefCell<DeviceWrapper>>
+    device: Arc<Mutex<DeviceWrapper>>
 }
 
 impl Drop for DeviceFramebuffer {
     fn drop(&mut self) {
         unsafe {
-            self.device.borrow().get().destroy_framebuffer(
-                self.framebuffer,
-                None);
+            self.device.lock()
+                .expect("Failed to obtain device lock.")
+                .get().destroy_framebuffer(
+                    self.framebuffer, None);
         }
     }
 }
 
 impl DeviceFramebuffer {
-    pub fn new(framebuffer: vk::Framebuffer, device: Arc<RefCell<DeviceWrapper>>) -> Self {
+    pub fn new(framebuffer: vk::Framebuffer, device: Arc<Mutex<DeviceWrapper>>) -> Self {
         DeviceFramebuffer {
             framebuffer: framebuffer,
             device: device
@@ -407,30 +410,32 @@ impl DeviceWrapper {
     // }
 
     pub fn create_image(
-        device: Arc<RefCell<DeviceWrapper>>,
+        device: Arc<Mutex<DeviceWrapper>>,
         image_desc: &ImageCreateInfo,
         memory_location: MemoryLocation) -> DeviceResource {
 
         let device_image = {
-            let new_handle = device.borrow_mut().generate_handle();
+            let mut device_ref = device.lock()
+                .expect("Failed to obtain device lock while creating image");
+            let new_handle = device_ref.generate_handle();
             let create_info = image_desc.get_create_info();
             let image = unsafe {
-                device.borrow().get().create_image(create_info, None)
+                device_ref.device.get().create_image(create_info, None)
                     .expect("Failed to create image")
             };
 
             let memory_requirements = unsafe {
-                device.borrow().get().get_image_memory_requirements(image)
+                device_ref.device.get().get_image_memory_requirements(image)
             };
 
-            let allocation = device.borrow_mut().allocate_memory(
+            let allocation = device_ref.allocate_memory(
                 image_desc.get_name(),
                 memory_requirements,
                 memory_location,
                 false);
 
             unsafe {
-                device.borrow().get().bind_image_memory(
+                device_ref.device.get().bind_image_memory(
                     image,
                     allocation.memory(),
                     allocation.offset())
@@ -452,14 +457,14 @@ impl DeviceWrapper {
                 }
             };
 
-            let image_view = device.borrow().create_image_view(
+            let image_view = device_ref.create_image_view(
                 image,
                 // vk::Format::R8G8B8A8_SRGB,
                 image_desc.get_create_info().format,
                 vk::ImageViewCreateFlags::empty(),
                 aspect_flags,
                 1);
-            device.borrow().set_debug_name(vk::ObjectType::IMAGE_VIEW, image_view.as_raw(), image_desc.get_name());
+            device_ref.set_debug_name(vk::ObjectType::IMAGE_VIEW, image_view.as_raw(), image_desc.get_name());
             let image_wrapper = ImageWrapper::new(
                 image,
                 image_view,
@@ -469,12 +474,12 @@ impl DeviceWrapper {
                 create_info.format,
                 None);
 
-            device.borrow().set_image_name(&image_wrapper, image_desc.get_name());
+            device_ref.set_image_name(&image_wrapper, image_desc.get_name());
             DeviceResource {
                 allocation: Some(allocation),
                 resource_type: Some(ResourceType::Image(image_wrapper)),
                 handle: new_handle,
-                device,
+                device: device.clone(),
             }
         };
 
@@ -482,7 +487,7 @@ impl DeviceWrapper {
     }
 
     pub fn wrap_image(
-        device: Arc<RefCell<DeviceWrapper>>,
+        device: Arc<Mutex<DeviceWrapper>>,
         image: vk::Image,
         format: vk::Format,
         image_aspect_flags: vk::ImageAspectFlags,
@@ -490,9 +495,13 @@ impl DeviceWrapper {
         extent: vk::Extent3D,
         is_swapchain_image: bool
     ) -> DeviceResource {
-        let new_handle = device.borrow_mut().generate_handle();
+        let mut device_ref =
+            device.lock()
+                .expect("Failed to obtain device lock when wrapping image");
 
-        let image_view = device.borrow().create_image_view(
+        let new_handle = device_ref.generate_handle();
+
+        let image_view = device_ref.create_image_view(
             image,
             format,
             vk::ImageViewCreateFlags::empty(),
@@ -508,6 +517,8 @@ impl DeviceWrapper {
             format,
             None);
 
+        drop(device_ref);
+
         DeviceResource {
             allocation: None,
             resource_type: Some(ResourceType::Image(image_wrapper)),
@@ -522,32 +533,34 @@ impl DeviceWrapper {
     }
 
     pub fn create_buffer(
-        device: Arc<RefCell<DeviceWrapper>>,
+        device: Arc<Mutex<DeviceWrapper>>,
         buffer_desc: &BufferCreateInfo,
         memory_location: MemoryLocation) -> DeviceResource {
 
         let device_buffer = {
-            let new_handle = device.borrow_mut().generate_handle();
+            let mut device_ref = device.lock()
+                .expect("Failed to obtain device lock when creating buffer");
+            let new_handle = device_ref.generate_handle();
             log::trace!(target: "resource", "Creating buffer: {} -- {}", new_handle, buffer_desc.get_name());
 
             let create_info = buffer_desc.get_create_info();
             let buffer = unsafe {
-                device.borrow().get().create_buffer(create_info, None)
+                device_ref.device.get().create_buffer(create_info, None)
                     .expect("Failed to create buffer")
             };
 
             let memory_requirements = unsafe {
-                device.borrow().get().get_buffer_memory_requirements(buffer)
+                device_ref.device.get().get_buffer_memory_requirements(buffer)
             };
 
-            let allocation = device.borrow_mut().allocate_memory(
+            let allocation = device_ref.allocate_memory(
                 buffer_desc.get_name(),
                 memory_requirements,
                 memory_location,
                 true);
 
             unsafe {
-                device.borrow().get().bind_buffer_memory(
+                device_ref.device.get().bind_buffer_memory(
                     buffer,
                     allocation.memory(),
                     allocation.offset())
@@ -555,12 +568,12 @@ impl DeviceWrapper {
             }
 
             let buffer_wrapper = BufferWrapper::new(buffer, buffer_desc.get_create_info().clone());
-            device.borrow().set_buffer_name(&buffer_wrapper, buffer_desc.get_name());
+            device_ref.set_buffer_name(&buffer_wrapper, buffer_desc.get_name());
             DeviceResource {
                 allocation: Some(allocation),
                 resource_type: Some(ResourceType::Buffer(buffer_wrapper)),
                 handle: new_handle,
-                device
+                device: device.clone()
             }
         };
         device_buffer
@@ -621,36 +634,44 @@ impl DeviceWrapper {
     }
 
     pub fn create_shader(
-        device: Arc<RefCell<DeviceWrapper>>,
+        device: Arc<Mutex<DeviceWrapper>>,
         name: &str,
         shader_create: &vk::ShaderModuleCreateInfo) -> DeviceShader {
 
+        let device_ref = device.lock()
+            .expect("Failed to obtain device lock");
         let shader = unsafe {
-            device.borrow().get().create_shader_module(&shader_create, None)
+            device_ref.get().create_shader_module(&shader_create, None)
                 .expect("Failed to create shader module")
         };
 
-        device.borrow().set_debug_name(ObjectType::SHADER_MODULE, shader.as_raw(), name);
+        device_ref.set_debug_name(ObjectType::SHADER_MODULE, shader.as_raw(), name);
+        drop(device_ref);
+
         DeviceShader::new(shader, device)
     }
 
     pub fn create_pipeline(
-        device: Arc<RefCell<DeviceWrapper>>,
+        device: Arc<Mutex<DeviceWrapper>>,
         create_info: &vk::GraphicsPipelineCreateInfo,
         pipeline_layout: vk::PipelineLayout,
         descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
         name: &str
     ) -> DevicePipeline {
+        let device_ref = device.lock()
+            .expect("Failed to obtain device lock");
         let pipeline = unsafe {
-            device.borrow().get().create_graphics_pipelines(
+            device_ref.get().create_graphics_pipelines(
                 vk::PipelineCache::null(),
                 std::slice::from_ref(create_info),
                 None)
                 .expect("Failed to create Graphics Pipeline")
         }[0];
 
-        device.borrow().set_debug_name(vk::ObjectType::PIPELINE, pipeline.as_raw(), name);
-        device.borrow().set_debug_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.as_raw(), &(name.to_owned() + "_layout"));
+        device_ref.set_debug_name(vk::ObjectType::PIPELINE, pipeline.as_raw(), name);
+        device_ref.set_debug_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.as_raw(), &(name.to_owned() + "_layout"));
+
+        drop(device_ref);
 
         DevicePipeline::new(
             pipeline,
@@ -660,22 +681,26 @@ impl DeviceWrapper {
     }
 
     pub fn create_compute_pipeline(
-        device: Arc<RefCell<DeviceWrapper>>,
+        device: Arc<Mutex<DeviceWrapper>>,
         create_info: &vk::ComputePipelineCreateInfo,
         pipeline_layout: vk::PipelineLayout,
         descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
         name: &str
     ) -> DevicePipeline {
+        let device_ref = device.lock()
+            .expect("Failed to obtain device lock");
         let pipeline = unsafe {
-            device.borrow().get().create_compute_pipelines(
+            device_ref.get().create_compute_pipelines(
                 vk::PipelineCache::null(),
                 std::slice::from_ref(create_info),
                 None)
                 .expect("Failed to create Graphics Pipeline")
         }[0];
 
-        device.borrow().set_debug_name(vk::ObjectType::PIPELINE, pipeline.as_raw(), name);
-        device.borrow().set_debug_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.as_raw(), &(name.to_owned() + "_layout"));
+        device_ref.set_debug_name(vk::ObjectType::PIPELINE, pipeline.as_raw(), name);
+        device_ref.set_debug_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.as_raw(), &(name.to_owned() + "_layout"));
+
+        drop(device_ref);
 
         DevicePipeline::new(
             pipeline,
@@ -685,16 +710,18 @@ impl DeviceWrapper {
     }
 
     pub fn create_renderpass(
-        device: Arc<RefCell<DeviceWrapper>>,
+        device: Arc<Mutex<DeviceWrapper>>,
         create_info: &vk::RenderPassCreateInfo,
         name: &str
     ) -> DeviceRenderpass {
+        let device_ref = device.lock()
+            .expect("Failed to obtain device lock");
         let renderpass = unsafe {
-            device.borrow().get().create_render_pass(create_info, None)
+            device_ref.get().create_render_pass(create_info, None)
                 .expect("Failed to create renderpass")
         };
-
-        device.borrow().set_debug_name(vk::ObjectType::RENDER_PASS, renderpass.as_raw(), name);
+        device_ref.set_debug_name(vk::ObjectType::RENDER_PASS, renderpass.as_raw(), name);
+        drop(device_ref);
 
         DeviceRenderpass {
             renderpass,
@@ -732,19 +759,21 @@ impl DeviceWrapper {
 #[derive(Clone)]
 pub struct DeviceShader {
     pub shader_module: vk::ShaderModule,
-    pub device: Arc<RefCell<DeviceWrapper>>
+    pub device: Arc<Mutex<DeviceWrapper>>
 }
 
 impl Drop for DeviceShader {
     fn drop(&mut self) {
         unsafe {
-            self.device.borrow().get().destroy_shader_module(self.shader_module, None)
+            self.device.lock()
+                .expect("Failed to obtain device lock")
+                .get().destroy_shader_module(self.shader_module, None)
         }
     }
 }
 
 impl DeviceShader {
-    pub fn new(shader_module: vk::ShaderModule, device: Arc<RefCell<DeviceWrapper>>) -> Self {
+    pub fn new(shader_module: vk::ShaderModule, device: Arc<Mutex<DeviceWrapper>>) -> Self {
         DeviceShader {
             shader_module,
             device
@@ -757,16 +786,18 @@ pub struct DevicePipeline {
     pub pipeline: vk::Pipeline,
     pub pipeline_layout: vk::PipelineLayout,
     pub descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
-    pub device: Arc<RefCell<DeviceWrapper>>
+    pub device: Arc<Mutex<DeviceWrapper>>
 }
 
 impl Drop for DevicePipeline {
     fn drop(&mut self) {
         unsafe {
-            self.device.borrow().get().destroy_pipeline_layout(self.pipeline_layout, None);
-            self.device.borrow().get().destroy_pipeline(self.pipeline, None);
+            let device_ref = self.device.lock()
+                .expect("Failed to obtain device lock");
+            device_ref.get().destroy_pipeline_layout(self.pipeline_layout, None);
+            device_ref.get().destroy_pipeline(self.pipeline, None);
             for dsl in &self.descriptor_set_layouts {
-                self.device.borrow().get().destroy_descriptor_set_layout(*dsl, None);
+                device_ref.get().destroy_descriptor_set_layout(*dsl, None);
             }
         }
     }
@@ -777,7 +808,7 @@ impl DevicePipeline {
         pipeline: vk::Pipeline,
         pipeline_layout: vk::PipelineLayout,
         descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
-        device: Arc<RefCell<DeviceWrapper>>) -> Self {
+        device: Arc<Mutex<DeviceWrapper>>) -> Self {
 
         DevicePipeline {
             pipeline,
@@ -791,13 +822,15 @@ impl DevicePipeline {
 #[derive(Clone)]
 pub struct DeviceRenderpass {
     pub renderpass: vk::RenderPass,
-    pub device: Arc<RefCell<DeviceWrapper>>
+    pub device: Arc<Mutex<DeviceWrapper>>
 }
 
 impl Drop for DeviceRenderpass {
     fn drop(&mut self) {
         unsafe {
-            self.device.borrow().get().destroy_render_pass(self.renderpass, None);
+            self.device.lock()
+                .expect("Failed to obtain device lock.")
+                .get().destroy_render_pass(self.renderpass, None);
         }
     }
 }
@@ -805,7 +838,7 @@ impl Drop for DeviceRenderpass {
 impl DeviceRenderpass {
     pub fn new(
         renderpass: vk::RenderPass,
-        device: Arc<RefCell<DeviceWrapper>>) -> Self {
+        device: Arc<Mutex<DeviceWrapper>>) -> Self {
 
         DeviceRenderpass {
             renderpass,

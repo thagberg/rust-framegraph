@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use ash::prelude::VkResult;
 use ash::vk;
 use crate::device::{DeviceResource, DeviceWrapper};
@@ -19,7 +19,7 @@ pub struct NextImage {
 }
 
 pub struct SwapchainWrapper {
-    device: Arc<RefCell<DeviceWrapper>>,
+    device: Arc<Mutex<DeviceWrapper>>,
     loader: ash::extensions::khr::Swapchain,
     swapchain: vk::SwapchainKHR,
     images: Vec<Rc<RefCell<DeviceResource>>>,
@@ -37,7 +37,7 @@ impl Debug for SwapchainWrapper {
 
 impl SwapchainWrapper {
     pub fn new(
-        device: Arc<RefCell<DeviceWrapper>>,
+        device: Arc<Mutex<DeviceWrapper>>,
         loader: ash::extensions::khr::Swapchain,
         swapchain: vk::SwapchainKHR,
         images: Vec<Rc<RefCell<DeviceResource>>>,
@@ -74,8 +74,10 @@ impl SwapchainWrapper {
         let mut can_destroy = true;
 
         unsafe {
+            let device_ref = self.device.lock()
+                .expect("Failed to obtain device lock while checking fence status");
             for fence in &self.present_fences {
-                let fence_status = self.device.borrow().get().get_fence_status(*fence)
+                let fence_status = device_ref.get().get_fence_status(*fence)
                     .expect("Failed to get Present fence status");
                 match fence_status {
                     true => {}
@@ -151,8 +153,10 @@ impl SwapchainWrapper {
 impl Drop for SwapchainWrapper {
     fn drop(&mut self) {
         unsafe {
+            let device_ref = self.device.lock()
+                .expect("Failed to obtain device lock while dropping SwapchainWrapper");
             for fence in &self.present_fences {
-                self.device.borrow().get().destroy_fence(*fence, None);
+                device_ref.get().destroy_fence(*fence, None);
             }
             self.loader.destroy_swapchain(self.swapchain, None);
         }

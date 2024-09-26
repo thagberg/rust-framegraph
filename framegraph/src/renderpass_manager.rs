@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use ash::{vk};
 use api_types::device::{DeviceRenderpass, DeviceWrapper};
@@ -48,7 +48,7 @@ impl VulkanRenderpassManager {
         pass_name: &str,
         color_attachments: &[AttachmentReference],
         depth_attachment: &Option<AttachmentReference>,
-        device: Arc<RefCell<DeviceWrapper>>) -> Rc<RefCell<DeviceRenderpass>> {
+        device: Arc<Mutex<DeviceWrapper>>) -> Rc<RefCell<DeviceRenderpass>> {
         enter_span!(tracing::Level::TRACE, "Create or Fetch Renderpass");
 
         let renderpass = self.renderpass_map.entry(pass_name.to_string()).or_insert_with_key(|_| {

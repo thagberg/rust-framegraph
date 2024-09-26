@@ -669,7 +669,9 @@ impl VulkanFrameGraph {
 
         // bind pipeline
         unsafe {
-            render_context.get_device().borrow().get().cmd_bind_pipeline(
+            render_context.get_device().lock()
+                .expect("Failed to obtain device lock")
+                .get().cmd_bind_pipeline(
                 *command_buffer,
                 vk::PipelineBindPoint::COMPUTE,
                 pipeline.borrow().get_pipeline());
@@ -696,13 +698,15 @@ impl VulkanFrameGraph {
                 &mut descriptor_updates);
 
             unsafe {
+                let device_ref = render_context.get_device().lock()
+                    .expect("Failed to obtain device lock");
                 // TODO: support descriptor copies?
-                render_context.get_device().borrow().get().update_descriptor_sets(
+                device_ref.get().update_descriptor_sets(
                     &descriptor_updates.descriptor_writes,
                     &[]);
                 // bind descriptorsets
                 // TODO: COMPUTE SUPPORT
-                render_context.get_device().borrow().get().cmd_bind_descriptor_sets(
+                device_ref.get().cmd_bind_descriptor_sets(
                     *command_buffer,
                     vk::PipelineBindPoint::COMPUTE,
                     pipeline.borrow().get_pipeline_layout(),
@@ -813,13 +817,15 @@ impl VulkanFrameGraph {
 
                 unsafe {
                     enter_span!(tracing::Level::TRACE, "Update and bind descriptor sets");
+                    let device_ref = render_context.get_device().lock()
+                        .expect("Failed to obtain device lock");
                     // TODO: support descriptor copies?
-                    render_context.get_device().borrow().get().update_descriptor_sets(
+                    device_ref.get().update_descriptor_sets(
                         &descriptor_updates.descriptor_writes,
                         &[]);
                     // bind descriptorsets
                     // TODO: COMPUTE SUPPORT
-                    render_context.get_device().borrow().get().cmd_bind_descriptor_sets(
+                    device_ref.get().cmd_bind_descriptor_sets(
                         *command_buffer,
                         vk::PipelineBindPoint::GRAPHICS,
                         pipeline.borrow().get_pipeline_layout(),
@@ -843,14 +849,16 @@ impl VulkanFrameGraph {
                     .clear_values(std::slice::from_ref(&clear_value));
 
                 unsafe {
+                    let device_ref = render_context.get_device().lock()
+                        .expect("Failed to obtain device lock");
                     enter_span!(tracing::Level::TRACE, "Begin renderpass & bind pipeline");
-                    render_context.get_device().borrow().get().cmd_begin_render_pass(
+                    device_ref.get().cmd_begin_render_pass(
                         *command_buffer,
                         &render_pass_begin,
                         vk::SubpassContents::INLINE);
 
                     // TODO: add compute support
-                    render_context.get_device().borrow().get().cmd_bind_pipeline(
+                    device_ref.get().cmd_bind_pipeline(
                         *command_buffer,
                         vk::PipelineBindPoint::GRAPHICS,
                         pipeline.borrow().get_pipeline());
@@ -860,21 +868,25 @@ impl VulkanFrameGraph {
             descriptor_sets.append(&mut new_descriptor_sets);
         }
 
-        if let Some(viewport) = &node.viewport {
-            unsafe {
-                render_context.get_device().borrow().get().cmd_set_viewport(
-                    *command_buffer,
-                    0,
-                    std::slice::from_ref(viewport));
+        {
+            let device_ref = render_context.get_device().lock()
+                .expect("Failed to obtain device lock");
+            if let Some(viewport) = &node.viewport {
+                unsafe {
+                    device_ref.get().cmd_set_viewport(
+                        *command_buffer,
+                        0,
+                        std::slice::from_ref(viewport));
+                }
             }
-        }
 
-        if let Some(scissor) = &node.scissor {
-            unsafe {
-                render_context.get_device().borrow().get().cmd_set_scissor(
-                    *command_buffer,
-                    0,
-                    std::slice::from_ref(scissor));
+            if let Some(scissor) = &node.scissor {
+                unsafe {
+                    device_ref.get().cmd_set_scissor(
+                        *command_buffer,
+                        0,
+                        std::slice::from_ref(scissor));
+                }
             }
         }
 
@@ -886,7 +898,9 @@ impl VulkanFrameGraph {
         // if we began a render pass and bound a pipeline for this node, end it
         if active_pipeline.is_some() {
             unsafe {
-                render_context.get_device().borrow().get().cmd_end_render_pass(*command_buffer);
+                render_context.get_device().lock()
+                    .expect("Failed to obtain device lock")
+                    .get().cmd_end_render_pass(*command_buffer);
             }
         }
     }
@@ -929,6 +943,8 @@ impl FrameGraph for VulkanFrameGraph {
         // add a global memory barrier to ensure all CPU writes are accessible
         // prior to dispatching GPU work
         {
+            let device_ref = render_context.get_device().lock()
+                .expect("Failed to obtain device lock");
             let host_barrier = vk::MemoryBarrier::builder()
                 .src_access_mask(vk::AccessFlags::HOST_WRITE)
                 .dst_access_mask(vk::AccessFlags::UNIFORM_READ
@@ -937,7 +953,7 @@ impl FrameGraph for VulkanFrameGraph {
                 .build();
 
             unsafe {
-                render_context.get_device().borrow().get().cmd_pipeline_barrier(
+                device_ref.get().cmd_pipeline_barrier(
                     *command_buffer,
                     vk::PipelineStageFlags::HOST,
                     vk::PipelineStageFlags::VERTEX_INPUT | vk::PipelineStageFlags::VERTEX_SHADER,
@@ -958,7 +974,9 @@ impl FrameGraph for VulkanFrameGraph {
                 enter_span!(tracing::Level::TRACE, "Node", "{}", index.index());
                 let nodes = &mut frame.nodes;
                 let node = nodes.node_weight_mut(*index).unwrap();
-                render_context.get_device().borrow().push_debug_label(*command_buffer, node.get_name());
+                render_context.get_device().lock()
+                    .expect("Failed to obtain device lock.")
+                    .push_debug_label(*command_buffer, node.get_name());
 
                 // Prepare and execute resource barriers
                 let barriers = self.node_barriers.get(index);
@@ -1027,7 +1045,9 @@ impl FrameGraph for VulkanFrameGraph {
 
                     if transformed_image_barriers.len() > 0 || transformed_buffer_barriers.len() > 0 {
                         unsafe {
-                            render_context.get_device().borrow().get().cmd_pipeline_barrier(
+                            render_context.get_device().lock()
+                                .expect("Failed to obtain device lock")
+                                .get().cmd_pipeline_barrier(
                                 *command_buffer,
                                 source_stage,
                                 dest_stage,
@@ -1057,7 +1077,9 @@ impl FrameGraph for VulkanFrameGraph {
                     _ => {}
                 }
 
-                render_context.get_device().borrow().pop_debug_label(*command_buffer);
+                render_context.get_device().lock()
+                    .expect("Failed to obtain device lock")
+                    .pop_debug_label(*command_buffer);
             }
         });
 

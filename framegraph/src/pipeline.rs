@@ -322,7 +322,9 @@ fn create_descriptor_set_layouts(render_context: &VulkanRenderContext, full_bind
                 .build();
 
             let layout = unsafe {
-                render_context.get_device().borrow().get().create_descriptor_set_layout(
+                render_context.get_device().lock()
+                    .expect("Failed to obtain device lock")
+                    .get().create_descriptor_set_layout(
                     &layout_create_info,
                     None)
                     .expect("Failed to create descriptor set layout")
@@ -376,34 +378,40 @@ impl VulkanPipelineManager {
 
                 // let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
 
-                let pipeline_layout = {
-                    let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
-                        .set_layouts(&descriptor_set_layouts);
-                    unsafe {
-                        render_context.get_device().borrow().get().create_pipeline_layout(&pipeline_layout_create, None)
-                            .expect("Failed to create pipeline layout")
-                    }
+                let pipeline = {
+                    let pipeline_layout = {
+                        let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
+                            .set_layouts(&descriptor_set_layouts);
+                        unsafe {
+                            let device_ref = render_context.get_device().lock()
+                                .expect("Failed to obtain device lock");
+                            device_ref.get().create_pipeline_layout(&pipeline_layout_create, None)
+                                .expect("Failed to create pipeline layout")
+                        }
+                    };
+
+                    let main_name = std::ffi::CString::new("main").unwrap();
+                    let shader_stage = vk::PipelineShaderStageCreateInfo::builder()
+                        .module(compute_shader_module.borrow().shader.shader_module.clone())
+                        .name(&main_name)
+                        .stage(vk::ShaderStageFlags::COMPUTE);
+
+                    let compute_pipeline_info = vk::ComputePipelineCreateInfo::builder()
+                        .stage(*shader_stage)
+                        .layout(pipeline_layout)
+                        .build();
+
+                    let device_pipeline = DeviceWrapper::create_compute_pipeline(
+                        render_context.get_device(),
+                        &compute_pipeline_info,
+                        pipeline_layout,
+                        descriptor_set_layouts,
+                        &pipeline_description.compute_name);
+
+                    Rc::new(RefCell::new(Pipeline::new(
+                        device_pipeline)))
                 };
 
-                let main_name = std::ffi::CString::new("main").unwrap();
-                let shader_stage = vk::PipelineShaderStageCreateInfo::builder()
-                    .module(compute_shader_module.borrow().shader.shader_module.clone())
-                    .name(&main_name)
-                    .stage(vk::ShaderStageFlags::COMPUTE);
-
-                let compute_pipeline_info = vk::ComputePipelineCreateInfo::builder()
-                    .stage(*shader_stage)
-                    .layout(pipeline_layout)
-                    .build();
-
-                let device_pipeline = DeviceWrapper::create_compute_pipeline(
-                    render_context.get_device(),
-                    &compute_pipeline_info,
-                    pipeline_layout,
-                    descriptor_set_layouts,
-                    &pipeline_description.compute_name);
-                let pipeline = Rc::new(RefCell::new(Pipeline::new(
-                    device_pipeline)));
                 self.pipeline_cache.insert(pipeline_key, pipeline.clone());
                 pipeline
             }
@@ -465,7 +473,9 @@ impl VulkanPipelineManager {
                         let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
                             .set_layouts(&descriptor_set_layouts);
                         unsafe {
-                            render_context.get_device().borrow().get().create_pipeline_layout(&pipeline_layout_create, None)
+                            render_context.get_device().lock()
+                                .expect("Failed to obtain device lock")
+                                .get().create_pipeline_layout(&pipeline_layout_create, None)
                                 .expect("Failed to create pipeline layout")
                         }
                 };

@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::ffi::c_void;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use ash::vk;
 use ash::vk::{DeviceSize, Format};
@@ -14,7 +14,7 @@ use api_types::image::{ImageCreateInfo, ImageType};
 use context::vulkan_render_context::VulkanRenderContext;
 
 pub fn create_from_bytes(
-    device: Arc<RefCell<DeviceWrapper>>,
+    device: Arc<Mutex<DeviceWrapper>>,
     render_context: &VulkanRenderContext,
     immediate_command_buffer: &vk::CommandBuffer,
     image_info: vk::ImageCreateInfo,
@@ -35,8 +35,11 @@ pub fn create_from_bytes(
         MemoryLocation::CpuToGpu
     );
 
+    let device_ref = device.lock()
+        .expect("Failed to obtain device lock.");
+
     // update buffer with image bytes
-    device.borrow().update_buffer(&buffer, |mapped_memory: *mut c_void, _size: u64| {
+    device_ref.update_buffer(&buffer, |mapped_memory: *mut c_void, _size: u64| {
         unsafe {
             core::ptr::copy_nonoverlapping(
                 image_bytes.as_ptr(),
@@ -124,7 +127,7 @@ pub fn create_from_bytes(
             .build();
 
         unsafe {
-            device.borrow().get().reset_command_buffer(
+            device_ref.get().reset_command_buffer(
                 *immediate_command_buffer,
                 vk::CommandBufferResetFlags::empty())
                 .expect("Failed to reset command buffer");
@@ -132,10 +135,10 @@ pub fn create_from_bytes(
             let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
                 .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
                 .build();
-            device.borrow().get().begin_command_buffer(*immediate_command_buffer, &command_buffer_begin_info)
+            device_ref.get().begin_command_buffer(*immediate_command_buffer, &command_buffer_begin_info)
                 .expect("Failed to begin recording command buffer");
 
-            device.borrow().get().cmd_pipeline_barrier(
+            device_ref.get().cmd_pipeline_barrier(
                 *immediate_command_buffer,
                 vk::PipelineStageFlags::TOP_OF_PIPE,
                 vk::PipelineStageFlags::TRANSFER,
@@ -144,14 +147,14 @@ pub fn create_from_bytes(
                 &[],
                 std::slice::from_ref(&pre_barrier));
 
-            device.borrow().get().cmd_copy_buffer_to_image(
+            device_ref.get().cmd_copy_buffer_to_image(
                 *immediate_command_buffer,
                 resolved_buffer.buffer,
                 resolved_texture.image,
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 std::slice::from_ref(&copy_region));
 
-            device.borrow().get().cmd_pipeline_barrier(
+            device_ref.get().cmd_pipeline_barrier(
                 *immediate_command_buffer,
                 vk::PipelineStageFlags::TRANSFER,
                 vk::PipelineStageFlags::VERTEX_SHADER,
@@ -160,21 +163,21 @@ pub fn create_from_bytes(
                 &[],
                 std::slice::from_ref(&post_barrier));
 
-            device.borrow().get().end_command_buffer(*immediate_command_buffer)
+            device_ref.get().end_command_buffer(*immediate_command_buffer)
                 .expect("Failed to record command buffer");
 
             let submit = vk::SubmitInfo::builder()
                 .command_buffers(std::slice::from_ref(immediate_command_buffer))
                 .build();
 
-            device.borrow().get().queue_submit(
+            device_ref.get().queue_submit(
                 render_context.get_graphics_queue(),
                 std::slice::from_ref(&submit),
                 vk::Fence::null())
                 .expect("Failed to execute buffer->image copy");
 
             // TODO: this is very bad and we should figure something else out
-            device.borrow().get().device_wait_idle()
+            device_ref.get().device_wait_idle()
                 .expect("Error when waiting for buffer->image copy");
         }
 
@@ -182,7 +185,7 @@ pub fn create_from_bytes(
     }
 }
 pub fn create_from_uri(
-    device: Arc<RefCell<DeviceWrapper>>,
+    device: Arc<Mutex<DeviceWrapper>>,
     render_context: &VulkanRenderContext,
     immediate_command_buffer: &vk::CommandBuffer,
     uri: &str,

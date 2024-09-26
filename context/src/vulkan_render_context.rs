@@ -3,7 +3,7 @@ use std::ffi::{c_void, CStr};
 use std::fmt::{Debug, Formatter};
 use std::os::raw::c_char;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread::Thread;
 use ash::{vk};
 use ash::vk::{ExtendsPhysicalDeviceFeatures2, PFN_vkGetPhysicalDeviceFeatures2, PhysicalDeviceFeatures2, PhysicalDeviceFeatures2Builder, PresentModeKHR};
@@ -470,18 +470,21 @@ fn create_command_pool(
 
 
 fn create_per_thread_objects(
-    device: Arc<RefCell<DeviceWrapper>>,
+    device: Arc<Mutex<DeviceWrapper>>,
     descriptor_pool_sizes: &[vk::DescriptorPoolSize],
     max_descriptor_sets: u32,
     thread_type: ThreadType) -> PerThread {
 
+    let device_ref = device.lock()
+        .expect("Failed to obtain device lock while creating PerThread objects");
+
     let graphics_command_pool = create_command_pool(
-        &device.borrow(),
-        device.borrow().get_queue_family_indices().graphics.unwrap());
+        &device_ref,
+        device_ref.get_queue_family_indices().graphics.unwrap());
 
     let compute_command_pool = create_command_pool(
-        &device.borrow(),
-        device.borrow().get_queue_family_indices().compute.unwrap());
+        &device_ref,
+        device_ref.get_queue_family_indices().compute.unwrap());
 
     let descriptor_pool = unsafe {
         let descriptor_pool_create = vk::DescriptorPoolCreateInfo::builder()
@@ -489,11 +492,13 @@ fn create_per_thread_objects(
             .max_sets(max_descriptor_sets)
             .pool_sizes(&descriptor_pool_sizes);
 
-        device.borrow().get().create_descriptor_pool(
+        device_ref.get().create_descriptor_pool(
             &descriptor_pool_create,
             None)
             .expect("Failed to create descriptor pool for PerThread object")
     };
+
+    drop(device_ref);
 
     PerThread::new(
         device,
@@ -532,7 +537,7 @@ fn create_debug_util(
 
 fn create_swapchain(
     instance: &InstanceWrapper,
-    device: Arc<RefCell<DeviceWrapper>>,
+    device: Arc<Mutex<DeviceWrapper>>,
     physical_device: &PhysicalDeviceWrapper,
     surface: &SurfaceWrapper,
     window: &winit::window::Window,
@@ -632,7 +637,9 @@ fn create_swapchain(
 
     let swapchain_loader = ash::extensions::khr::Swapchain::new(
         instance.get(),
-        device.borrow().get());
+        device.lock()
+            .expect("Failed to obtain device lock when creating swapchain, \
+            worker threads should not be active at this point").get());
     let swapchain = unsafe {
         swapchain_loader
             .create_swapchain(&create_info, None)
@@ -666,9 +673,11 @@ fn create_swapchain(
         let fence_create = vk::FenceCreateInfo::builder()
             .flags(vk::FenceCreateFlags::SIGNALED)
             .build();
+        let device_ref = device.lock()
+            .expect("Failed to obtain device lock while creating swapchain images");
         for _ in 0..swapchain_images.len() {
             present_fences.push(
-                device.borrow().get().create_fence(
+                device_ref.get().create_fence(
                     &fence_create,
                     None
                 )
@@ -719,7 +728,7 @@ pub struct VulkanRenderContext {
     swapchain: Option<SwapchainWrapper>,
     old_swapchain: Option<OldSwapchain>,
     swapchain_semaphores: Vec<vk::Semaphore>,
-    device: Arc<RefCell<DeviceWrapper>>,
+    device: Arc<Mutex<DeviceWrapper>>,
     physical_device: PhysicalDeviceWrapper,
     surface: Option<SurfaceWrapper>,
     instance: InstanceWrapper,
@@ -736,7 +745,10 @@ impl Debug for VulkanRenderContext {
 impl Drop for VulkanRenderContext {
     fn drop(&mut self) {
         unsafe {
-            let device = self.device.borrow();
+            // let device = self.device.borrow();
+            let device = self.device.lock()
+                .expect("A worker thread still possesses a lock on the device when attempting \
+                 to destroy the render context");
             for semaphore in &self.swapchain_semaphores {
                 device.get().destroy_semaphore(*semaphore, None);
             }
@@ -748,7 +760,7 @@ impl RenderContext for VulkanRenderContext {
     type Create = vk::RenderPassCreateInfo;
     type RP = vk::RenderPass;
 
-    fn get_device(&self) -> Arc<RefCell<DeviceWrapper>> { self.device.clone() }
+    fn get_device(&self) -> Arc<Mutex<DeviceWrapper>> { self.device.clone() }
 
 }
 
@@ -831,7 +843,7 @@ impl VulkanRenderContext {
 
         logical_device_extensions.append(&mut physical_device_extensions);
 
-        let logical_device = Arc::new(RefCell::new(create_logical_device(
+        let logical_device = Arc::new(Mutex::new(create_logical_device(
             &instance_wrapper,
             device_properties.clone(),
             debug,
@@ -840,6 +852,9 @@ impl VulkanRenderContext {
             &layers,
             &logical_device_extensions
         )));
+        let device_ref = logical_device.lock()
+            .expect("Failed to obtain device lock while creating VulkanRenderContext; \
+            this should be impossible.");
 
         let swapchain = {
             if window.is_some() && surface_wrapper.is_some() {
@@ -864,7 +879,7 @@ impl VulkanRenderContext {
                         .build();
 
                     semaphores.push(unsafe {
-                        logical_device.borrow().get().create_semaphore(&create_info, None)
+                        device_ref.get().create_semaphore(&create_info, None)
                             .expect("Failed to create semaphore for swapchain image")
                     });
                 }
@@ -874,18 +889,18 @@ impl VulkanRenderContext {
         };
 
         let graphics_queue = unsafe {
-            logical_device.borrow().get().get_device_queue(
-                logical_device.borrow().get_queue_family_indices().graphics.unwrap(),
+            device_ref.get().get_device_queue(
+                device_ref.get_queue_family_indices().graphics.unwrap(),
                 0)
         };
         let present_queue = unsafe {
-            logical_device.borrow().get().get_device_queue(
-                logical_device.borrow().get_queue_family_indices().present.unwrap(),
+            device_ref.get().get_device_queue(
+                device_ref.get_queue_family_indices().present.unwrap(),
                 0)
         };
         let compute_queue = unsafe {
-            logical_device.borrow().get().get_device_queue(
-                logical_device.borrow().get_queue_family_indices().compute.unwrap(),
+            device_ref.get().get_device_queue(
+                device_ref.get_queue_family_indices().compute.unwrap(),
                 0)
         };
 
@@ -935,7 +950,7 @@ impl VulkanRenderContext {
         let frame_index = 0;
 
         {
-            let borrowed_device = logical_device.borrow();
+            // let borrowed_device = logical_device.borrow();
             let num_frames = match &swapchain {
                 None => { MAX_FRAMES_IN_FLIGHT }
                 Some(swapchain) => {
@@ -944,7 +959,8 @@ impl VulkanRenderContext {
             };
 
             init_gpu_profiling!(
-                borrowed_device.get(),
+                device_ref.get(),
+                // borrowed_device.get(),
                 device_properties.limits.timestamp_period,
                 // &main_thread_objects.immediate_graphics_buffer,
                 &main_thread_objects[0].immediate_graphics_buffer,
@@ -956,7 +972,7 @@ impl VulkanRenderContext {
         VulkanRenderContext {
             entry,
             instance: instance_wrapper,
-            device: logical_device,
+            device: logical_device.clone(),
             physical_device,
             graphics_queue,
             present_queue,
@@ -980,7 +996,9 @@ impl VulkanRenderContext {
 
     pub fn get_graphics_queue_index(&self) -> u32
     {
-        self.device.borrow().get_queue_family_indices().graphics.unwrap()
+        self.device.lock()
+            .expect("Failed to obtain device lock.")
+            .get_queue_family_indices().graphics.unwrap()
     }
 
     pub fn get_graphics_queue(&self) -> vk::Queue {
@@ -1095,7 +1113,10 @@ impl VulkanRenderContext {
             };
 
             let descriptor_sets = unsafe {
-                self.device.borrow().get().allocate_descriptor_sets(&alloc_info )
+                self.device.lock()
+                    .expect("Failed to obtain device lock")
+                    .get()
+                    .allocate_descriptor_sets(&alloc_info)
                     .expect("Failed to allocate descriptor sets")
             };
 
@@ -1132,7 +1153,9 @@ impl VulkanRenderContext {
             .layers(extent.depth);
 
         unsafe {
-            let framebuffer = self.device.borrow().get().create_framebuffer(&create_info, None)
+            let framebuffer = self.device.lock()
+                .expect("Failed to obtain device lock")
+                .get().create_framebuffer(&create_info, None)
                 .expect("Failed to create framebuffer");
             DeviceFramebuffer::new(framebuffer, self.device.clone())
         }
@@ -1154,7 +1177,9 @@ impl VulkanRenderContext {
             .build();
 
         unsafe {
-            self.device.borrow().get()
+            self.device.lock()
+                .expect("Failed to obtain device lock")
+                .get()
                 .queue_submit(
                     self.get_graphics_queue(),
                     std::slice::from_ref(&submit_info),
@@ -1191,13 +1216,15 @@ impl VulkanRenderContext {
         let present_fence = swapchain.get_present_fence(self.swapchain_index);
         unsafe {
             enter_span!(tracing::Level::TRACE, "Waiting for Present fence");
-            self.device.borrow().get().wait_for_fences(
+            let device_ref = self.device.lock()
+                .expect("Failed to obtain device lock.");
+            device_ref.get().wait_for_fences(
                 std::slice::from_ref(&present_fence),
                 true,
                 u64::MAX )
                 .expect("Failed to wait for Present fence");
 
-            self.device.borrow().get().reset_fences(
+            device_ref.get().reset_fences(
                 std::slice::from_ref(&present_fence)
             ).expect("Failed to reset Present fence");
         }
@@ -1221,7 +1248,8 @@ impl VulkanRenderContext {
     }
 
     pub fn start_frame(&mut self, frame_index: u32) {
-        let borrowed_device = self.device.borrow();
+        let borrowed_device = self.device.lock()
+            .expect("Failed to obtain device lock.");
         reset_gpu_profiling!(borrowed_device.get());
     }
 
