@@ -11,6 +11,7 @@ extern crate context;
 use context::render_context::{RenderContext};
 
 use ash::vk;
+use rayon::prelude::*;
 use crate::frame::Frame;
 use crate::frame_graph::FrameGraph;
 use crate::pass_node::PassNode;
@@ -949,7 +950,9 @@ impl FrameGraph for VulkanFrameGraph {
 
         // excute nodes
         // let sorted_nodes = &frame.sorted_nodes;
-        for command_list in command_lists {
+        // for command_list in command_lists {
+        // for command_list in command_lists.par_iter() {
+        command_lists.par_iter().for_each(|command_list| {
             enter_span!(tracing::Level::TRACE, "Filling command lists");
             for index in &command_list.nodes {
                 enter_span!(tracing::Level::TRACE, "Node", "{}", index.index());
@@ -1056,7 +1059,7 @@ impl FrameGraph for VulkanFrameGraph {
 
                 render_context.get_device().borrow().pop_debug_label(*command_buffer);
             }
-        }
+        });
 
     }
 }
