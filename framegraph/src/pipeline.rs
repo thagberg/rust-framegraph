@@ -1,9 +1,7 @@
-use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use ash::vk;
@@ -46,8 +44,8 @@ pub struct PipelineDescription
     depth_stencil: DepthStencilType,
     blend: BlendType,
     name: String,
-    vertex_shader: Rc<RefCell<Shader>>,
-    fragment_shader: Rc<RefCell<Shader>>
+    vertex_shader: Arc<Mutex<Shader>>,
+    fragment_shader: Arc<Mutex<Shader>>
 }
 
 impl Hash for PipelineDescription
@@ -68,8 +66,8 @@ impl PipelineDescription
         depth_stencil: DepthStencilType,
         blend: BlendType,
         name: &str,
-        vertex_shader: Rc<RefCell<Shader>>,
-        fragment_shader: Rc<RefCell<Shader>>) -> Self
+        vertex_shader: Arc<Mutex<Shader>>,
+        fragment_shader: Arc<Mutex<Shader>>) -> Self
     {
         PipelineDescription {
             vertex_input,
@@ -440,7 +438,7 @@ impl VulkanPipelineManager {
                 //  i.e. - Could have duplicate bindings for descriptors used in both stages, or
                 //  bindings only used in a single stage but are part of a larger descriptor set
                 let mut full_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>> = HashMap::new();
-                for (set, bindings) in &pipeline_description.vertex_shader.borrow().descriptor_bindings {
+                for (set, bindings) in &pipeline_description.vertex_shader.lock().unwrap().descriptor_bindings {
                     let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
                     // set_bindings.copy_from_slice(&bindings);
                     set_bindings.extend(bindings.iter());
@@ -448,7 +446,7 @@ impl VulkanPipelineManager {
                         binding.stage_flags = vk::ShaderStageFlags::VERTEX;
                     }
                 }
-                for (set, bindings) in &pipeline_description.fragment_shader.borrow().descriptor_bindings {
+                for (set, bindings) in &pipeline_description.fragment_shader.lock().unwrap().descriptor_bindings {
                     let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
                     for binding in bindings {
                         let duplicate = set_bindings.iter_mut().find(|x| {
@@ -520,7 +518,7 @@ impl VulkanPipelineManager {
                         s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
                         p_next: std::ptr::null(),
                         flags: vk::PipelineShaderStageCreateFlags::empty(),
-                        module: pipeline_description.vertex_shader.borrow().shader.shader_module.clone(),
+                        module: pipeline_description.vertex_shader.lock().unwrap().shader.shader_module.clone(),
                         p_name: main_name.as_ptr(),
                         p_specialization_info: std::ptr::null(),
                         stage: vk::ShaderStageFlags::VERTEX,
@@ -530,7 +528,7 @@ impl VulkanPipelineManager {
                         s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
                         p_next: std::ptr::null(),
                         flags: vk::PipelineShaderStageCreateFlags::empty(),
-                        module: pipeline_description.fragment_shader.borrow().shader.shader_module.clone(),
+                        module: pipeline_description.fragment_shader.lock().unwrap().shader.shader_module.clone(),
                         p_name: main_name.as_ptr(),
                         p_specialization_info: std::ptr::null(),
                         stage: vk::ShaderStageFlags::FRAGMENT,
