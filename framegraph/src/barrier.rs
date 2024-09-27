@@ -1,10 +1,9 @@
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use ash::vk;
 use api_types::device::DeviceResource;
 
 pub struct ImageBarrier {
-    pub resource: Rc<RefCell<DeviceResource>>,
+    pub resource: Arc<Mutex<DeviceResource>>,
     pub source_stage: vk::PipelineStageFlags,
     pub dest_stage: vk::PipelineStageFlags,
     pub source_access: vk::AccessFlags,
@@ -14,7 +13,7 @@ pub struct ImageBarrier {
 }
 
 pub struct BufferBarrier {
-    pub resource: Rc<RefCell<DeviceResource>>,
+    pub resource: Arc<Mutex<DeviceResource>>,
     pub source_stage: vk::PipelineStageFlags,
     pub dest_stage: vk::PipelineStageFlags,
     pub source_access: vk::AccessFlags,

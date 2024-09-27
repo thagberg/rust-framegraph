@@ -1,18 +1,19 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use api_types::device::DeviceResource;
 use crate::pass_node::PassNode;
 
 #[derive(Debug)]
 pub struct PresentPassNode {
-    pub swapchain_image: Rc<RefCell<DeviceResource>>,
+    pub swapchain_image: Arc<Mutex<DeviceResource>>,
     name: String
 }
 
 #[derive(Default)]
 pub struct PresentPassNodeBuilder {
     name: String,
-    swapchain_image: Option<Rc<RefCell<DeviceResource>>>
+    swapchain_image: Option<Arc<Mutex<DeviceResource>>>
 }
 
 impl PresentPassNode {
@@ -25,7 +26,7 @@ impl PresentPassNode {
 }
 
 impl PresentPassNodeBuilder {
-    pub fn swapchain_image(mut self, swapchain_image: Rc<RefCell<DeviceResource>>) -> Self {
+    pub fn swapchain_image(mut self, swapchain_image: Arc<Mutex<DeviceResource>>) -> Self {
         self.swapchain_image = Some(swapchain_image);
         self
     }

@@ -435,7 +435,7 @@ fn link_present_node(node: &mut PresentPassNode, usage_cache: &mut HashMap<u64, 
     };
 
     // link_inputs(gn.get_inputs(), &mut node_barrier, &mut usage_cache);
-    let mut swapchain = node.swapchain_image.borrow_mut();
+    let mut swapchain = node.swapchain_image.lock().unwrap();
     let handle = swapchain.get_handle();
     let mut swapchain_image = swapchain.get_image_mut();
     let last_usage = {
