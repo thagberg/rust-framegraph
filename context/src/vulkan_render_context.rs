@@ -646,13 +646,13 @@ fn create_swapchain(
             .expect("Failed to create swapchain.")
     };
 
-    let swapchain_images : Vec<Rc<RefCell<DeviceResource>>> = unsafe {
+    let swapchain_images : Vec<Arc<Mutex<DeviceResource>>> = unsafe {
         swapchain_loader
             .get_swapchain_images(swapchain)
             .expect("Failed to get swapchain images.")
             .iter()
             .map(|image| {
-                Rc::new(RefCell::new(DeviceWrapper::wrap_image(
+                Arc::new(Mutex::new(DeviceWrapper::wrap_image(
                     device.clone(),
                     image.clone(),
                     swapchain_format.format,

@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 use ash::vk;
 use ash::vk::Handle;
@@ -143,7 +144,7 @@ impl Pipeline {
 #[derive(Debug)]
 pub struct VulkanPipelineManager
 {
-    pipeline_cache: HashMap<u64, Rc<RefCell<Pipeline>>>,
+    pipeline_cache: HashMap<u64, Arc<Mutex<Pipeline>>>,
     shader_manager: ShaderManager
 }
 
@@ -352,7 +353,7 @@ impl VulkanPipelineManager {
     pub fn create_compute_pipeline(
         &mut self,
         render_context: &VulkanRenderContext,
-        pipeline_description: &ComputePipelineDescription) -> Rc<RefCell<Pipeline>> {
+        pipeline_description: &ComputePipelineDescription) -> Arc<Mutex<Pipeline>> {
 
         let mut pipeline_hasher = DefaultHasher::new();
         pipeline_description.hash(&mut pipeline_hasher);
@@ -408,7 +409,7 @@ impl VulkanPipelineManager {
                         descriptor_set_layouts,
                         &pipeline_description.compute_name);
 
-                    Rc::new(RefCell::new(Pipeline::new(
+                    Arc::new(Mutex::new(Pipeline::new(
                         device_pipeline)))
                 };
 
@@ -422,7 +423,7 @@ impl VulkanPipelineManager {
         &mut self,
         render_context: &VulkanRenderContext,
         render_pass: vk::RenderPass,
-        pipeline_description: &PipelineDescription) -> Rc<RefCell<Pipeline>> {
+        pipeline_description: &PipelineDescription) -> Arc<Mutex<Pipeline>> {
         enter_span!(tracing::Level::TRACE, "Create or fetch Pipeline");
 
         // TODO: define a PipelineKey type and require the consumer to provide it here
@@ -566,7 +567,7 @@ impl VulkanPipelineManager {
                     pipeline_layout,
                     descriptor_set_layouts,
                     pipeline_description.get_name());
-                let pipeline = Rc::new(RefCell::new(Pipeline::new(
+                let pipeline = Arc::new(Mutex::new(Pipeline::new(
                     device_pipeline)));
                 self.pipeline_cache.insert(pipeline_key, pipeline.clone());
                 pipeline

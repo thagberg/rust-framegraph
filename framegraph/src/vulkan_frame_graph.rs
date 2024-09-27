@@ -668,53 +668,56 @@ impl VulkanFrameGraph {
             &node.pipeline_description);
 
         // bind pipeline
-        unsafe {
-            render_context.get_device().lock()
-                .expect("Failed to obtain device lock")
-                .get().cmd_bind_pipeline(
-                *command_buffer,
-                vk::PipelineBindPoint::COMPUTE,
-                pipeline.borrow().get_pipeline());
-        }
-
-        // prepare and perform descriptor writes
+        let pipeline_ref = pipeline.lock().unwrap();
         {
-            let mut descriptor_updates = DescriptorUpdate::new();
-
-            // get input and output handles for this pass
-            // let inputs = node.get_inputs();
-            let inputs = &node.inputs;
-            let outputs = &node.outputs;
-
-            resolve_descriptors(
-                inputs,
-                pipeline.borrow().deref(),
-                &[],
-                &mut descriptor_updates);
-            resolve_descriptors(
-                outputs,
-                pipeline.borrow().deref(),
-                &[],
-                &mut descriptor_updates);
-
             unsafe {
-                let device_ref = render_context.get_device().lock()
-                    .expect("Failed to obtain device lock");
-                // TODO: support descriptor copies?
-                device_ref.get().update_descriptor_sets(
-                    &descriptor_updates.descriptor_writes,
-                    &[]);
-                // bind descriptorsets
-                // TODO: COMPUTE SUPPORT
-                device_ref.get().cmd_bind_descriptor_sets(
+                render_context.get_device().lock()
+                    .expect("Failed to obtain device lock")
+                    .get().cmd_bind_pipeline(
                     *command_buffer,
                     vk::PipelineBindPoint::COMPUTE,
-                    pipeline.borrow().get_pipeline_layout(),
-                    0,
-                    &vec![],
-                    &[]);
+                    pipeline_ref.get_pipeline());
             }
-        };
+
+            // prepare and perform descriptor writes
+            {
+                let mut descriptor_updates = DescriptorUpdate::new();
+
+                // get input and output handles for this pass
+                // let inputs = node.get_inputs();
+                let inputs = &node.inputs;
+                let outputs = &node.outputs;
+
+                resolve_descriptors(
+                    inputs,
+                    pipeline_ref.deref(),
+                    &[],
+                    &mut descriptor_updates);
+                resolve_descriptors(
+                    outputs,
+                    pipeline_ref.deref(),
+                    &[],
+                    &mut descriptor_updates);
+
+                unsafe {
+                    let device_ref = render_context.get_device().lock()
+                        .expect("Failed to obtain device lock");
+                    // TODO: support descriptor copies?
+                    device_ref.get().update_descriptor_sets(
+                        &descriptor_updates.descriptor_writes,
+                        &[]);
+                    // bind descriptorsets
+                    // TODO: COMPUTE SUPPORT
+                    device_ref.get().cmd_bind_descriptor_sets(
+                        *command_buffer,
+                        vk::PipelineBindPoint::COMPUTE,
+                        pipeline_ref.get_pipeline_layout(),
+                        0,
+                        &vec![],
+                        &[]);
+                }
+            };
+        }
 
         // execute node
         node.execute(
@@ -772,100 +775,106 @@ impl VulkanFrameGraph {
 
             let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass.borrow().renderpass.clone(), pipeline_description);
 
-            let mut new_descriptor_sets = render_context.create_descriptor_sets(&pipeline.borrow().device_pipeline.descriptor_set_layouts, descriptor_pool);
-
-            // create framebuffer
-            // TODO: should cache framebuffer objects to avoid creating the same ones each frame
-            let framebuffer = {
-                let framebuffer = render_context.create_framebuffer(
-                    renderpass.borrow().renderpass.clone(),
-                    &framebuffer_extent,
-                    &resolved_render_targets,
-                    &resolved_depth_target);
-                // Framebuffer needs to be owned by the GraphicsPassNode to ensure it's
-                // destroyed after this frame has rendered
-                node.framebuffer = Some(framebuffer);
-                node.get_framebuffer()
-            };
-
-            // TODO: parameterize this per framebuffer attachment
-            let clear_value = vk::ClearValue {
-                color: vk::ClearColorValue {
-                    float32: [0.1, 0.1, 0.1, 1.0]
-                }
-            };
-
-            // prepare and perform descriptor writes
             {
-                let mut descriptor_updates = DescriptorUpdate::new();
+                let pipeline_ref = pipeline.lock().unwrap();
 
-                // get input and output handles for this pass
-                // let inputs = node.get_inputs();
-                let inputs = &node.inputs;
-                let outputs = node.get_outputs();
+                let mut new_descriptor_sets = render_context.create_descriptor_sets(
+                    &pipeline_ref.device_pipeline.descriptor_set_layouts, descriptor_pool);
 
-                resolve_descriptors(
-                    inputs,
-                    pipeline.borrow().deref(),
-                    &new_descriptor_sets,
-                    &mut descriptor_updates);
-                resolve_descriptors(
-                    outputs,
-                    pipeline.borrow().deref(),
-                    &new_descriptor_sets,
-                    &mut descriptor_updates);
+                // create framebuffer
+                // TODO: should cache framebuffer objects to avoid creating the same ones each frame
+                let framebuffer = {
+                    let framebuffer = render_context.create_framebuffer(
+                        renderpass.borrow().renderpass.clone(),
+                        &framebuffer_extent,
+                        &resolved_render_targets,
+                        &resolved_depth_target);
+                    // Framebuffer needs to be owned by the GraphicsPassNode to ensure it's
+                    // destroyed after this frame has rendered
+                    node.framebuffer = Some(framebuffer);
+                    node.get_framebuffer()
+                };
 
-                unsafe {
-                    enter_span!(tracing::Level::TRACE, "Update and bind descriptor sets");
-                    let device_ref = render_context.get_device().lock()
-                        .expect("Failed to obtain device lock");
-                    // TODO: support descriptor copies?
-                    device_ref.get().update_descriptor_sets(
-                        &descriptor_updates.descriptor_writes,
-                        &[]);
-                    // bind descriptorsets
-                    // TODO: COMPUTE SUPPORT
-                    device_ref.get().cmd_bind_descriptor_sets(
-                        *command_buffer,
-                        vk::PipelineBindPoint::GRAPHICS,
-                        pipeline.borrow().get_pipeline_layout(),
-                        0,
+                // TODO: parameterize this per framebuffer attachment
+                let clear_value = vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.1, 0.1, 0.1, 1.0]
+                    }
+                };
+
+                // prepare and perform descriptor writes
+                {
+                    let mut descriptor_updates = DescriptorUpdate::new();
+
+                    // get input and output handles for this pass
+                    // let inputs = node.get_inputs();
+                    let inputs = &node.inputs;
+                    let outputs = node.get_outputs();
+
+                    resolve_descriptors(
+                        inputs,
+                        pipeline_ref.deref(),
                         &new_descriptor_sets,
-                        &[]);
+                        &mut descriptor_updates);
+                    resolve_descriptors(
+                        outputs,
+                        pipeline_ref.deref(),
+                        &new_descriptor_sets,
+                        &mut descriptor_updates);
+
+                    unsafe {
+                        enter_span!(tracing::Level::TRACE, "Update and bind descriptor sets");
+                        let device_ref = render_context.get_device().lock()
+                            .expect("Failed to obtain device lock");
+                        // TODO: support descriptor copies?
+                        device_ref.get().update_descriptor_sets(
+                            &descriptor_updates.descriptor_writes,
+                            &[]);
+                        // bind descriptorsets
+                        // TODO: COMPUTE SUPPORT
+                        device_ref.get().cmd_bind_descriptor_sets(
+                            *command_buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            pipeline_ref.get_pipeline_layout(),
+                            0,
+                            &new_descriptor_sets,
+                            &[]);
+                    }
                 }
+
+                // begin render pass and bind pipeline
+                {
+                    let render_pass_begin = vk::RenderPassBeginInfo::builder()
+                        .render_pass(renderpass.borrow().renderpass.clone())
+                        .framebuffer(framebuffer)
+                        .render_area(vk::Rect2D::builder()
+                            .offset(vk::Offset2D{x: 0, y: 0})
+                            .extent(vk::Extent2D{
+                                width: framebuffer_extent.width,
+                                height: framebuffer_extent.height})
+                            .build())
+                        .clear_values(std::slice::from_ref(&clear_value));
+
+                    unsafe {
+                        let device_ref = render_context.get_device().lock()
+                            .expect("Failed to obtain device lock");
+                        enter_span!(tracing::Level::TRACE, "Begin renderpass & bind pipeline");
+                        device_ref.get().cmd_begin_render_pass(
+                            *command_buffer,
+                            &render_pass_begin,
+                            vk::SubpassContents::INLINE);
+
+                        // TODO: add compute support
+                        device_ref.get().cmd_bind_pipeline(
+                            *command_buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            pipeline_ref.get_pipeline());
+                    }
+                }
+
+                descriptor_sets.append(&mut new_descriptor_sets);
             }
 
-            // begin render pass and bind pipeline
-            {
-                let render_pass_begin = vk::RenderPassBeginInfo::builder()
-                    .render_pass(renderpass.borrow().renderpass.clone())
-                    .framebuffer(framebuffer)
-                    .render_area(vk::Rect2D::builder()
-                        .offset(vk::Offset2D{x: 0, y: 0})
-                        .extent(vk::Extent2D{
-                            width: framebuffer_extent.width,
-                            height: framebuffer_extent.height})
-                        .build())
-                    .clear_values(std::slice::from_ref(&clear_value));
-
-                unsafe {
-                    let device_ref = render_context.get_device().lock()
-                        .expect("Failed to obtain device lock");
-                    enter_span!(tracing::Level::TRACE, "Begin renderpass & bind pipeline");
-                    device_ref.get().cmd_begin_render_pass(
-                        *command_buffer,
-                        &render_pass_begin,
-                        vk::SubpassContents::INLINE);
-
-                    // TODO: add compute support
-                    device_ref.get().cmd_bind_pipeline(
-                        *command_buffer,
-                        vk::PipelineBindPoint::GRAPHICS,
-                        pipeline.borrow().get_pipeline());
-                }
-            }
-
-            descriptor_sets.append(&mut new_descriptor_sets);
         }
 
         {
@@ -966,8 +975,6 @@ impl FrameGraph for VulkanFrameGraph {
 
         // excute nodes
         // let sorted_nodes = &frame.sorted_nodes;
-        // for command_list in command_lists {
-        // for command_list in command_lists.par_iter() {
         command_lists.par_iter().for_each(|command_list| {
             enter_span!(tracing::Level::TRACE, "Filling command lists");
             for index in &command_list.nodes {

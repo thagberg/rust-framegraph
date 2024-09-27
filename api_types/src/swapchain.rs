@@ -14,7 +14,7 @@ pub enum SwapchainStatus {
 }
 
 pub struct NextImage {
-    pub image: Option<Rc<RefCell<DeviceResource>>>,
+    pub image: Option<Arc<Mutex<DeviceResource>>>,
     pub status: SwapchainStatus
 }
 
@@ -22,7 +22,7 @@ pub struct SwapchainWrapper {
     device: Arc<Mutex<DeviceWrapper>>,
     loader: ash::extensions::khr::Swapchain,
     swapchain: vk::SwapchainKHR,
-    images: Vec<Rc<RefCell<DeviceResource>>>,
+    images: Vec<Arc<Mutex<DeviceResource>>>,
     format: vk::Format,
     extent: vk::Extent2D,
     present_fences: Vec<vk::Fence>
@@ -40,7 +40,7 @@ impl SwapchainWrapper {
         device: Arc<Mutex<DeviceWrapper>>,
         loader: ash::extensions::khr::Swapchain,
         swapchain: vk::SwapchainKHR,
-        images: Vec<Rc<RefCell<DeviceResource>>>,
+        images: Vec<Arc<Mutex<DeviceResource>>>,
         format: vk::Format,
         extent: vk::Extent2D,
         present_fences: Vec<vk::Fence>
@@ -58,7 +58,7 @@ impl SwapchainWrapper {
 
     pub fn get(&self) -> vk::SwapchainKHR { self.swapchain }
 
-    pub fn get_images(&self) -> &Vec<Rc<RefCell<DeviceResource>>> { &self.images }
+    pub fn get_images(&self) -> &Vec<Arc<Mutex<DeviceResource>>> { &self.images }
 
     pub fn get_format(&self) -> vk::Format { self.format }
 
