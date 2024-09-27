@@ -354,7 +354,9 @@ fn link_copy_node(node: &mut CopyPassNode, usage_cache: &mut HashMap<u64, Resour
     };
 
     for resource in &node.copy_sources {
-        let handle = resource.borrow().get_handle();
+        let handle = {
+            resource.lock().unwrap().get_handle()
+        };
         let last_usage = {
             let usage = usage_cache.get(&handle);
             match usage {
@@ -389,7 +391,9 @@ fn link_copy_node(node: &mut CopyPassNode, usage_cache: &mut HashMap<u64, Resour
     }
 
     for resource in &node.copy_dests {
-        let handle = resource.borrow().get_handle();
+        let handle = {
+            resource.lock().unwrap().get_handle()
+        };
         let last_usage = {
             let usage = usage_cache.get(&handle);
             match usage {

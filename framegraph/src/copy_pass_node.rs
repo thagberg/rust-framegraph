@@ -1,14 +1,13 @@
-use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use ash::vk::CommandBuffer;
 use api_types::device::DeviceResource;
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::pass_node::{FillCallback, PassNode};
 
 pub struct CopyPassNode {
-    pub copy_sources: Vec<Rc<RefCell<DeviceResource>>>,
-    pub copy_dests: Vec<Rc<RefCell<DeviceResource>>>,
+    pub copy_sources: Vec<Arc<Mutex<DeviceResource>>>,
+    pub copy_dests: Vec<Arc<Mutex<DeviceResource>>>,
     pub fill_callback: Box<FillCallback>,
     name: String
 }
@@ -45,7 +44,7 @@ impl PassNode for CopyPassNode {
         let mut reads: Vec<u64> = Vec::new();
         reads.reserve(self.copy_sources.len());
         for source in &self.copy_sources {
-            reads.push(source.borrow().get_handle());
+            reads.push(source.lock().unwrap().get_handle());
         }
 
         reads
@@ -55,7 +54,7 @@ impl PassNode for CopyPassNode {
         let mut writes: Vec<u64> = Vec::new();
         writes.reserve(self.copy_dests.len());
         for dest in &self.copy_dests {
-            writes.push(dest.borrow().get_handle());
+            writes.push(dest.lock().unwrap().get_handle());
         }
 
         writes
@@ -64,19 +63,19 @@ impl PassNode for CopyPassNode {
 
 #[derive(Default)]
 pub struct CopyPassNodeBuilder {
-    copy_sources: Vec<Rc<RefCell<DeviceResource>>>,
-    copy_dests: Vec<Rc<RefCell<DeviceResource>>>,
+    copy_sources: Vec<Arc<Mutex<DeviceResource>>>,
+    copy_dests: Vec<Arc<Mutex<DeviceResource>>>,
     fill_callback: Option<Box<FillCallback>>,
     name: String
 }
 
 impl CopyPassNodeBuilder {
-    pub fn copy_src(mut self, copy_src: Rc<RefCell<DeviceResource>>) -> Self {
+    pub fn copy_src(mut self, copy_src: Arc<Mutex<DeviceResource>>) -> Self {
         self.copy_sources.push(copy_src);
         self
     }
 
-    pub fn copy_dst(mut self, copy_dst: Rc<RefCell<DeviceResource>>) -> Self {
+    pub fn copy_dst(mut self, copy_dst: Arc<Mutex<DeviceResource>>) -> Self {
         self.copy_dests.push(copy_dst);
         self
     }
