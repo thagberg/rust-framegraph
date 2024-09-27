@@ -47,14 +47,14 @@ impl PassNode for GraphicsPassNode  {
         let mut reads: Vec<u64> = Vec::new();
         reads.reserve(self.inputs.len() + self.render_targets.len());
         for input in &self.inputs {
-           reads.push(input.resource.borrow().get_handle());
+           reads.push(input.resource.lock().unwrap().get_handle());
         }
         // color and depth targets also likely depend on previous writes
         for rt in &self.render_targets {
-            reads.push(rt.resource_image.borrow().get_handle());
+            reads.push(rt.resource_image.lock().unwrap().get_handle());
         }
         if let Some(dt) = &self.depth_target {
-            reads.push(dt.resource_image.borrow().get_handle());
+            reads.push(dt.resource_image.lock().unwrap().get_handle());
         }
 
         reads
@@ -63,13 +63,13 @@ impl PassNode for GraphicsPassNode  {
     fn get_writes(&self) -> Vec<u64> {
         let mut writes: Vec<u64> = Vec::new();
         for output in &self.outputs {
-            writes.push(output.resource.borrow().get_handle());
+            writes.push(output.resource.lock().unwrap().get_handle());
         }
         for rt in &self.render_targets {
-            writes.push(rt.resource_image.borrow().get_handle());
+            writes.push(rt.resource_image.lock().unwrap().get_handle());
         }
         if let Some(dt) = &self.depth_target {
-            writes.push(dt.resource_image.borrow().get_handle());
+            writes.push(dt.resource_image.lock().unwrap().get_handle());
         }
 
         writes

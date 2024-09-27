@@ -1,6 +1,5 @@
-use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use ash::vk;
 use api_types::device::DeviceResource;
 
@@ -57,6 +56,6 @@ impl Debug for BindingInfo {
 
 #[derive(Clone, Debug)]
 pub struct ResourceBinding {
-    pub resource: Rc<RefCell<DeviceResource>>,
+    pub resource: Arc<Mutex<DeviceResource>>,
     pub binding_info: BindingInfo
 }

@@ -62,18 +62,23 @@ fn is_write(access: vk::AccessFlags, stage: vk::PipelineStageFlags) -> bool {
 
 fn link_inputs(inputs: &[ResourceBinding], node_barrier: &mut NodeBarriers, usage_cache: &mut HashMap<u64, ResourceUsage>) {
     for input in inputs {
-        let handle = input.resource.borrow().get_handle();
+        let (handle, resolved_resource) = {
+            let mut input_ref = input.resource.lock().unwrap();
 
-        let mut resource = input.resource.borrow_mut();
-        let resolved_resource = {
-            match &mut resource.resource_type {
-                None => {
-                    panic!("Invalid input binding")
+            let handle = input_ref.get_handle();
+
+            let resolved_resource = {
+                match &mut input_ref.resource_type {
+                    None => {
+                        panic!("Invalid input binding")
+                    }
+                    Some(resource) => {
+                        resource
+                    }
                 }
-                Some(resource) => {
-                    resource
-                }
-            }
+            };
+
+            (handle, resolved_resource)
         };
 
         match resolved_resource {
@@ -147,7 +152,7 @@ fn resolve_render_targets(
 
     let mut rts: Vec<ImageWrapper> = Vec::new();
     for attachment in attachments {
-        let attachment_image = attachment.resource_image.borrow();
+        let attachment_image = attachment.resource_image.lock().unwrap();
         let resolved = attachment_image.resource_type.as_ref().expect("Invalid rendertarget provided");
         if let ResourceType::Image(rt_image) = &resolved {
             // TODO: do I really want to copy the ImageWrappers here?
@@ -219,8 +224,10 @@ fn resolve_descriptors<'a, 'b>(
     enter_span!(tracing::Level::TRACE, "Resolve descriptors");
 
     for binding in bindings {
-        let binding_ref = binding.resource.borrow();
-        let resolved_binding = binding_ref.resource_type.as_ref().expect("Invalid resource in binding");
+        let resolved_binding = {
+            let binding_ref = binding.resource.lock().unwrap();
+            binding_ref.resource_type.as_ref().expect("Invalid resource in binding")
+        };
         let descriptor_set = descriptor_sets[binding.binding_info.set as usize];
 
         let mut descriptor_write_builder = vk::WriteDescriptorSet::builder()
@@ -276,7 +283,9 @@ fn link_graphics_node(node: &mut GraphicsPassNode, usage_cache: &mut HashMap<u64
     link_inputs(&node.outputs, &mut node_barrier, usage_cache);
 
     if let Some(dt) = node.get_depth_mut() {
-        let handle = dt.resource_image.borrow().get_handle();
+        let handle = {
+            dt.resource_image.lock().unwrap().get_handle()
+        };
         let last_usage = usage_cache.get(&handle);
         // TODO: handle separate depth and stencil targets
         let new_usage = ResourceUsage {
@@ -306,7 +315,9 @@ fn link_graphics_node(node: &mut GraphicsPassNode, usage_cache: &mut HashMap<u64
     for rt in node.get_rendertargets_mut() {
         // rendertargets always write, so if this isn't the first usage of this resource
         // then we know we need a barrier
-        let handle = rt.resource_image.borrow().get_handle();
+        let handle = {
+            rt.resource_image.lock().unwrap().get_handle()
+        };
         let last_usage = usage_cache.get(&handle);
         let new_usage = ResourceUsage {
             access: vk::AccessFlags::COLOR_ATTACHMENT_WRITE | vk::AccessFlags::COLOR_ATTACHMENT_READ,

@@ -1,11 +1,10 @@
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use ash::vk;
 use api_types::device::{DeviceResource, ResourceType};
 
 #[derive(Clone)]
 pub struct AttachmentReference {
-    pub resource_image: Rc<RefCell<DeviceResource>>,
+    pub resource_image: Arc<Mutex<DeviceResource>>,
     pub format: vk::Format,
     pub samples: vk::SampleCountFlags,
     pub layout: vk::ImageLayout
@@ -13,7 +12,7 @@ pub struct AttachmentReference {
 
 impl AttachmentReference {
     pub fn new(
-        resource_image: Rc<RefCell<DeviceResource>>,
+        resource_image: Arc<Mutex<DeviceResource>>,
         samples: vk::SampleCountFlags) -> AttachmentReference {
 
         assert!(resource_image.borrow().resource_type.is_some(), "AttachmentResource: resource_image must be valid DeviceResource");
