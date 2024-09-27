@@ -767,15 +767,19 @@ impl VulkanFrameGraph {
                 extent.expect("Framebuffer required for renderpass")
             };
 
-            let renderpass = self.renderpass_manager.create_or_fetch_renderpass(
-                node.get_name(),
-                &node.render_targets,
-                &node.depth_target,
-                render_context.get_device());
-
-            let pipeline = self.pipeline_manager.create_pipeline(render_context, renderpass.borrow().renderpass.clone(), pipeline_description);
 
             {
+                let renderpass = self.renderpass_manager.create_or_fetch_renderpass(
+                    node.get_name(),
+                    &node.render_targets,
+                    &node.depth_target,
+                    render_context.get_device());
+                let renderpass_ref = renderpass.lock().unwrap();
+
+                let pipeline = self.pipeline_manager.create_pipeline(
+                    render_context,
+                    renderpass_ref.renderpass.clone(),
+                    pipeline_description);
                 let pipeline_ref = pipeline.lock().unwrap();
 
                 let mut new_descriptor_sets = render_context.create_descriptor_sets(
@@ -785,7 +789,7 @@ impl VulkanFrameGraph {
                 // TODO: should cache framebuffer objects to avoid creating the same ones each frame
                 let framebuffer = {
                     let framebuffer = render_context.create_framebuffer(
-                        renderpass.borrow().renderpass.clone(),
+                        renderpass_ref.renderpass.clone(),
                         &framebuffer_extent,
                         &resolved_render_targets,
                         &resolved_depth_target);
@@ -845,7 +849,7 @@ impl VulkanFrameGraph {
                 // begin render pass and bind pipeline
                 {
                     let render_pass_begin = vk::RenderPassBeginInfo::builder()
-                        .render_pass(renderpass.borrow().renderpass.clone())
+                        .render_pass(renderpass_ref.renderpass.clone())
                         .framebuffer(framebuffer)
                         .render_area(vk::Rect2D::builder()
                             .offset(vk::Offset2D{x: 0, y: 0})

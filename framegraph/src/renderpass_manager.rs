@@ -24,7 +24,7 @@ pub struct AttachmentInfo {
 }
 
 pub struct VulkanRenderpassManager {
-    renderpass_map: HashMap<String, Rc<RefCell<DeviceRenderpass>>>
+    renderpass_map: HashMap<String, Arc<Mutex<DeviceRenderpass>>>
 }
 
 impl Debug for VulkanRenderpassManager {
@@ -48,7 +48,7 @@ impl VulkanRenderpassManager {
         pass_name: &str,
         color_attachments: &[AttachmentReference],
         depth_attachment: &Option<AttachmentReference>,
-        device: Arc<Mutex<DeviceWrapper>>) -> Rc<RefCell<DeviceRenderpass>> {
+        device: Arc<Mutex<DeviceWrapper>>) -> Arc<Mutex<DeviceRenderpass>> {
         enter_span!(tracing::Level::TRACE, "Create or Fetch Renderpass");
 
         let renderpass = self.renderpass_map.entry(pass_name.to_string()).or_insert_with_key(|_| {
@@ -130,7 +130,7 @@ impl VulkanRenderpassManager {
                 .subpasses(std::slice::from_ref(&subpass))
                 .dependencies(std::slice::from_ref(&subpass_dependency)).build();
 
-            Rc::new(RefCell::new(DeviceWrapper::create_renderpass(device, &renderpass_create_info, pass_name)))
+            Arc::new(Mutex::new(DeviceWrapper::create_renderpass(device, &renderpass_create_info, pass_name)))
         }).clone();
         renderpass
     }
