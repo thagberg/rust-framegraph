@@ -1022,7 +1022,7 @@ impl FrameGraph for VulkanFrameGraph {
 
                     // translate from our BufferBarrier to Vulkan
                     let transformed_buffer_barriers: Vec<vk::BufferMemoryBarrier> = barriers.buffer_barriers.iter().map(|bb| {
-                        let buffer = bb.resource.borrow();
+                        let buffer = bb.resource.lock().unwrap();
                         let resolved = buffer.resource_type.as_ref().expect("Invalid buffer in BufferBarrier");
                         if let ResourceType::Buffer(resolved_buffer) = resolved {
                             vk::BufferMemoryBarrier::builder()
@@ -1041,7 +1041,7 @@ impl FrameGraph for VulkanFrameGraph {
 
                     // translate from our ImageBarrier to Vulkan
                     let transformed_image_barriers: Vec<vk::ImageMemoryBarrier> = barriers.image_barriers.iter().map(|ib| {
-                        let image = ib.resource.borrow();
+                        let image = ib.resource.lock().unwrap();
                         let resolved = image.resource_type.as_ref().expect("Invalid image in ImageBarrier");
                         if let ResourceType::Image(resolved_image) = resolved {
                             let aspect_mask = util::image::get_aspect_mask_from_format(
