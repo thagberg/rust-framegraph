@@ -141,7 +141,7 @@ impl Shader
 
 pub struct ShaderManager
 {
-    shader_cache: HashMap<String, Rc<RefCell<Shader>>>
+    shader_cache: HashMap<String, Arc<Mutex<Shader>>>
 }
 
 impl Debug for ShaderManager {
@@ -161,7 +161,7 @@ impl ShaderManager
         }
     }
 
-    pub fn load_shader(&mut self, device: Arc<Mutex<DeviceWrapper>>, file_name: &str) -> Rc<RefCell<Shader>>
+    pub fn load_shader(&mut self, device: Arc<Mutex<DeviceWrapper>>, file_name: &str) -> Arc<Mutex<Shader>>
     {
         // TODO: can this return a &ShaderModule without a double mutable borrow error in PipelineManager::create_pipeline?
         //let full_path = concat!(concat!(env!("OUT_DIR"), "/shaders/"), file_name);
@@ -176,7 +176,7 @@ impl ShaderManager
         match val {
             Some(sm) => {sm.clone()},
             None => {
-                let sm = Rc::new(RefCell::new(create_shader_module(device, &full_name)));
+                let sm = Arc::new(Mutex::new(create_shader_module(device, &full_name)));
                 self.shader_cache.insert(full_name, sm.clone());
                 sm
             }

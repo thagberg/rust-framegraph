@@ -365,9 +365,10 @@ impl VulkanPipelineManager {
                 let mut compute_shader_module = self.shader_manager.load_shader(
                     render_context.get_device(),
                     &pipeline_description.compute_name);
+                let mut compute_shader_ref = compute_shader_module.lock().unwrap();
 
                 let mut full_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>> = HashMap::new();
-                for (set, bindings) in &mut compute_shader_module.borrow_mut().descriptor_bindings {
+                for (set, bindings) in &mut compute_shader_ref.descriptor_bindings {
                     let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
                     set_bindings.extend(bindings.iter());
                     for binding in set_bindings {
@@ -393,7 +394,7 @@ impl VulkanPipelineManager {
 
                     let main_name = std::ffi::CString::new("main").unwrap();
                     let shader_stage = vk::PipelineShaderStageCreateInfo::builder()
-                        .module(compute_shader_module.borrow().shader.shader_module.clone())
+                        .module(compute_shader_ref.shader.shader_module.clone())
                         .name(&main_name)
                         .stage(vk::ShaderStageFlags::COMPUTE);
 
