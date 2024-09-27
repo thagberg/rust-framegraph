@@ -1,6 +1,5 @@
-use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use ash::vk;
 use api_types::device::{DeviceFramebuffer, DeviceResource};
 use crate::pass_node::{PassNode, FillCallback};
@@ -15,7 +14,7 @@ pub struct GraphicsPassNode {
     pub depth_target: Option<AttachmentReference>,
     pub inputs: Vec<ResourceBinding>,
     pub outputs: Vec<ResourceBinding>,
-    pub tagged_resources: Vec<Rc<RefCell<DeviceResource>>>,
+    pub tagged_resources: Vec<Arc<Mutex<DeviceResource>>>,
     pub framebuffer: Option<DeviceFramebuffer>,
     pub viewport: Option<vk::Viewport>,
     pub scissor: Option<vk::Rect2D>,
@@ -30,7 +29,7 @@ pub struct PassNodeBuilder {
     depth_target: Option<AttachmentReference>,
     inputs: Vec<ResourceBinding>,
     outputs: Vec<ResourceBinding>,
-    tagged_resources: Vec<Rc<RefCell<DeviceResource>>>,
+    tagged_resources: Vec<Arc<Mutex<DeviceResource>>>,
     fill_callback: Option<Box<FillCallback>>,
     viewport: Option<vk::Viewport>,
     scissor: Option<vk::Rect2D>,
@@ -150,7 +149,7 @@ impl PassNodeBuilder {
         self
     }
 
-    pub fn tag(mut self, tagged_resource: Rc<RefCell<DeviceResource>>) -> Self {
+    pub fn tag(mut self, tagged_resource: Arc<Mutex<DeviceResource>>) -> Self {
         self.tagged_resources.push(tagged_resource);
         self
     }
