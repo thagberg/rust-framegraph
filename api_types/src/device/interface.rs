@@ -7,7 +7,6 @@ use ash::vk::{DebugUtilsLabelEXT, DebugUtilsObjectNameInfoEXT, Handle, ObjectTyp
 use gpu_allocator::MemoryLocation;
 use crate::buffer::{BufferCreateInfo, BufferWrapper};
 use crate::device::debug::VulkanDebug;
-use crate::device::{DeviceLifetime, DeviceWrapper};
 use crate::device::allocator::ResourceAllocator;
 use crate::device::queue::QueueFamilies;
 use crate::device::resource::{DeviceResource, ResourceType};

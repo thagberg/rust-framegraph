@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 use ash::vk;
-use crate::device::DeviceWrapper;
 use crate::device::interface::DeviceInterface;
 
 #[derive(Clone)]

@@ -2,7 +2,6 @@ use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Mutex};
 use gpu_allocator::vulkan::Allocation;
 use crate::buffer::BufferWrapper;
-use crate::device::DeviceWrapper;
 use crate::device::interface::DeviceInterface;
 use crate::image::ImageWrapper;
 

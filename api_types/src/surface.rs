@@ -2,7 +2,7 @@ use std::fmt::{Debug, Formatter};
 use std::os::raw::{c_char};
 use ash::vk;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
-use crate::device::PhysicalDeviceWrapper;
+use crate::device::physical::PhysicalDeviceWrapper;
 
 
 pub fn get_required_surface_extensions(window: &winit::window::Window) -> &'static [*const c_char] {
