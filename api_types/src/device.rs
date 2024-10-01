@@ -1,3 +1,9 @@
+mod queue;
+mod physical;
+mod resource;
+mod interface;
+mod debug;
+
 use std::cell::RefCell;
 use std::ffi::{CString};
 use core::ffi::c_void;
@@ -14,45 +20,6 @@ use log::trace;
 use crate::buffer::{BufferCreateInfo, BufferWrapper};
 use crate::image::{ImageCreateInfo, ImageType, ImageWrapper};
 
-pub struct VulkanDebug {
-    pub debug_utils: DebugUtils,
-    pub debug_messenger: DebugUtilsMessengerEXT
-}
-
-impl Debug for VulkanDebug {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("VulkanDebug")
-            .finish()
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct QueueFamilies {
-    pub graphics: Option<u32>,
-    pub compute: Option<u32>,
-    pub present: Option<u32>
-}
-
-impl QueueFamilies {
-    pub fn is_complete(&self) -> bool {
-        self.graphics.is_some() && self.compute.is_some() && self.present.is_some()
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct PhysicalDeviceWrapper {
-    physical_device: vk::PhysicalDevice,
-}
-
-impl PhysicalDeviceWrapper {
-    pub fn new(physical_device: vk::PhysicalDevice) -> PhysicalDeviceWrapper {
-        PhysicalDeviceWrapper {
-            physical_device
-        }
-    }
-
-    pub fn get(&self) -> vk::PhysicalDevice { self.physical_device }
-}
 
 /// DeviceLifetime exists to ensure DeviceWrapper can destroy its Allocator before
 /// ash::Device::destroy_device gets called
@@ -109,162 +76,6 @@ impl Drop for DeviceWrapper {
     }
 }
 
-
-#[derive(Clone)]
-pub enum ResourceType {
-    Buffer(BufferWrapper),
-    Image(ImageWrapper)
-}
-
-pub struct DeviceResource {
-    pub allocation: Option<Allocation>,
-    pub resource_type: Option<ResourceType>,
-
-    handle: u64,
-    device: Arc<Mutex<DeviceWrapper>>
-}
-
-impl Debug for DeviceResource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DeviceResource")
-            .field("handle", &self.handle)
-            .finish()
-    }
-}
-
-impl Drop for DeviceResource {
-    fn drop(&mut self) {
-        let mut device = self.device.lock()
-            .expect("Failed to lock device when dropping resource");
-        if let Some(resource_type) = &mut self.resource_type {
-            match resource_type {
-                ResourceType::Buffer(buffer) => {
-                    log::trace!(target: "resource", "Destroying buffer: {}", self.handle);
-                    device.destroy_buffer(buffer);
-                },
-                ResourceType::Image(image) => {
-                    log::trace!(target: "resource", "Destroying image: {}", self.handle);
-                    device.destroy_image(image);
-                }
-            }
-        }
-        if let Some(alloc) = &mut self.allocation {
-            let moved = std::mem::replace(alloc, Allocation::default());
-            device.free_allocation(moved);
-        }
-    }
-}
-
-impl PartialEq<Self> for DeviceResource {
-    fn eq(&self, other: &Self) -> bool {
-        self.handle == other.handle
-    }
-}
-impl Eq for DeviceResource {}
-
-impl DeviceResource {
-    pub fn get_image(&self) -> &ImageWrapper {
-        match &self.resource_type {
-            Some(resolved_resource) => {
-                match &resolved_resource {
-                    ResourceType::Image(image) => {
-                        image
-                    },
-                    _ => {
-                        panic!("Non-image resource type")
-                    }
-                }
-            },
-            None => {
-                panic!("Unresolved resource")
-            }
-        }
-    }
-
-    pub fn get_image_mut(&mut self) -> &mut ImageWrapper {
-        match self.resource_type.as_mut() {
-            Some(resolved_resource) => {
-                match resolved_resource {
-                    ResourceType::Image(image) => {
-                        image
-                    },
-                    _ => {
-                        panic!("Non-image resource type")
-                    }
-                }
-            },
-            None => {
-                panic!("Unresolved resource")
-            }
-        }
-    }
-
-    pub fn get_buffer(&self) -> &BufferWrapper {
-        match &self.resource_type {
-            Some(resolved_resource) => {
-                match &resolved_resource {
-                    ResourceType::Buffer(buffer) => {
-                       buffer
-                    },
-                    _ => {
-                        panic!("Non-buffer resource type")
-                    }
-                }
-            },
-            None => {
-                panic!("Unresolved resource")
-            }
-        }
-    }
-
-    pub fn get_handle(&self) -> u64 {
-        self.handle
-    }
-}
-
-// pub struct DeviceDescriptorSet {
-//     descriptor_set: vk::DescriptorSet,
-//     descriptor_pool: vk::DescriptorPool,
-//     device: Rc<RefCell<DeviceWrapper>>
-// }
-//
-// impl Drop for DeviceDescriptorSet {
-//     fn drop(&mut self) {
-//         unsafe {
-//             self.device.borrow().get().free_descriptor_sets(
-//                 self.descriptor_pool,
-//                 std::slice::from_ref(&self.descriptor_set))
-//                 .expect("Failed to free descriptor set")
-//         }
-//     }
-// }
-
-pub struct DeviceFramebuffer {
-    framebuffer: vk::Framebuffer,
-    device: Arc<Mutex<DeviceWrapper>>
-}
-
-impl Drop for DeviceFramebuffer {
-    fn drop(&mut self) {
-        unsafe {
-            self.device.lock()
-                .expect("Failed to obtain device lock.")
-                .get().destroy_framebuffer(
-                    self.framebuffer, None);
-        }
-    }
-}
-
-impl DeviceFramebuffer {
-    pub fn new(framebuffer: vk::Framebuffer, device: Arc<Mutex<DeviceWrapper>>) -> Self {
-        DeviceFramebuffer {
-            framebuffer: framebuffer,
-            device: device
-        }
-    }
-
-    pub fn get_framebuffer(&self) -> vk::Framebuffer { self.framebuffer }
-}
 
 impl DeviceWrapper {
     pub fn new(
@@ -358,27 +169,6 @@ impl DeviceWrapper {
         }
     }
 
-    pub fn set_debug_name(&self, object_type: vk::ObjectType, handle: u64, name: &str)
-    {
-        let c_name = CString::new(name)
-            .expect("Failed to create C-name for debug object");
-        let debug_info = DebugUtilsObjectNameInfoEXT::builder()
-            .object_type(object_type)
-            .object_handle(handle)
-            .object_name(&c_name)
-            .build();
-        unsafe {
-            if let Some(debug) = &self.debug {
-                debug.debug_utils.debug_utils_set_object_name(self.device.get().handle(), &debug_info)
-                    .expect("Failed to set debug object name");
-            }
-        }
-    }
-
-    pub fn set_image_name(&self, image: &ImageWrapper, name: &str)
-    {
-        self.set_debug_name(vk::ObjectType::IMAGE, image.get().as_raw(), name);
-    }
 
     pub fn allocate_memory(
         &mut self,
@@ -756,93 +546,5 @@ impl DeviceWrapper {
     }
 }
 
-#[derive(Clone)]
-pub struct DeviceShader {
-    pub shader_module: vk::ShaderModule,
-    pub device: Arc<Mutex<DeviceWrapper>>
-}
 
-impl Drop for DeviceShader {
-    fn drop(&mut self) {
-        unsafe {
-            self.device.lock()
-                .expect("Failed to obtain device lock")
-                .get().destroy_shader_module(self.shader_module, None)
-        }
-    }
-}
 
-impl DeviceShader {
-    pub fn new(shader_module: vk::ShaderModule, device: Arc<Mutex<DeviceWrapper>>) -> Self {
-        DeviceShader {
-            shader_module,
-            device
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct DevicePipeline {
-    pub pipeline: vk::Pipeline,
-    pub pipeline_layout: vk::PipelineLayout,
-    pub descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
-    pub device: Arc<Mutex<DeviceWrapper>>
-}
-
-impl Drop for DevicePipeline {
-    fn drop(&mut self) {
-        unsafe {
-            let device_ref = self.device.lock()
-                .expect("Failed to obtain device lock");
-            device_ref.get().destroy_pipeline_layout(self.pipeline_layout, None);
-            device_ref.get().destroy_pipeline(self.pipeline, None);
-            for dsl in &self.descriptor_set_layouts {
-                device_ref.get().destroy_descriptor_set_layout(*dsl, None);
-            }
-        }
-    }
-}
-
-impl DevicePipeline {
-    pub fn new(
-        pipeline: vk::Pipeline,
-        pipeline_layout: vk::PipelineLayout,
-        descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
-        device: Arc<Mutex<DeviceWrapper>>) -> Self {
-
-        DevicePipeline {
-            pipeline,
-            pipeline_layout,
-            descriptor_set_layouts,
-            device
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct DeviceRenderpass {
-    pub renderpass: vk::RenderPass,
-    pub device: Arc<Mutex<DeviceWrapper>>
-}
-
-impl Drop for DeviceRenderpass {
-    fn drop(&mut self) {
-        unsafe {
-            self.device.lock()
-                .expect("Failed to obtain device lock.")
-                .get().destroy_render_pass(self.renderpass, None);
-        }
-    }
-}
-
-impl DeviceRenderpass {
-    pub fn new(
-        renderpass: vk::RenderPass,
-        device: Arc<Mutex<DeviceWrapper>>) -> Self {
-
-        DeviceRenderpass {
-            renderpass,
-            device
-        }
-    }
-}

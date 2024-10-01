@@ -4,6 +4,11 @@ pub mod instance;
 pub mod image;
 pub mod buffer;
 pub mod swapchain;
+mod framebuffer;
+mod shader;
+mod pipeline;
+mod renderpass;
+
 pub fn add(left: u64, right: u64) -> u64 {
     left + right
 }
