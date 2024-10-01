@@ -24,6 +24,7 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use ash::vk::DeviceSize;
 use petgraph::data::DataMap;
 use petgraph::visit::Dfs;
@@ -673,23 +674,23 @@ impl VulkanFrameGraph {
         &mut self,
         descriptor_sets: &mut Vec<vk::DescriptorSet>,
         descriptor_pool: vk::DescriptorPool,
-        render_context: &mut VulkanRenderContext,
-        command_buffer: &vk::CommandBuffer,
+        device: Arc<Mutex<DeviceWrapper>>,
+        command_buffer: vk::CommandBuffer,
         node: &mut ComputePassNode) {
 
         // get compute pipeline from node's pipeline description
         let pipeline = self.pipeline_manager.create_compute_pipeline(
-            render_context,
+            device.clone(),
             &node.pipeline_description);
 
         // bind pipeline
         let pipeline_ref = pipeline.lock().unwrap();
         {
             unsafe {
-                render_context.get_device().lock()
+                device.lock()
                     .expect("Failed to obtain device lock")
                     .get().cmd_bind_pipeline(
-                    *command_buffer,
+                    command_buffer,
                     vk::PipelineBindPoint::COMPUTE,
                     pipeline_ref.get_pipeline());
             }
@@ -715,7 +716,7 @@ impl VulkanFrameGraph {
                     &mut descriptor_updates);
 
                 unsafe {
-                    let device_ref = render_context.get_device().lock()
+                    let device_ref = device.lock()
                         .expect("Failed to obtain device lock");
                     // TODO: support descriptor copies?
                     device_ref.get().update_descriptor_sets(
@@ -724,7 +725,7 @@ impl VulkanFrameGraph {
                     // bind descriptorsets
                     // TODO: COMPUTE SUPPORT
                     device_ref.get().cmd_bind_descriptor_sets(
-                        *command_buffer,
+                        command_buffer,
                         vk::PipelineBindPoint::COMPUTE,
                         pipeline_ref.get_pipeline_layout(),
                         0,
@@ -736,7 +737,7 @@ impl VulkanFrameGraph {
 
         // execute node
         node.execute(
-            render_context,
+            device.clone(),
             command_buffer);
     }
 

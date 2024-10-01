@@ -1,11 +1,13 @@
 use std::fmt::{Debug};
+use std::sync::{Arc, Mutex};
 use ash::vk;
+use api_types::device::DeviceWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
 
 pub type FillCallback = dyn (
 Fn(
-    &VulkanRenderContext,
-    &vk::CommandBuffer
+    Arc<Mutex<DeviceWrapper>>,
+    vk::CommandBuffer
 )
 );
 

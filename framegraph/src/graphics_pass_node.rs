@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Mutex};
 use ash::vk;
-use api_types::device::{DeviceFramebuffer, DeviceResource};
+use api_types::device::{DeviceFramebuffer, DeviceResource, DeviceWrapper};
 use crate::pass_node::{PassNode, FillCallback};
 use crate::binding::{ResourceBinding};
 use context::vulkan_render_context::VulkanRenderContext;
@@ -9,7 +9,7 @@ use crate::attachment::AttachmentReference;
 use crate::pipeline::{PipelineDescription};
 
 pub struct GraphicsPassNode {
-    pub pipeline_description: Option<PipelineDescription>,
+    pub pipeline_description: Option<Arc<PipelineDescription>>,
     pub render_targets: Vec<AttachmentReference>,
     pub depth_target: Option<AttachmentReference>,
     pub inputs: Vec<ResourceBinding>,
@@ -24,7 +24,7 @@ pub struct GraphicsPassNode {
 
 #[derive(Default)]
 pub struct PassNodeBuilder {
-    pipeline_description: Option<PipelineDescription>,
+    pipeline_description: Option<Arc<PipelineDescription>>,
     render_targets: Vec<AttachmentReference>,
     depth_target: Option<AttachmentReference>,
     inputs: Vec<ResourceBinding>,
@@ -92,7 +92,7 @@ impl GraphicsPassNode  {
         }
     }
 
-    pub fn get_pipeline_description(&self) -> &Option<PipelineDescription> { &self.pipeline_description }
+    pub fn get_pipeline_description(&self) -> &Option<Arc<PipelineDescription>> { &self.pipeline_description }
 
     // pub fn set_framebuffer(&mut self, framebuffer: DeviceFramebuffer) {
     pub fn set_framebuffer(passnode: &mut Self, framebuffer: DeviceFramebuffer) {
@@ -133,18 +133,18 @@ impl GraphicsPassNode  {
 
     pub fn execute(
         &self,
-        render_context: &mut VulkanRenderContext,
-        command_buffer: &vk::CommandBuffer)
+        device: Arc<Mutex<DeviceWrapper>>,
+        command_buffer: vk::CommandBuffer)
     {
         (self.fill_callback)(
-            render_context,
+            device,
             command_buffer);
     }
 
 }
 
 impl PassNodeBuilder {
-    pub fn pipeline_description(mut self, pipeline_description: PipelineDescription) -> Self {
+    pub fn pipeline_description(mut self, pipeline_description: Arc<PipelineDescription>) -> Self {
         self.pipeline_description = Some(pipeline_description);
         self
     }

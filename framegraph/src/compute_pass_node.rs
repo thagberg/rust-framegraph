@@ -1,7 +1,9 @@
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use ash::vk::CommandBuffer;
+use api_types::device::DeviceWrapper;
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::binding::ResourceBinding;
 use crate::pass_node::{FillCallback, PassNode};
@@ -34,9 +36,12 @@ impl ComputePassNode {
         }
     }
 
-    pub fn execute(&self, render_context: &mut VulkanRenderContext, command_buffer: &CommandBuffer) {
+    pub fn execute(
+        &self,
+        device: Arc<Mutex<DeviceWrapper>>,
+        command_buffer: CommandBuffer) {
         (self.fill_callback)(
-            render_context,
+            device,
             command_buffer);
     }
 }

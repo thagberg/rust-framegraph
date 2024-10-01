@@ -296,7 +296,7 @@ fn generate_blend_state(blend_type: BlendType, attachments: &[vk::PipelineColorB
     }
 }
 
-fn create_descriptor_set_layouts(render_context: &VulkanRenderContext, full_bindings: &HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>>) -> Vec<vk::DescriptorSetLayout> {
+fn create_descriptor_set_layouts(device: Arc<Mutex<DeviceWrapper>>, full_bindings: &HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>>) -> Vec<vk::DescriptorSetLayout> {
 
     let mut descriptor_set_layouts: Vec<vk::DescriptorSetLayout> = Vec::new();
 
@@ -321,7 +321,7 @@ fn create_descriptor_set_layouts(render_context: &VulkanRenderContext, full_bind
                 .build();
 
             let layout = unsafe {
-                render_context.get_device().lock()
+                device.lock()
                     .expect("Failed to obtain device lock")
                     .get().create_descriptor_set_layout(
                     &layout_create_info,
@@ -350,7 +350,7 @@ impl VulkanPipelineManager {
 
     pub fn create_compute_pipeline(
         &mut self,
-        render_context: &VulkanRenderContext,
+        device: Arc<Mutex<DeviceWrapper>>,
         pipeline_description: &ComputePipelineDescription) -> Arc<Mutex<Pipeline>> {
 
         let mut pipeline_hasher = DefaultHasher::new();
@@ -361,7 +361,7 @@ impl VulkanPipelineManager {
             Some(pipeline) => { pipeline.clone() },
             None => {
                 let mut compute_shader_module = self.shader_manager.load_shader(
-                    render_context.get_device(),
+                    device.clone(),
                     &pipeline_description.compute_name);
                 let mut compute_shader_ref = compute_shader_module.lock().unwrap();
 
@@ -374,7 +374,7 @@ impl VulkanPipelineManager {
                     }
                 }
 
-                let descriptor_set_layouts = create_descriptor_set_layouts(render_context, &full_bindings);
+                let descriptor_set_layouts = create_descriptor_set_layouts(device.clone(), &full_bindings);
 
                 // let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
 
@@ -383,7 +383,7 @@ impl VulkanPipelineManager {
                         let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
                             .set_layouts(&descriptor_set_layouts);
                         unsafe {
-                            let device_ref = render_context.get_device().lock()
+                            let device_ref = device.lock()
                                 .expect("Failed to obtain device lock");
                             device_ref.get().create_pipeline_layout(&pipeline_layout_create, None)
                                 .expect("Failed to create pipeline layout")
@@ -402,7 +402,7 @@ impl VulkanPipelineManager {
                         .build();
 
                     let device_pipeline = DeviceWrapper::create_compute_pipeline(
-                        render_context.get_device(),
+                        device.clone(),
                         &compute_pipeline_info,
                         pipeline_layout,
                         descriptor_set_layouts,
@@ -420,7 +420,7 @@ impl VulkanPipelineManager {
 
     pub fn create_pipeline(
         &mut self,
-        render_context: &VulkanRenderContext,
+        device: Arc<Mutex<DeviceWrapper>>,
         render_pass: vk::RenderPass,
         pipeline_description: &PipelineDescription) -> Arc<Mutex<Pipeline>> {
         enter_span!(tracing::Level::TRACE, "Create or fetch Pipeline");
@@ -465,7 +465,7 @@ impl VulkanPipelineManager {
                     }
                 }
 
-                let descriptor_set_layouts = create_descriptor_set_layouts(render_context, &full_bindings);
+                let descriptor_set_layouts = create_descriptor_set_layouts(device.clone(), &full_bindings);
 
                 // let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
 
@@ -473,7 +473,7 @@ impl VulkanPipelineManager {
                         let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
                             .set_layouts(&descriptor_set_layouts);
                         unsafe {
-                            render_context.get_device().lock()
+                            device.lock()
                                 .expect("Failed to obtain device lock")
                                 .get().create_pipeline_layout(&pipeline_layout_create, None)
                                 .expect("Failed to create pipeline layout")
@@ -561,7 +561,7 @@ impl VulkanPipelineManager {
                 // .build();
 
                 let device_pipeline = DeviceWrapper::create_pipeline(
-                    render_context.get_device(),
+                    device,
                     &graphics_pipeline_info,
                     pipeline_layout,
                     descriptor_set_layouts,
