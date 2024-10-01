@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use gpu_allocator::vulkan::Allocation;
 use crate::buffer::BufferWrapper;
 use crate::device::DeviceWrapper;
+use crate::device::interface::DeviceInterface;
 use crate::image::ImageWrapper;
 
 #[derive(Clone)]
@@ -11,12 +12,12 @@ pub enum ResourceType {
     Image(ImageWrapper)
 }
 
-pub struct DeviceResource {
+pub struct DeviceResource<'a> {
     pub allocation: Option<Allocation>,
     pub resource_type: Option<ResourceType>,
 
     handle: u64,
-    device: Arc<Mutex<DeviceWrapper>>
+    device: &'a DeviceInterface
 }
 
 impl Debug for DeviceResource {
@@ -29,17 +30,15 @@ impl Debug for DeviceResource {
 
 impl Drop for DeviceResource {
     fn drop(&mut self) {
-        let mut device = self.device.lock()
-            .expect("Failed to lock device when dropping resource");
         if let Some(resource_type) = &mut self.resource_type {
             match resource_type {
                 ResourceType::Buffer(buffer) => {
                     log::trace!(target: "resource", "Destroying buffer: {}", self.handle);
-                    device.destroy_buffer(buffer);
+                    self.device.destroy_buffer(buffer);
                 },
                 ResourceType::Image(image) => {
                     log::trace!(target: "resource", "Destroying image: {}", self.handle);
-                    device.destroy_image(image);
+                    self.device.destroy_image(image);
                 }
             }
         }
@@ -58,6 +57,21 @@ impl PartialEq<Self> for DeviceResource {
 impl Eq for DeviceResource {}
 
 impl DeviceResource {
+
+    pub(crate) fn new(
+        allocation: Option<Allocation>,
+        resource_type: Some(ResourceType),
+        handle: u64,
+        device: &DeviceInterface
+    ) -> Self {
+        DeviceResource {
+            allocation,
+            resource_type,
+            handle,
+            device
+        }
+    }
+
     pub fn get_image(&self) -> &ImageWrapper {
         match &self.resource_type {
             Some(resolved_resource) => {

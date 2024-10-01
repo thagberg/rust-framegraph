@@ -8,6 +8,7 @@ mod framebuffer;
 mod shader;
 mod pipeline;
 mod renderpass;
+mod handle;
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right

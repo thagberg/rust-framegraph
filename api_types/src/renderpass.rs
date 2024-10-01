@@ -1,19 +1,18 @@
 use std::sync::{Arc, Mutex};
 use ash::vk;
 use crate::device::DeviceWrapper;
+use crate::device::interface::DeviceInterface;
 
 #[derive(Clone)]
-pub struct DeviceRenderpass {
+pub struct DeviceRenderpass<'a> {
     pub renderpass: vk::RenderPass,
-    pub device: Arc<Mutex<DeviceWrapper>>
+    pub device: &'a DeviceInterface
 }
 
 impl Drop for DeviceRenderpass {
     fn drop(&mut self) {
         unsafe {
-            self.device.lock()
-                .expect("Failed to obtain device lock.")
-                .get().destroy_render_pass(self.renderpass, None);
+            *self.device.destroy_render_pass(self.renderpass, None);
         }
     }
 }
@@ -21,7 +20,7 @@ impl Drop for DeviceRenderpass {
 impl DeviceRenderpass {
     pub fn new(
         renderpass: vk::RenderPass,
-        device: Arc<Mutex<DeviceWrapper>>) -> Self {
+        device: &DeviceInterface) -> Self {
 
         DeviceRenderpass {
             renderpass,
