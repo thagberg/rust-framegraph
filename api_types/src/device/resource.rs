@@ -1,7 +1,8 @@
 use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Mutex};
-use gpu_allocator::vulkan::Allocation;
+use gpu_allocator::vulkan::{Allocation, Allocator};
 use crate::buffer::BufferWrapper;
+use crate::device::allocator::ResourceAllocator;
 use crate::device::interface::DeviceInterface;
 use crate::image::ImageWrapper;
 
@@ -16,7 +17,8 @@ pub struct DeviceResource<'a> {
     pub resource_type: Option<ResourceType>,
 
     handle: u64,
-    device: &'a DeviceInterface
+    device: &'a DeviceInterface,
+    allocator: Arc<Mutex<ResourceAllocator>>
 }
 
 impl Debug for DeviceResource {
@@ -43,7 +45,8 @@ impl Drop for DeviceResource {
         }
         if let Some(alloc) = &mut self.allocation {
             let moved = std::mem::replace(alloc, Allocation::default());
-            device.free_allocation(moved);
+            let mut allocator_ref = self.allocator.lock().unwrap();
+            allocator_ref.free_allocation(moved);
         }
     }
 }
@@ -61,13 +64,15 @@ impl DeviceResource {
         allocation: Option<Allocation>,
         resource_type: Some(ResourceType),
         handle: u64,
-        device: &DeviceInterface
+        device: &DeviceInterface,
+        allocator: Arc<Mutex<ResourceAllocator>>
     ) -> Self {
         DeviceResource {
             allocation,
             resource_type,
             handle,
-            device
+            device,
+            allocator
         }
     }
 

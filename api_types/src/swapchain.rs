@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use ash::prelude::VkResult;
 use ash::vk;
-use crate::device::{DeviceResource, DeviceWrapper};
+use crate::device::resource::DeviceResource;
 
 #[derive(PartialEq, Eq)]
 pub enum SwapchainStatus {

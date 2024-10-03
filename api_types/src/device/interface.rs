@@ -249,6 +249,7 @@ impl DeviceInterface {
         &self,
         handle: u64,
         buffer_desc: &BufferCreateInfo,
+        allocator: &mut ResourceAllocator,
         memory_location: MemoryLocation) -> DeviceResource {
 
         let device_buffer = {
@@ -264,7 +265,7 @@ impl DeviceInterface {
                 *self.device.get_buffer_memory_requirements(buffer)
             };
 
-            let allocation = self.allocate_memory(
+            let allocation = allocator.allocate_memory(
                 buffer_desc.get_name(),
                 memory_requirements,
                 memory_location,

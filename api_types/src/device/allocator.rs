@@ -49,4 +49,9 @@ impl ResourceAllocator {
             allocation_scheme: AllocationScheme::GpuAllocatorManaged,
         }).expect("Failed to allocate memory for resource")
     }
+
+    pub fn free_allocation(&mut self, allocation: Allocation) {
+        self.allocator.free(allocation)
+            .expect("Failed to free Device allocation");
+    }
 }
