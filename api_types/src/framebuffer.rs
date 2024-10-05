@@ -1,25 +1,22 @@
 use std::sync::{Arc, Mutex};
 use ash::vk;
-use crate::device::DeviceWrapper;
+use crate::device::interface::DeviceInterface;
 
-pub struct DeviceFramebuffer {
+pub struct DeviceFramebuffer<'a> {
     framebuffer: vk::Framebuffer,
-    device: Arc<Mutex<DeviceWrapper>>
+    device: &'a DeviceInterface
 }
 
-impl Drop for DeviceFramebuffer {
+impl Drop for DeviceFramebuffer<'_> {
     fn drop(&mut self) {
         unsafe {
-            self.device.lock()
-                .expect("Failed to obtain device lock.")
-                .get().destroy_framebuffer(
-                self.framebuffer, None);
+            self.device.get().destroy_framebuffer(self.framebuffer, None);
         }
     }
 }
 
-impl DeviceFramebuffer {
-    pub fn new(framebuffer: vk::Framebuffer, device: Arc<Mutex<DeviceWrapper>>) -> Self {
+impl<'a> DeviceFramebuffer<'a> {
+    pub fn new(framebuffer: vk::Framebuffer, device: &'a DeviceInterface) -> Self {
         DeviceFramebuffer {
             framebuffer: framebuffer,
             device: device

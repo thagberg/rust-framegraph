@@ -6,8 +6,8 @@ use crate::device::physical::PhysicalDeviceWrapper;
 
 
 pub fn get_required_surface_extensions(window: &winit::window::Window) -> &'static [*const c_char] {
-
-    ash_window::enumerate_required_extensions(window.raw_display_handle())
+    let handle = window.raw_display_handle();
+    ash_window::enumerate_required_extensions(handle)
         .expect("Failed to find required surface extension names")
 }
 

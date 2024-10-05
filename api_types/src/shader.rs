@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 use ash::vk;
-use crate::device::DeviceWrapper;
 use crate::device::interface::DeviceInterface;
 
 #[derive(Clone)]
@@ -9,7 +8,7 @@ pub struct DeviceShader<'a> {
     pub device: &'a DeviceInterface
 }
 
-impl Drop for DeviceShader {
+impl Drop for DeviceShader<'_> {
     fn drop(&mut self) {
         unsafe {
             self.device.destroy_shader_module(self.shader_module, None)
@@ -17,10 +16,10 @@ impl Drop for DeviceShader {
     }
 }
 
-impl DeviceShader {
+impl<'a> DeviceShader<'a> {
     pub fn new(
         shader_module: vk::ShaderModule,
-        device: &DeviceInterface) -> Self {
+        device: &'a DeviceInterface) -> Self {
         DeviceShader {
             shader_module,
             device

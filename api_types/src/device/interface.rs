@@ -71,7 +71,7 @@ impl DeviceInterface {
             .build();
         unsafe {
             if let Some(debug) = &self.debug {
-                debug.debug_utils.set_debug_utils_set_object_name(self.device.get().handle(), &debug_info)
+                debug.debug_utils.debug_utils_set_object_name(self.device.handle(), &debug_info)
                     .expect("Failed to set debug object name");
             }
         }
@@ -113,7 +113,7 @@ impl DeviceInterface {
         };
 
         unsafe {
-            *self.device.create_image_view(&create_info, None)
+            self.device.create_image_view(&create_info, None)
                 .expect("Failed to create image view.")
         }
     }
@@ -122,27 +122,30 @@ impl DeviceInterface {
         &self,
         handle: u64,
         image_desc: &ImageCreateInfo,
-        allocator: &mut ResourceAllocator,
+        allocator: Arc<Mutex<ResourceAllocator>>,
         memory_location: MemoryLocation) -> DeviceResource {
         let device_image = {
             let create_info = image_desc.get_create_info();
             let image = unsafe {
-                *self.device.create_image(create_info, None)
+                self.device.create_image(create_info, None)
                     .expect("Failed to create image")
             };
 
             let memory_requirements = unsafe {
-                *self.device.get_image_memory_requirements(image)
+                self.device.get_image_memory_requirements(image)
             };
 
-            let allocation = allocator.allocate_memory(
-                image_desc.get_name(),
-                memory_requirements,
-                memory_location,
-                false);
+            let allocation = {
+                let mut allocator_ref = allocator.lock().unwrap();
+                allocator_ref.allocate_memory(
+                    image_desc.get_name(),
+                    memory_requirements,
+                    memory_location,
+                    false)
+            };
 
             unsafe {
-                *self.device.bind_image_memory(
+                self.device.bind_image_memory(
                     image,
                     allocation.memory(),
                     allocation.offset())
@@ -186,7 +189,8 @@ impl DeviceInterface {
                 Some(allocation),
                 Some(ResourceType::Image(image_wrapper)),
                 handle,
-                &self
+                &self,
+                Some(allocator.clone())
             )
         };
 
@@ -196,12 +200,12 @@ impl DeviceInterface {
     pub fn destroy_image(&self, image: &ImageWrapper) {
         unsafe {
             if let Some(sampler) = image.sampler {
-                *self.device.destroy_sampler(sampler, None);
+                self.device.destroy_sampler(sampler, None);
             }
-            *self.device.destroy_image_view(image.view, None);
+            self.device.destroy_image_view(image.view, None);
             // We're not responsible for cleaning up the swapchain images
             if !image.is_swapchain_image {
-                *self.device.destroy_image(image.image, None);
+                self.device.destroy_image(image.image, None);
             }
         }
     }
@@ -236,7 +240,8 @@ impl DeviceInterface {
             None,
             Some(ResourceType::Image(image_wrapper)),
             handle,
-            &self
+            &self,
+            None
         )
     }
 
@@ -249,7 +254,7 @@ impl DeviceInterface {
         &self,
         handle: u64,
         buffer_desc: &BufferCreateInfo,
-        allocator: &mut ResourceAllocator,
+        allocator: Arc<Mutex<ResourceAllocator>>,
         memory_location: MemoryLocation) -> DeviceResource {
 
         let device_buffer = {
@@ -257,22 +262,25 @@ impl DeviceInterface {
 
             let create_info = buffer_desc.get_create_info();
             let buffer = unsafe {
-                *self.device.create_buffer(create_info, None)
+                self.device.create_buffer(create_info, None)
                     .expect("Failed to create buffer")
             };
 
             let memory_requirements = unsafe {
-                *self.device.get_buffer_memory_requirements(buffer)
+                self.device.get_buffer_memory_requirements(buffer)
             };
 
-            let allocation = allocator.allocate_memory(
-                buffer_desc.get_name(),
-                memory_requirements,
-                memory_location,
-                true);
+            let allocation = {
+                let mut allocator_ref = allocator.lock().unwrap();
+                allocator_ref.allocate_memory(
+                    buffer_desc.get_name(),
+                    memory_requirements,
+                    memory_location,
+                    true)
+            };
 
             unsafe {
-                *self.device.bind_buffer_memory(
+                self.device.bind_buffer_memory(
                     buffer,
                     allocation.memory(),
                     allocation.offset())
@@ -285,7 +293,8 @@ impl DeviceInterface {
                 Some(allocation),
                 Some(ResourceType::Buffer(buffer_wrapper)),
                 handle,
-                &self
+                &self,
+                Some(allocator.clone())
             )
         };
         device_buffer
@@ -314,14 +323,14 @@ impl DeviceInterface {
                     fill_callback(mapped.as_ptr(), allocation.size());
                 } else {
                     unsafe {
-                        let mapped_memory = self.device.get().map_memory(
+                        let mapped_memory = self.device.map_memory(
                             allocation.memory(),
                             allocation.offset(),
                             allocation.size(),
                             vk::MemoryMapFlags::empty())
                             .expect("Failed to map buffer");
                         fill_callback(mapped_memory, allocation.size());
-                        self.device.get().unmap_memory(allocation.memory());
+                        self.device.unmap_memory(allocation.memory());
                     }
                 }
                 // If this buffer was not allocated in host-coherent memory then we need
@@ -331,7 +340,7 @@ impl DeviceInterface {
                 // which is required for vkFlushMappedMemoryRanges
                 if !allocation.memory_properties().contains(vk::MemoryPropertyFlags::HOST_COHERENT) {
                     unsafe {
-                        self.device.get().flush_mapped_memory_ranges(std::slice::from_ref(&mapped_range))
+                        self.device.flush_mapped_memory_ranges(std::slice::from_ref(&mapped_range))
                             .expect("Failed to flush mapped memory");
                     }
                 }
@@ -345,7 +354,7 @@ impl DeviceInterface {
 
     pub fn destroy_buffer(&self, buffer: &BufferWrapper) {
         unsafe {
-            *self.device.destroy_buffer(buffer.buffer, None);
+            self.device.destroy_buffer(buffer.buffer, None);
         }
     }
 
@@ -355,7 +364,7 @@ impl DeviceInterface {
         shader_create: &vk::ShaderModuleCreateInfo) -> DeviceShader {
 
         let shader = unsafe {
-            *self.device.create_shader_module(&shader_create, None)
+            self.device.create_shader_module(&shader_create, None)
                 .expect("Failed to create shader module")
         };
 
@@ -372,7 +381,7 @@ impl DeviceInterface {
         name: &str
     ) -> DevicePipeline {
         let pipeline = unsafe {
-            *self.device.create_graphics_pipelines(
+            self.device.create_graphics_pipelines(
                 vk::PipelineCache::null(),
                 std::slice::from_ref(create_info),
                 None)
@@ -397,7 +406,7 @@ impl DeviceInterface {
         name: &str
     ) -> DevicePipeline {
         let pipeline = unsafe {
-            *self.create_compute_pipelines(
+            self.device.create_compute_pipelines(
                 vk::PipelineCache::null(),
                 std::slice::from_ref(create_info),
                 None)
@@ -420,7 +429,7 @@ impl DeviceInterface {
         name: &str
     ) -> DeviceRenderpass {
         let renderpass = unsafe {
-            *self.create_render_pass(create_info, None)
+            self.device.create_render_pass(create_info, None)
                 .expect("Failed to create renderpass")
         };
         self.set_debug_name(vk::ObjectType::RENDER_PASS, renderpass.as_raw(), name);

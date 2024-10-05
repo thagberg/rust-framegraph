@@ -8,18 +8,18 @@ pub struct DeviceRenderpass<'a> {
     pub device: &'a DeviceInterface
 }
 
-impl Drop for DeviceRenderpass {
+impl Drop for DeviceRenderpass<'_> {
     fn drop(&mut self) {
         unsafe {
-            *self.device.destroy_render_pass(self.renderpass, None);
+            self.device.get().destroy_render_pass(self.renderpass, None);
         }
     }
 }
 
-impl DeviceRenderpass {
+impl<'a> DeviceRenderpass<'a> {
     pub fn new(
         renderpass: vk::RenderPass,
-        device: &DeviceInterface) -> Self {
+        device: &'a DeviceInterface) -> Self {
 
         DeviceRenderpass {
             renderpass,

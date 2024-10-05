@@ -4,6 +4,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use ash::prelude::VkResult;
 use ash::vk;
+use crate::device::interface::DeviceInterface;
 use crate::device::resource::DeviceResource;
 
 #[derive(PartialEq, Eq)]
@@ -13,38 +14,38 @@ pub enum SwapchainStatus {
     Outdated
 }
 
-pub struct NextImage {
-    pub image: Option<Arc<Mutex<DeviceResource>>>,
+pub struct NextImage<'a> {
+    pub image: Option<Arc<Mutex<DeviceResource<'a>>>>,
     pub status: SwapchainStatus
 }
 
-pub struct SwapchainWrapper {
-    device: Arc<Mutex<DeviceWrapper>>,
+pub struct SwapchainWrapper<'a> {
+    device: &'a DeviceInterface,
     loader: ash::extensions::khr::Swapchain,
     swapchain: vk::SwapchainKHR,
-    images: Vec<Arc<Mutex<DeviceResource>>>,
+    images: Vec<Arc<Mutex<DeviceResource<'a>>>>,
     format: vk::Format,
     extent: vk::Extent2D,
     present_fences: Vec<vk::Fence>
 }
 
-impl Debug for SwapchainWrapper {
+impl Debug for SwapchainWrapper<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SwapchainWrapper")
             .finish()
     }
 }
 
-impl SwapchainWrapper {
+impl<'a> SwapchainWrapper<'a> {
     pub fn new(
-        device: Arc<Mutex<DeviceWrapper>>,
+        device: &'a DeviceInterface,
         loader: ash::extensions::khr::Swapchain,
         swapchain: vk::SwapchainKHR,
-        images: Vec<Arc<Mutex<DeviceResource>>>,
+        images: Vec<Arc<Mutex<DeviceResource<'a>>>>,
         format: vk::Format,
         extent: vk::Extent2D,
         present_fences: Vec<vk::Fence>
-    ) -> SwapchainWrapper {
+    ) -> SwapchainWrapper<'a> {
         SwapchainWrapper {
             device,
             loader,
@@ -58,7 +59,7 @@ impl SwapchainWrapper {
 
     pub fn get(&self) -> vk::SwapchainKHR { self.swapchain }
 
-    pub fn get_images(&self) -> &Vec<Arc<Mutex<DeviceResource>>> { &self.images }
+    pub fn get_images(&self) -> &'a Vec<Arc<Mutex<DeviceResource>>> { &self.images }
 
     pub fn get_format(&self) -> vk::Format { self.format }
 
@@ -74,10 +75,8 @@ impl SwapchainWrapper {
         let mut can_destroy = true;
 
         unsafe {
-            let device_ref = self.device.lock()
-                .expect("Failed to obtain device lock while checking fence status");
             for fence in &self.present_fences {
-                let fence_status = device_ref.get().get_fence_status(*fence)
+                let fence_status = self.device.get_fence_status(*fence)
                     .expect("Failed to get Present fence status");
                 match fence_status {
                     true => {}
@@ -94,7 +93,7 @@ impl SwapchainWrapper {
         timeout: u64,
         semaphore: vk::Semaphore,
         fence: vk::Fence
-    ) -> NextImage
+    ) -> NextImage<'a>
     {
         let acquire_image = unsafe {
             self.loader.acquire_next_image(
@@ -129,7 +128,7 @@ impl SwapchainWrapper {
         &self,
         timeout: Option<u64>,
         semaphore: Option<vk::Semaphore>,
-        fence: Option<vk::Fence>) -> NextImage
+        fence: Option<vk::Fence>) -> NextImage<'a>
     {
         let t = match timeout
         {
@@ -150,13 +149,11 @@ impl SwapchainWrapper {
     }
 }
 
-impl Drop for SwapchainWrapper {
+impl Drop for SwapchainWrapper<'_> {
     fn drop(&mut self) {
         unsafe {
-            let device_ref = self.device.lock()
-                .expect("Failed to obtain device lock while dropping SwapchainWrapper");
             for fence in &self.present_fences {
-                device_ref.get().destroy_fence(*fence, None);
+                self.device.destroy_fence(*fence, None);
             }
             self.loader.destroy_swapchain(self.swapchain, None);
         }
