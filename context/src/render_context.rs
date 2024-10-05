@@ -1,9 +1,9 @@
 use std::sync::{Arc, Mutex};
-use api_types::device::DeviceWrapper;
+use api_types::device::interface::DeviceInterface;
 
 pub trait RenderContext  {
     type Create;
     type RP;
 
-    fn get_device(&self) -> Arc<Mutex<DeviceWrapper>>;
+    fn get_device(&self) -> &DeviceInterface;
 }

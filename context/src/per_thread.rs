@@ -1,14 +1,14 @@
 use std::sync::{Arc, Mutex};
 use ash::vk;
-use api_types::device::DeviceWrapper;
+use api_types::device::interface::DeviceInterface;
 
 pub enum ThreadType {
     Main,
     Worker
 }
 
-pub struct PerThread {
-    device: Arc<Mutex<DeviceWrapper>>,
+pub struct PerThread<'a> {
+    device: &'a DeviceInterface,
     // TODO: how do I make this member private?
     thread_type: ThreadType,
     graphics_pool: vk::CommandPool,
@@ -20,7 +20,7 @@ pub struct PerThread {
 }
 
 fn create_command_buffers(
-    device: &DeviceWrapper,
+    device: &DeviceInterface,
     command_pool: vk::CommandPool,
     command_buffer_level: vk::CommandBufferLevel,
     num_command_buffers: u32) -> Vec<vk::CommandBuffer> {
@@ -36,27 +36,24 @@ fn create_command_buffers(
     }
 }
 
-impl Drop for PerThread {
+impl<'a> Drop for PerThread<'a> {
     fn drop(&mut self) {
         unsafe {
-            let device = self.device.lock()
-                .expect("Failed to obtain device lock.");
+            self.device.get().free_command_buffers(self.graphics_pool, std::slice::from_ref(&self.immediate_graphics_buffer));
+            self.device.get().free_command_buffers(self.graphics_pool, &self.graphics_command_buffers);
+            self.device.get().free_command_buffers(self.compute_pool, &self.compute_command_buffers);
 
-            device.get().free_command_buffers(self.graphics_pool, std::slice::from_ref(&self.immediate_graphics_buffer));
-            device.get().free_command_buffers(self.graphics_pool, &self.graphics_command_buffers);
-            device.get().free_command_buffers(self.compute_pool, &self.compute_command_buffers);
+            self.device.get().destroy_command_pool(self.graphics_pool, None);
+            self.device.get().destroy_command_pool(self.compute_pool, None);
 
-            device.get().destroy_command_pool(self.graphics_pool, None);
-            device.get().destroy_command_pool(self.compute_pool, None);
-
-            device.get().destroy_descriptor_pool(self.descriptor_pool, None);
+            self.device.get().destroy_descriptor_pool(self.descriptor_pool, None);
         }
     }
 }
 
-impl PerThread {
+impl<'a> PerThread<'a> {
     pub fn new(
-        device: Arc<Mutex<DeviceWrapper>>,
+        device: &'a DeviceInterface,
         thread_type: ThreadType,
         graphics_pool: vk::CommandPool,
         compute_pool: vk::CommandPool,
@@ -64,39 +61,34 @@ impl PerThread {
         num_graphics_buffers: u32,
         num_compute_buffers: u32) -> Self {
 
-        let device_ref = device.lock()
-            .expect("Failed to obtain device lock while creating PerThread object");
-
         let command_buffer_level = match(thread_type) {
             ThreadType::Main => { vk::CommandBufferLevel::PRIMARY}
             ThreadType::Worker => { vk::CommandBufferLevel::SECONDARY}
         };
 
         let immediate_graphics_buffer = create_command_buffers(
-            &device_ref,
+            device,
             graphics_pool,
             command_buffer_level,
             1
         ).pop().expect("No command buffers were created for immediate command buffer");
 
         let graphics_command_buffers = create_command_buffers(
-            &device_ref,
+            device,
             graphics_pool,
             command_buffer_level,
             num_graphics_buffers
         );
 
         let compute_command_buffers = create_command_buffers(
-            &device_ref,
+            device,
             compute_pool,
             command_buffer_level,
             num_compute_buffers
         );
 
-        drop(device_ref);
-
         PerThread {
-            device: device.clone(),
+            device,
             thread_type,
             graphics_pool,
             compute_pool,
