@@ -17,6 +17,7 @@ use api_types::device::interface::DeviceInterface;
 use api_types::device::queue::QueueFamilies;
 use api_types::device::resource::DeviceResource;
 use api_types::framebuffer::DeviceFramebuffer;
+use api_types::handle::HandleGenerator;
 use api_types::image::ImageWrapper;
 use api_types::instance::InstanceWrapper;
 use api_types::surface;
@@ -532,14 +533,15 @@ fn create_debug_util(
     }
 }
 
-fn create_swapchain<'a>(
+fn create_swapchain<'a, 'b>(
+    handle_generator: &mut HandleGenerator,
     instance: &InstanceWrapper,
     device: &'a DeviceInterface,
     physical_device: &PhysicalDeviceWrapper,
     surface: &SurfaceWrapper,
     window: &winit::window::Window,
     old_swapchain: &Option<OldSwapchain>
-) -> SwapchainWrapper<'a> {
+) -> SwapchainWrapper<'b> where 'a : 'b {
     let swapchain_capabilities = surface.get_surface_capabilities(physical_device);
 
     // TODO: may want to make format and color space customizable
@@ -647,8 +649,9 @@ fn create_swapchain<'a>(
             .expect("Failed to get swapchain images.")
             .iter()
             .map(|image| {
+                let handle = handle_generator.generate_handle();
                 Arc::new(Mutex::new(device.wrap_image(
-                    device,
+                    handle,
                     image.clone(),
                     swapchain_format.format,
                     vk::ImageAspectFlags::COLOR,
@@ -711,6 +714,7 @@ pub struct VulkanFrameObjects<'a> {
 // whenever we recreate the swapchain
 // Necessary for avoiding errors when specifying image indices in VkPresentInfoKHR
 pub struct VulkanRenderContext<'a> {
+    handle_generator: HandleGenerator,
     frame_index: u32,
     swapchain_index: u32,
     graphics_queue: vk::Queue,
@@ -790,6 +794,8 @@ impl<'a> VulkanRenderContext<'a> {
             &layers,
             &instance_extensions);
 
+        let mut handle_generator = HandleGenerator::new();
+
         let debug = {
             if debug_enabled {
                 Some(create_debug_util(
@@ -830,7 +836,6 @@ impl<'a> VulkanRenderContext<'a> {
             )
         };
 
-
         logical_device_extensions.append(&mut physical_device_extensions);
 
         let logical_device = create_logical_device(
@@ -843,62 +848,54 @@ impl<'a> VulkanRenderContext<'a> {
             &logical_device_extensions
         );
 
-        let swapchain = {
-            if window.is_some() && surface_wrapper.is_some() {
-                Some(create_swapchain(
-                    &instance_wrapper,
-                    &logical_device,
-                    &physical_device,
-                    &surface_wrapper.as_ref().unwrap(),
-                    window.unwrap(),
-                    &None))
-            } else {
-                None
-            }
-        };
-
-        let swapchain_semaphores = {
-            let mut semaphores: Vec<vk::Semaphore> = Vec::new();
-            if let Some(swapchain) = &swapchain {
-                semaphores.reserve(swapchain.get_images().len());
-                for i in 0..swapchain.get_images().len() {
-                    let create_info = vk::SemaphoreCreateInfo::builder()
-                        .build();
-
-                    semaphores.push(unsafe {
-                        logical_device.get().create_semaphore(&create_info, None)
-                            .expect("Failed to create semaphore for swapchain image")
-                    });
-                }
-            }
-
-            semaphores
-        };
-
         let graphics_queue = unsafe {
             logical_device.get().get_device_queue(
-                logical_device.get_queue_family_indices().graphics.unwrap(),
+                logical_device.get_queue_families().graphics.unwrap(),
                 0)
         };
         let present_queue = unsafe {
             logical_device.get().get_device_queue(
-                logical_device.get_queue_family_indices().present.unwrap(),
+                logical_device.get_queue_families().present.unwrap(),
                 0)
         };
         let compute_queue = unsafe {
             logical_device.get().get_device_queue(
-                logical_device.get_queue_family_indices().compute.unwrap(),
+                logical_device.get_queue_families().compute.unwrap(),
                 0)
         };
 
-        let max_frames_in_flight = {
-            if let Some(swapchain) = &swapchain {
-                swapchain.get_images().len() as u32
-            } else {
-                MAX_FRAMES_IN_FLIGHT
-            }
+        let frame_index = 0;
+
+        let mut context = VulkanRenderContext {
+            handle_generator,
+            entry,
+            instance: instance_wrapper,
+            device: logical_device,
+            physical_device,
+            graphics_queue,
+            present_queue,
+            compute_queue,
+            surface: surface_wrapper,
+            // swapchain,
+            swapchain: None,
+            old_swapchain: None,
+            // swapchain_semaphores,
+            swapchain_semaphores: vec![],
+            frame_index,
+            swapchain_index: 0,
+            main_thread_objects: vec![],
+            worker_thread_objects: vec![]
         };
 
+
+        context
+    }
+
+    pub fn init(
+        &'a mut self,
+        max_threads: usize,
+        window: Option<&winit::window::Window>
+    ) {
         let ubo_pool_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::UNIFORM_BUFFER,
             descriptor_count: 16
@@ -913,65 +910,92 @@ impl<'a> VulkanRenderContext<'a> {
             .build();
         let descriptor_pool_sizes = [ubo_pool_size, image_pool_size, combined_sampler_pool_size];
 
+        self.swapchain = {
+            if window.is_some() && self.surface.is_some() {
+                Some(create_swapchain(
+                    &mut self.handle_generator,
+                    &self.instance,
+                    &self.device,
+                    &self.physical_device,
+                    &self.surface.as_ref().unwrap(),
+                    window.unwrap(),
+                    &None))
+            } else {
+                None
+            }
+        };
+
+        self.swapchain_semaphores = {
+            let mut semaphores: Vec<vk::Semaphore> = Vec::new();
+            if let Some(s) = &self.swapchain {
+                semaphores.reserve(s.get_images().len());
+                for i in 0..s.get_images().len() {
+                    let create_info = vk::SemaphoreCreateInfo::builder()
+                        .build();
+
+                    semaphores.push(unsafe {
+                        self.device.get().create_semaphore(&create_info, None)
+                            .expect("Failed to create semaphore for swapchain image")
+                    });
+                }
+            }
+
+            semaphores
+        };
+
+        let max_frames_in_flight = {
+            if let Some(swapchain) = &self.swapchain {
+                swapchain.get_images().len() as u32
+            } else {
+                MAX_FRAMES_IN_FLIGHT
+            }
+        };
+
         let mut main_thread_objects: Vec<PerThread> = Vec::new();
         main_thread_objects.reserve(max_frames_in_flight as usize);
         for i in (0..main_thread_objects.capacity()) {
             main_thread_objects.push(create_per_thread_objects(
-                &logical_device,
+                &self.device,
                 &descriptor_pool_sizes,
                 8,
                 ThreadType::Main
             ));
         }
+        self.main_thread_objects = main_thread_objects;
+
         let mut worker_thread_objects: Vec<PerThread> = Vec::new();
         worker_thread_objects.reserve(max_threads);
         for i in (0..worker_thread_objects.capacity()) {
             worker_thread_objects.push(create_per_thread_objects(
-                &logical_device,
+                &self.device,
                 &descriptor_pool_sizes,
                 8,
                 ThreadType::Worker
             ));
         }
-
-        let frame_index = 0;
+        self.worker_thread_objects = worker_thread_objects;
 
         {
             // let borrowed_device = logical_device.borrow();
-            let num_frames = match &swapchain {
+            let num_frames = match &self.swapchain {
                 None => { MAX_FRAMES_IN_FLIGHT }
                 Some(swapchain) => {
                     swapchain.get_images().len() as u32
                 }
             };
 
+            let device_properties = unsafe {
+                self.instance.get().get_physical_device_properties(
+                    self.physical_device.get().clone()
+                )
+            };
+
             init_gpu_profiling!(
-                &logical_device,
-                // borrowed_device.get(),
+                &self.device,
                 device_properties.limits.timestamp_period,
-                // &main_thread_objects.immediate_graphics_buffer,
-                &main_thread_objects[0].immediate_graphics_buffer,
-                &graphics_queue,
+                &self.main_thread_objects[0].immediate_graphics_buffer,
+                &self.graphics_queue,
                 num_frames);
-        }
-
-
-        VulkanRenderContext {
-            entry,
-            instance: instance_wrapper,
-            device: logical_device,
-            physical_device,
-            graphics_queue,
-            present_queue,
-            compute_queue,
-            surface: surface_wrapper,
-            swapchain,
-            old_swapchain: None,
-            swapchain_semaphores,
-            frame_index,
-            swapchain_index: 0,
-            main_thread_objects,
-            worker_thread_objects
         }
     }
 
@@ -983,9 +1007,7 @@ impl<'a> VulkanRenderContext<'a> {
 
     pub fn get_graphics_queue_index(&self) -> u32
     {
-        self.device.lock()
-            .expect("Failed to obtain device lock.")
-            .get_queue_family_indices().graphics.unwrap()
+        self.device.get_queue_families().graphics.unwrap()
     }
 
     pub fn get_graphics_queue(&self) -> vk::Queue {
@@ -996,10 +1018,10 @@ impl<'a> VulkanRenderContext<'a> {
         self.present_queue
     }
 
-    pub fn get_swapchain(&self) -> &Option<SwapchainWrapper> { &self.swapchain }
+    pub fn get_swapchain(&self) -> &'a Option<SwapchainWrapper> { &self.swapchain }
 
     pub fn recreate_swapchain(
-        &mut self,
+        &'a mut self,
         window: &winit::window::Window
     ) {
         match &self.surface {
@@ -1011,8 +1033,9 @@ impl<'a> VulkanRenderContext<'a> {
                         frame_index: self.frame_index
                     });
                     let new_swapchain = create_swapchain(
+                        &mut self.handle_generator,
                         &self.instance,
-                        self.device.clone(),
+                        &self.device,
                         &self.physical_device,
                         surface,
                         window,
@@ -1032,7 +1055,7 @@ impl<'a> VulkanRenderContext<'a> {
         &mut self,
         timeout: Option<u64>,
         semaphore: Option<vk::Semaphore>,
-        fence: Option<vk::Fence>) -> Option<NextImage> {
+        fence: Option<vk::Fence>) -> Option<NextImage<'a>> {
 
         match &mut self.swapchain {
             Some(swapchain) => {
@@ -1045,7 +1068,7 @@ impl<'a> VulkanRenderContext<'a> {
     }
 
     #[tracing::instrument]
-    pub fn get_next_frame_objects(&mut self) -> VulkanFrameObjects {
+    pub fn get_next_frame_objects(&mut self) -> VulkanFrameObjects<'a> {
         let old_index = self.frame_index;
 
         let semaphore = self.swapchain_semaphores[old_index as usize];
@@ -1100,10 +1123,7 @@ impl<'a> VulkanRenderContext<'a> {
             };
 
             let descriptor_sets = unsafe {
-                self.device.lock()
-                    .expect("Failed to obtain device lock")
-                    .get()
-                    .allocate_descriptor_sets(&alloc_info)
+                self.device.allocate_descriptor_sets(&alloc_info)
                     .expect("Failed to allocate descriptor sets")
             };
 
@@ -1114,7 +1134,7 @@ impl<'a> VulkanRenderContext<'a> {
     }
 
     pub fn create_framebuffer(
-        &self,
+        &'a self,
         render_pass: vk::RenderPass,
         extent: &vk::Extent3D,
         images: &[ImageWrapper],
@@ -1162,9 +1182,7 @@ impl<'a> VulkanRenderContext<'a> {
             .build();
 
         unsafe {
-            self.device.lock()
-                .expect("Failed to obtain device lock")
-                .get()
+            self.device.get()
                 .queue_submit(
                     self.get_graphics_queue(),
                     std::slice::from_ref(&submit_info),
@@ -1201,15 +1219,13 @@ impl<'a> VulkanRenderContext<'a> {
         let present_fence = swapchain.get_present_fence(self.swapchain_index);
         unsafe {
             enter_span!(tracing::Level::TRACE, "Waiting for Present fence");
-            let device_ref = self.device.lock()
-                .expect("Failed to obtain device lock.");
-            device_ref.get().wait_for_fences(
+            self.device.get().wait_for_fences(
                 std::slice::from_ref(&present_fence),
                 true,
                 u64::MAX )
                 .expect("Failed to wait for Present fence");
 
-            device_ref.get().reset_fences(
+            self.device.get().reset_fences(
                 std::slice::from_ref(&present_fence)
             ).expect("Failed to reset Present fence");
         }
@@ -1233,12 +1249,10 @@ impl<'a> VulkanRenderContext<'a> {
     }
 
     pub fn start_frame(&mut self, frame_index: u32) {
-        let borrowed_device = self.device.lock()
-            .expect("Failed to obtain device lock.");
-        reset_gpu_profiling!(borrowed_device.get());
+        reset_gpu_profiling!(&self.device);
     }
 
-    pub fn end_frame(&mut self) {
+    pub fn end_frame(&'a mut self) {
         let max_frames_in_flight = {
             if let Some(swapchain) = &self.swapchain {
                 swapchain.get_images().len() as u32
