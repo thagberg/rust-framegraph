@@ -1,15 +1,13 @@
-use std::cell::RefCell;
 use std::ffi::c_void;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use ash::vk;
-use ash::vk::{DeviceSize, Format};
+use ash::vk::DeviceSize;
 use gpu_allocator::MemoryLocation;
 use image::{DynamicImage, GenericImageView, ImageReader};
 use image::DynamicImage::*;
 use api_types::buffer::BufferCreateInfo;
-use api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
+use api_types::device::resource::DeviceResource;
 use api_types::image::{ImageCreateInfo, ImageType};
 use context::vulkan_render_context::VulkanRenderContext;
 
