@@ -7,17 +7,23 @@ use gpu_allocator::MemoryLocation;
 use image::{DynamicImage, GenericImageView, ImageReader};
 use image::DynamicImage::*;
 use api_types::buffer::BufferCreateInfo;
-use api_types::device::resource::DeviceResource;
+use api_types::device::allocator::ResourceAllocator;
+use api_types::device::interface::DeviceInterface;
+use api_types::device::queue::QueueFamilies;
+use api_types::device::resource::{DeviceResource, ResourceType};
 use api_types::image::{ImageCreateInfo, ImageType};
 use context::vulkan_render_context::VulkanRenderContext;
 
-pub fn create_from_bytes(
-    device: Arc<Mutex<DeviceWrapper>>,
-    render_context: &VulkanRenderContext,
-    immediate_command_buffer: &vk::CommandBuffer,
+pub fn create_from_bytes<'a, 'b>(
+    image_handle: u64,
+    device: &'a DeviceInterface,
+    allocator: Arc<Mutex<ResourceAllocator>>,
+    immediate_command_buffer: &'a vk::CommandBuffer,
+    graphics_queue_index: u32,
+    graphics_queue: vk::Queue,
     image_info: vk::ImageCreateInfo,
-    image_bytes: &[u8],
-    name: &str) -> DeviceResource {
+    image_bytes: &'b [u8],
+    name: &'a str) -> DeviceResource<'a> {
     // create CPU-to-GPU buffer
     let buffer_create = BufferCreateInfo::new(
         vk::BufferCreateInfo::builder()
@@ -27,17 +33,15 @@ pub fn create_from_bytes(
             .build(),
         name.to_string()
     );
-    let buffer = DeviceWrapper::create_buffer(
-        device.clone(),
+    let buffer = device.create_buffer(
+        0,
         &buffer_create,
+        allocator.clone(),
         MemoryLocation::CpuToGpu
     );
 
-    let device_ref = device.lock()
-        .expect("Failed to obtain device lock.");
-
     // update buffer with image bytes
-    device_ref.update_buffer(&buffer, |mapped_memory: *mut c_void, _size: u64| {
+    device.update_buffer(&buffer, |mapped_memory: *mut c_void, _size: u64| {
         unsafe {
             core::ptr::copy_nonoverlapping(
                 image_bytes.as_ptr(),
@@ -53,10 +57,11 @@ pub fn create_from_bytes(
         name.to_string(),
         ImageType::Color
     );
-    let image = DeviceWrapper::create_image(
-        device.clone(),
+    let image = device.create_image(
+        image_handle,
         &image_create,
-        MemoryLocation::GpuOnly // TODO: this should be parameterized
+        allocator.clone(),
+        MemoryLocation::GpuOnly
     );
 
     // perform BufferImageCopy
@@ -107,8 +112,8 @@ pub fn create_from_bytes(
             .old_layout(vk::ImageLayout::UNDEFINED)
             .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             .subresource_range(barrier_subresource_range.clone())
-            .src_queue_family_index(render_context.get_graphics_queue_index())
-            .dst_queue_family_index(render_context.get_graphics_queue_index())
+            .src_queue_family_index(graphics_queue_index)
+            .dst_queue_family_index(graphics_queue_index)
             .src_access_mask(vk::AccessFlags::NONE)
             .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
             .build();
@@ -118,14 +123,14 @@ pub fn create_from_bytes(
             .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             .subresource_range(barrier_subresource_range.clone())
-            .src_queue_family_index(render_context.get_graphics_queue_index())
-            .dst_queue_family_index(render_context.get_graphics_queue_index())
+            .src_queue_family_index(graphics_queue_index)
+            .dst_queue_family_index(graphics_queue_index)
             .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
             .dst_access_mask(vk::AccessFlags::SHADER_READ)
             .build();
 
         unsafe {
-            device_ref.get().reset_command_buffer(
+            device.get().reset_command_buffer(
                 *immediate_command_buffer,
                 vk::CommandBufferResetFlags::empty())
                 .expect("Failed to reset command buffer");
@@ -133,10 +138,10 @@ pub fn create_from_bytes(
             let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
                 .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
                 .build();
-            device_ref.get().begin_command_buffer(*immediate_command_buffer, &command_buffer_begin_info)
+            device.get().begin_command_buffer(*immediate_command_buffer, &command_buffer_begin_info)
                 .expect("Failed to begin recording command buffer");
 
-            device_ref.get().cmd_pipeline_barrier(
+            device.get().cmd_pipeline_barrier(
                 *immediate_command_buffer,
                 vk::PipelineStageFlags::TOP_OF_PIPE,
                 vk::PipelineStageFlags::TRANSFER,
@@ -145,14 +150,14 @@ pub fn create_from_bytes(
                 &[],
                 std::slice::from_ref(&pre_barrier));
 
-            device_ref.get().cmd_copy_buffer_to_image(
+            device.get().cmd_copy_buffer_to_image(
                 *immediate_command_buffer,
                 resolved_buffer.buffer,
                 resolved_texture.image,
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 std::slice::from_ref(&copy_region));
 
-            device_ref.get().cmd_pipeline_barrier(
+            device.get().cmd_pipeline_barrier(
                 *immediate_command_buffer,
                 vk::PipelineStageFlags::TRANSFER,
                 vk::PipelineStageFlags::VERTEX_SHADER,
@@ -161,34 +166,37 @@ pub fn create_from_bytes(
                 &[],
                 std::slice::from_ref(&post_barrier));
 
-            device_ref.get().end_command_buffer(*immediate_command_buffer)
+            device.get().end_command_buffer(*immediate_command_buffer)
                 .expect("Failed to record command buffer");
 
             let submit = vk::SubmitInfo::builder()
                 .command_buffers(std::slice::from_ref(immediate_command_buffer))
                 .build();
 
-            device_ref.get().queue_submit(
-                render_context.get_graphics_queue(),
+            device.get().queue_submit(
+                graphics_queue,
                 std::slice::from_ref(&submit),
                 vk::Fence::null())
                 .expect("Failed to execute buffer->image copy");
 
             // TODO: this is very bad and we should figure something else out
-            device_ref.get().device_wait_idle()
+            device.get().device_wait_idle()
                 .expect("Error when waiting for buffer->image copy");
         }
 
         image
     }
 }
-pub fn create_from_uri(
-    device: Arc<Mutex<DeviceWrapper>>,
-    render_context: &VulkanRenderContext,
-    immediate_command_buffer: &vk::CommandBuffer,
-    uri: &str,
+pub fn create_from_uri<'a>(
+    image_handle: u64,
+    device: &'a DeviceInterface,
+    allocator: Arc<Mutex<ResourceAllocator>>,
+    immediate_command_buffer: &'a vk::CommandBuffer,
+    graphics_queue_index: u32,
+    graphics_queue: vk::Queue,
+    uri: &'a str,
     is_linear: bool
-) -> DeviceResource {
+) -> DeviceResource<'a> {
     let mut img = {
         let image = ImageReader::open(uri)
             .expect("Unable to load image");
@@ -238,7 +246,16 @@ pub fn create_from_uri(
         .array_layers(1)
         .build();
 
-    create_from_bytes(device, render_context, immediate_command_buffer, texture_create, img.as_bytes(), uri)
+    create_from_bytes(
+        image_handle,
+        device,
+        allocator,
+        immediate_command_buffer,
+        graphics_queue_index,
+        graphics_queue,
+        texture_create,
+        img.as_bytes(),
+        uri)
 }
 
 pub fn get_aspect_mask_from_format(format: vk::Format) -> vk::ImageAspectFlags {
