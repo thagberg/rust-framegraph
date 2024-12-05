@@ -8,9 +8,10 @@ use std::sync::{Arc, Mutex};
 use ash::vk;
 use rspirv_reflect;
 use rspirv_reflect::BindingCount;
-use api_types::device::{DeviceShader, DeviceWrapper};
+use api_types::device::interface::DeviceInterface;
+use api_types::shader::DeviceShader;
 
-fn create_shader_module(device: Arc<Mutex<DeviceWrapper>>, file_name: &str) -> Shader
+fn create_shader_module(device: &DeviceInterface, file_name: &str) -> Shader
 {
     let (reflection_module, shader) = {
         let bytes = fs::read(file_name)
@@ -27,7 +28,7 @@ fn create_shader_module(device: Arc<Mutex<DeviceWrapper>>, file_name: &str) -> S
             p_code: bytes.as_ptr() as *const u32
         };
 
-        let shader = DeviceWrapper::create_shader(device, file_name, &create_info);
+        let shader = device.create_shader(file_name, &create_info);
 
         (reflection_module, shader)
     };
@@ -66,7 +67,7 @@ fn create_shader_module(device: Arc<Mutex<DeviceWrapper>>, file_name: &str) -> S
     Shader::new(shader, binding_map)
 }
 
-pub fn create_shader_module_from_bytes(device: Arc<Mutex<DeviceWrapper>>, name: &str, bytes: &[u8]) -> Shader
+pub fn create_shader_module_from_bytes(device: &DeviceInterface, name: &str, bytes: &[u8]) -> Shader
 {
     let (reflection_module, shader) = {
         let reflection_module = rspirv_reflect::Reflection::new_from_spirv(bytes)
@@ -80,7 +81,7 @@ pub fn create_shader_module_from_bytes(device: Arc<Mutex<DeviceWrapper>>, name: 
             p_code: bytes.as_ptr() as *const u32
         };
 
-        let shader = DeviceWrapper::create_shader(device, name, &create_info);
+        let shader = device.create_shader(name, &create_info);
 
         (reflection_module, shader)
     };
@@ -161,7 +162,7 @@ impl ShaderManager
         }
     }
 
-    pub fn load_shader(&mut self, device: Arc<Mutex<DeviceWrapper>>, file_name: &str) -> Arc<Mutex<Shader>>
+    pub fn load_shader(&mut self, device: &DeviceInterface, file_name: &str) -> Arc<Mutex<Shader>>
     {
         // TODO: can this return a &ShaderModule without a double mutable borrow error in PipelineManager::create_pipeline?
         //let full_path = concat!(concat!(env!("OUT_DIR"), "/shaders/"), file_name);
