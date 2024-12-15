@@ -1,10 +1,10 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use ash::vk;
-use api_types::device::DeviceWrapper;
+use api_types::device::interface::DeviceInterface;
 use crate::frame::Frame;
 
-pub trait FrameGraph
+pub trait FrameGraph<'a>
 {
     type PN;
     type RPM;
@@ -15,8 +15,8 @@ pub trait FrameGraph
 
     fn start(
         &mut self,
-        device: Rc<RefCell<DeviceWrapper>>,
-        descriptor_pool: vk::DescriptorPool) -> Box<Frame>;
+        device: &'a DeviceInterface,
+        descriptor_pool: vk::DescriptorPool) -> Box<Frame<'a>>;
 
     fn end(
         &mut self,

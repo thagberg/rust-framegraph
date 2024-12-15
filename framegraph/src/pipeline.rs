@@ -8,6 +8,8 @@ use ash::vk;
 use ash::vk::Handle;
 
 use crate::shader::{Shader, ShaderManager};
+use api_types::pipeline::DevicePipeline;
+use api_types::device::interface::DeviceInterface;
 
 extern crate context;
 use context::vulkan_render_context::VulkanRenderContext;
@@ -34,7 +36,7 @@ pub enum RasterizationType
     Standard
 }
 
-pub struct PipelineDescription
+pub struct PipelineDescription<'a>
 {
     vertex_input: vk::PipelineVertexInputStateCreateInfo,
     dynamic_states: Vec<vk::DynamicState>,
@@ -42,11 +44,11 @@ pub struct PipelineDescription
     depth_stencil: DepthStencilType,
     blend: BlendType,
     name: String,
-    vertex_shader: Arc<Mutex<Shader>>,
-    fragment_shader: Arc<Mutex<Shader>>
+    vertex_shader: Arc<Mutex<Shader<'a>>>,
+    fragment_shader: Arc<Mutex<Shader<'a>>>
 }
 
-impl Hash for PipelineDescription
+impl Hash for PipelineDescription<'_>
 {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // TODO: this is an inadequate hash
@@ -55,7 +57,7 @@ impl Hash for PipelineDescription
     }
 }
 
-impl PipelineDescription
+impl PipelineDescription<'_>
 {
     pub fn new(
         vertex_input: vk::PipelineVertexInputStateCreateInfo,
@@ -107,12 +109,12 @@ impl ComputePipelineDescription {
 }
 
 #[derive(Clone)]
-pub struct Pipeline
+pub struct Pipeline<'d>
 {
-    pub device_pipeline: DevicePipeline
+    pub device_pipeline: DevicePipeline<'d>
 }
 
-impl Debug for Pipeline {
+impl Debug for Pipeline<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Pipeline")
             .field("device pipeline", &self.device_pipeline.pipeline.as_raw())
@@ -120,8 +122,8 @@ impl Debug for Pipeline {
     }
 }
 
-impl Pipeline {
-    pub fn new(device_pipeline: DevicePipeline) -> Pipeline
+impl<'d> Pipeline<'d> {
+    pub fn new(device_pipeline: DevicePipeline<'d>) -> Pipeline
     {
         Pipeline {
             device_pipeline
@@ -138,10 +140,10 @@ impl Pipeline {
 }
 
 #[derive(Debug)]
-pub struct VulkanPipelineManager
+pub struct VulkanPipelineManager<'d>
 {
-    pipeline_cache: HashMap<u64, Arc<Mutex<Pipeline>>>,
-    shader_manager: ShaderManager
+    pipeline_cache: HashMap<u64, Arc<Mutex<Pipeline<'d>>>>,
+    shader_manager: ShaderManager<'d>
 }
 
 const STENCIL_STATE_KEEP: vk::StencilOpState = vk::StencilOpState {
@@ -294,7 +296,7 @@ fn generate_blend_state(blend_type: BlendType, attachments: &[vk::PipelineColorB
     }
 }
 
-fn create_descriptor_set_layouts(device: Arc<Mutex<DeviceWrapper>>, full_bindings: &HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>>) -> Vec<vk::DescriptorSetLayout> {
+fn create_descriptor_set_layouts(device: &DeviceInterface, full_bindings: &HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>>) -> Vec<vk::DescriptorSetLayout> {
 
     let mut descriptor_set_layouts: Vec<vk::DescriptorSetLayout> = Vec::new();
 
@@ -319,9 +321,7 @@ fn create_descriptor_set_layouts(device: Arc<Mutex<DeviceWrapper>>, full_binding
                 .build();
 
             let layout = unsafe {
-                device.lock()
-                    .expect("Failed to obtain device lock")
-                    .get().create_descriptor_set_layout(
+                device.get().create_descriptor_set_layout(
                     &layout_create_info,
                     None)
                     .expect("Failed to create descriptor set layout")
@@ -337,8 +337,8 @@ fn create_descriptor_set_layouts(device: Arc<Mutex<DeviceWrapper>>, full_binding
 }
 
 
-impl VulkanPipelineManager {
-    pub fn new() -> VulkanPipelineManager
+impl<'device> VulkanPipelineManager<'device> {
+    pub fn new() -> VulkanPipelineManager<'device>
     {
         VulkanPipelineManager {
             pipeline_cache: HashMap::new(),
@@ -348,7 +348,7 @@ impl VulkanPipelineManager {
 
     pub fn create_compute_pipeline(
         &mut self,
-        device: Arc<Mutex<DeviceWrapper>>,
+        device: &DeviceInterface,
         pipeline_description: &ComputePipelineDescription) -> Arc<Mutex<Pipeline>> {
 
         let mut pipeline_hasher = DefaultHasher::new();
@@ -359,7 +359,7 @@ impl VulkanPipelineManager {
             Some(pipeline) => { pipeline.clone() },
             None => {
                 let mut compute_shader_module = self.shader_manager.load_shader(
-                    device.clone(),
+                    device,
                     &pipeline_description.compute_name);
                 let mut compute_shader_ref = compute_shader_module.lock().unwrap();
 
@@ -372,7 +372,7 @@ impl VulkanPipelineManager {
                     }
                 }
 
-                let descriptor_set_layouts = create_descriptor_set_layouts(device.clone(), &full_bindings);
+                let descriptor_set_layouts = create_descriptor_set_layouts(device, &full_bindings);
 
                 // let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
 
@@ -381,9 +381,7 @@ impl VulkanPipelineManager {
                         let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
                             .set_layouts(&descriptor_set_layouts);
                         unsafe {
-                            let device_ref = device.lock()
-                                .expect("Failed to obtain device lock");
-                            device_ref.get().create_pipeline_layout(&pipeline_layout_create, None)
+                            device.get().create_pipeline_layout(&pipeline_layout_create, None)
                                 .expect("Failed to create pipeline layout")
                         }
                     };
@@ -399,8 +397,7 @@ impl VulkanPipelineManager {
                         .layout(pipeline_layout)
                         .build();
 
-                    let device_pipeline = DeviceWrapper::create_compute_pipeline(
-                        device.clone(),
+                    let device_pipeline = device.create_compute_pipeline(
                         &compute_pipeline_info,
                         pipeline_layout,
                         descriptor_set_layouts,
@@ -418,7 +415,7 @@ impl VulkanPipelineManager {
 
     pub fn create_pipeline(
         &mut self,
-        device: Arc<Mutex<DeviceWrapper>>,
+        device: &DeviceInterface,
         render_pass: vk::RenderPass,
         pipeline_description: &PipelineDescription) -> Arc<Mutex<Pipeline>> {
         enter_span!(tracing::Level::TRACE, "Create or fetch Pipeline");
@@ -463,7 +460,7 @@ impl VulkanPipelineManager {
                     }
                 }
 
-                let descriptor_set_layouts = create_descriptor_set_layouts(device.clone(), &full_bindings);
+                let descriptor_set_layouts = create_descriptor_set_layouts(device, &full_bindings);
 
                 // let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
 
@@ -471,9 +468,7 @@ impl VulkanPipelineManager {
                         let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
                             .set_layouts(&descriptor_set_layouts);
                         unsafe {
-                            device.lock()
-                                .expect("Failed to obtain device lock")
-                                .get().create_pipeline_layout(&pipeline_layout_create, None)
+                            device.get().create_pipeline_layout(&pipeline_layout_create, None)
                                 .expect("Failed to create pipeline layout")
                         }
                 };
@@ -558,8 +553,7 @@ impl VulkanPipelineManager {
                     .subpass(0); // TODO: this shouldn't be static
                 // .build();
 
-                let device_pipeline = DeviceWrapper::create_pipeline(
-                    device,
+                let device_pipeline = device.create_pipeline(
                     &graphics_pipeline_info,
                     pipeline_layout,
                     descriptor_set_layouts,

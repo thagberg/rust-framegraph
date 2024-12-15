@@ -1,21 +1,21 @@
 use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Mutex};
 use ash::vk;
-use api_types::device::{DeviceFramebuffer, DeviceResource, DeviceWrapper};
+use api_types::device::resource::DeviceResource;
+use api_types::framebuffer::DeviceFramebuffer;
 use crate::pass_node::{PassNode, FillCallback};
 use crate::binding::{ResourceBinding};
-use context::vulkan_render_context::VulkanRenderContext;
 use crate::attachment::AttachmentReference;
 use crate::pipeline::{PipelineDescription};
 
-pub struct GraphicsPassNode {
-    pub pipeline_description: Option<Arc<PipelineDescription>>,
-    pub render_targets: Vec<AttachmentReference>,
-    pub depth_target: Option<AttachmentReference>,
-    pub inputs: Vec<ResourceBinding>,
-    pub outputs: Vec<ResourceBinding>,
-    pub tagged_resources: Vec<Arc<Mutex<DeviceResource>>>,
-    pub framebuffer: Option<DeviceFramebuffer>,
+pub struct GraphicsPassNode<'device> {
+    pub pipeline_description: Option<Arc<PipelineDescription<'device>>>,
+    pub render_targets: Vec<AttachmentReference<'device>>,
+    pub depth_target: Option<AttachmentReference<'device>>,
+    pub inputs: Vec<ResourceBinding<'device>>,
+    pub outputs: Vec<ResourceBinding<'device>>,
+    pub tagged_resources: Vec<Arc<Mutex<DeviceResource<'device>>>>,
+    pub framebuffer: Option<DeviceFramebuffer<'device>>,
     pub viewport: Option<vk::Viewport>,
     pub scissor: Option<vk::Rect2D>,
     pub fill_callback: Box<FillCallback>,
@@ -23,20 +23,20 @@ pub struct GraphicsPassNode {
 }
 
 #[derive(Default)]
-pub struct PassNodeBuilder {
-    pipeline_description: Option<Arc<PipelineDescription>>,
-    render_targets: Vec<AttachmentReference>,
-    depth_target: Option<AttachmentReference>,
-    inputs: Vec<ResourceBinding>,
-    outputs: Vec<ResourceBinding>,
-    tagged_resources: Vec<Arc<Mutex<DeviceResource>>>,
+pub struct PassNodeBuilder<'device> {
+    pipeline_description: Option<Arc<PipelineDescription<'device>>>,
+    render_targets: Vec<AttachmentReference<'device>>,
+    depth_target: Option<AttachmentReference<'device>>,
+    inputs: Vec<ResourceBinding<'device>>,
+    outputs: Vec<ResourceBinding<'device>>,
+    tagged_resources: Vec<Arc<Mutex<DeviceResource<'device>>>>,
     fill_callback: Option<Box<FillCallback>>,
     viewport: Option<vk::Viewport>,
     scissor: Option<vk::Rect2D>,
     name: String
 }
 
-impl PassNode for GraphicsPassNode  {
+impl PassNode for GraphicsPassNode<'_>  {
 
     fn get_name(&self) -> &str {
         &self.name
@@ -76,7 +76,7 @@ impl PassNode for GraphicsPassNode  {
 
 }
 
-impl Debug for GraphicsPassNode  {
+impl Debug for GraphicsPassNode<'_>  {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PassNode")
             .field("Name", &self.name)
@@ -84,8 +84,8 @@ impl Debug for GraphicsPassNode  {
     }
 }
 
-impl GraphicsPassNode  {
-    pub fn builder(name: String) -> PassNodeBuilder {
+impl<'device> GraphicsPassNode<'device>  {
+    pub fn builder(name: String) -> PassNodeBuilder<'device> {
         PassNodeBuilder {
             name,
             ..Default::default()
@@ -133,17 +133,15 @@ impl GraphicsPassNode  {
 
     pub fn execute(
         &self,
-        device: Arc<Mutex<DeviceWrapper>>,
         command_buffer: vk::CommandBuffer)
     {
         (self.fill_callback)(
-            device,
             command_buffer);
     }
 
 }
 
-impl PassNodeBuilder {
+impl<'device> PassNodeBuilder<'device> {
     pub fn pipeline_description(mut self, pipeline_description: Arc<PipelineDescription>) -> Self {
         self.pipeline_description = Some(pipeline_description);
         self
@@ -192,7 +190,7 @@ impl PassNodeBuilder {
         self
     }
 
-    pub fn build(mut self) -> Result<GraphicsPassNode, &'static str> {
+    pub fn build(mut self) -> Result<GraphicsPassNode<'device>, &'static str> {
         assert!(self.fill_callback.is_some(), "No fill callback set");
 
         if self.fill_callback.is_some() {

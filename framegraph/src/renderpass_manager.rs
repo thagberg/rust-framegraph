@@ -5,7 +5,9 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use ash::{vk};
-use api_types::device::{DeviceRenderpass, DeviceWrapper};
+use api_types::device::interface::DeviceInterface;
+use api_types::renderpass::DeviceRenderpass;
+
 use profiling::enter_span;
 use crate::attachment::AttachmentReference;
 
@@ -23,11 +25,11 @@ pub struct AttachmentInfo {
     pub stencil_attachment: Option<StencilAttachmentInfo>
 }
 
-pub struct VulkanRenderpassManager {
-    renderpass_map: HashMap<String, Arc<Mutex<DeviceRenderpass>>>
+pub struct VulkanRenderpassManager<'device> {
+    renderpass_map: HashMap<String, Arc<Mutex<DeviceRenderpass<'device>>>>
 }
 
-impl Debug for VulkanRenderpassManager {
+impl Debug for VulkanRenderpassManager<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VulkanRenderpassManager")
             .field("num renderpasses", &self.renderpass_map.len())
@@ -35,7 +37,7 @@ impl Debug for VulkanRenderpassManager {
     }
 }
 
-impl VulkanRenderpassManager {
+impl<'device> VulkanRenderpassManager<'device> {
 
     pub fn new() -> Self {
         VulkanRenderpassManager {
@@ -46,9 +48,9 @@ impl VulkanRenderpassManager {
     pub fn create_or_fetch_renderpass(
         &mut self,
         pass_name: &str,
-        color_attachments: &[AttachmentReference],
-        depth_attachment: &Option<AttachmentReference>,
-        device: Arc<Mutex<DeviceWrapper>>) -> Arc<Mutex<DeviceRenderpass>> {
+        color_attachments: &[AttachmentReference<'device>],
+        depth_attachment: &Option<AttachmentReference<'device>>,
+        device: &DeviceInterface) -> Arc<Mutex<DeviceRenderpass<'device>>> {
         enter_span!(tracing::Level::TRACE, "Create or Fetch Renderpass");
 
         let renderpass = self.renderpass_map.entry(pass_name.to_string()).or_insert_with_key(|_| {
@@ -130,7 +132,7 @@ impl VulkanRenderpassManager {
                 .subpasses(std::slice::from_ref(&subpass))
                 .dependencies(std::slice::from_ref(&subpass_dependency)).build();
 
-            Arc::new(Mutex::new(DeviceWrapper::create_renderpass(device, &renderpass_create_info, pass_name)))
+            Arc::new(Mutex::new(device.create_renderpass(&renderpass_create_info, pass_name)))
         }).clone();
         renderpass
     }

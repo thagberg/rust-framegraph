@@ -1,23 +1,23 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-use api_types::device::DeviceResource;
+use api_types::device::resource::DeviceResource;
 use crate::pass_node::PassNode;
 
 #[derive(Debug)]
-pub struct PresentPassNode {
-    pub swapchain_image: Arc<Mutex<DeviceResource>>,
+pub struct PresentPassNode<'a> {
+    pub swapchain_image: Arc<Mutex<DeviceResource<'a>>>,
     name: String
 }
 
 #[derive(Default)]
-pub struct PresentPassNodeBuilder {
+pub struct PresentPassNodeBuilder<'a> {
     name: String,
-    swapchain_image: Option<Arc<Mutex<DeviceResource>>>
+    swapchain_image: Option<Arc<Mutex<DeviceResource<'a>>>>
 }
 
-impl PresentPassNode {
-    pub fn builder(name: String) -> PresentPassNodeBuilder {
+impl<'a> PresentPassNode<'a> {
+    pub fn builder(name: String) -> PresentPassNodeBuilder<'a> {
         PresentPassNodeBuilder {
             name,
             ..Default::default()
@@ -25,13 +25,13 @@ impl PresentPassNode {
     }
 }
 
-impl PresentPassNodeBuilder {
-    pub fn swapchain_image(mut self, swapchain_image: Arc<Mutex<DeviceResource>>) -> Self {
+impl<'a> PresentPassNodeBuilder<'a> {
+    pub fn swapchain_image(mut self, swapchain_image: Arc<Mutex<DeviceResource<'a>>>) -> Self {
         self.swapchain_image = Some(swapchain_image);
         self
     }
 
-    pub fn build(mut self) -> Result<PresentPassNode, &'static str> {
+    pub fn build(mut self) -> Result<PresentPassNode<'a>, &'static str> {
         if let Some(swapchain_image) = self.swapchain_image {
             Ok(PresentPassNode {
                 swapchain_image,
@@ -43,7 +43,7 @@ impl PresentPassNodeBuilder {
     }
 }
 
-impl PassNode for PresentPassNode {
+impl PassNode for PresentPassNode<'_> {
     fn get_name(&self) -> &str {
         &self.name
     }

@@ -3,7 +3,7 @@ use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 use ash::vk;
 use petgraph::stable_graph::{StableDiGraph, NodeIndex};
-use api_types::device::DeviceWrapper;
+use api_types::device::interface::DeviceInterface;
 use crate::graphics_pass_node::GraphicsPassNode;
 use crate::pass_type::PassType;
 
@@ -14,17 +14,17 @@ enum FrameState {
     Ended
 }
 
-pub struct Frame {
-    pub nodes: StableDiGraph<PassType, u32>,
+pub struct Frame<'a> {
+    pub nodes: StableDiGraph<PassType<'a>, u32>,
     root_index: Option<NodeIndex>,
     state: FrameState,
     pub sorted_nodes: Vec<NodeIndex>,
-    device: Rc<RefCell<DeviceWrapper>>,
+    device: &'a DeviceInterface,
     pub(crate) descriptor_pool: vk::DescriptorPool,
     pub descriptor_sets: Vec<vk::DescriptorSet>
 }
 
-impl Debug for Frame {
+impl Debug for Frame<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Frame")
             .field("state", &self.state)
@@ -32,11 +32,11 @@ impl Debug for Frame {
     }
 }
 
-impl Drop for Frame {
+impl Drop for Frame<'_> {
     fn drop(&mut self) {
         log::trace!(target: "frame", "Dropping frame");
         unsafe {
-            self.device.borrow().get().free_descriptor_sets(
+            self.device.get().free_descriptor_sets(
                 self.descriptor_pool,
                 &self.descriptor_sets)
                 .expect("Failed to free Descriptor Sets for Frame");
@@ -44,8 +44,10 @@ impl Drop for Frame {
     }
 }
 
-impl Frame {
-    pub fn new(device: Rc<RefCell<DeviceWrapper>>, descriptor_pool: vk::DescriptorPool) -> Self {
+impl<'a> Frame<'a> {
+    pub fn new(
+        device: &'a DeviceInterface,
+        descriptor_pool: vk::DescriptorPool) -> Self {
         Frame {
             nodes: StableDiGraph::new(),
             root_index: None,

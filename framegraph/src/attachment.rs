@@ -1,19 +1,19 @@
 use std::sync::{Arc, Mutex};
 use ash::vk;
-use api_types::device::{DeviceResource, ResourceType};
+use api_types::device::resource::{DeviceResource, ResourceType};
 
 #[derive(Clone)]
-pub struct AttachmentReference {
-    pub resource_image: Arc<Mutex<DeviceResource>>,
+pub struct AttachmentReference<'a> {
+    pub resource_image: Arc<Mutex<DeviceResource<'a>>>,
     pub format: vk::Format,
     pub samples: vk::SampleCountFlags,
     pub layout: vk::ImageLayout
 }
 
-impl AttachmentReference {
+impl<'a> AttachmentReference<'a> {
     pub fn new(
-        resource_image: Arc<Mutex<DeviceResource>>,
-        samples: vk::SampleCountFlags) -> AttachmentReference {
+        resource_image: Arc<Mutex<DeviceResource<'a>>>,
+        samples: vk::SampleCountFlags) -> AttachmentReference<'a> {
 
         assert!(resource_image.borrow().resource_type.is_some(), "AttachmentResource: resource_image must be valid DeviceResource");
         let resource_ref = resource_image.borrow();

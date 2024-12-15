@@ -11,7 +11,7 @@ use rspirv_reflect::BindingCount;
 use api_types::device::interface::DeviceInterface;
 use api_types::shader::DeviceShader;
 
-fn create_shader_module(device: &DeviceInterface, file_name: &str) -> Shader
+fn create_shader_module<'a>(device: &'a DeviceInterface, file_name: &str) -> Shader<'a>
 {
     let (reflection_module, shader) = {
         let bytes = fs::read(file_name)
@@ -67,7 +67,7 @@ fn create_shader_module(device: &DeviceInterface, file_name: &str) -> Shader
     Shader::new(shader, binding_map)
 }
 
-pub fn create_shader_module_from_bytes(device: &DeviceInterface, name: &str, bytes: &[u8]) -> Shader
+pub fn create_shader_module_from_bytes<'a>(device: &'a DeviceInterface, name: &str, bytes: &[u8]) -> Shader<'a>
 {
     let (reflection_module, shader) = {
         let reflection_module = rspirv_reflect::Reflection::new_from_spirv(bytes)
@@ -121,13 +121,13 @@ pub fn create_shader_module_from_bytes(device: &DeviceInterface, name: &str, byt
 }
 
 #[derive(Clone)]
-pub struct Shader
+pub struct Shader<'a>
 {
-    pub shader: DeviceShader,
+    pub shader: DeviceShader<'a>,
     pub descriptor_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>>
 }
 
-impl Shader
+impl Shader<'_>
 {
     pub fn new(
         shader: DeviceShader,
@@ -140,12 +140,12 @@ impl Shader
     }
 }
 
-pub struct ShaderManager
+pub struct ShaderManager<'a>
 {
-    shader_cache: HashMap<String, Arc<Mutex<Shader>>>
+    shader_cache: HashMap<String, Arc<Mutex<Shader<'a>>>>
 }
 
-impl Debug for ShaderManager {
+impl Debug for ShaderManager<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ShaderManager")
             .field("cached shaders", &self.shader_cache.keys().len())
@@ -153,9 +153,9 @@ impl Debug for ShaderManager {
     }
 }
 
-impl ShaderManager
+impl<'device> ShaderManager<'device>
 {
-    pub fn new() -> ShaderManager
+    pub fn new() -> ShaderManager<'device>
     {
         ShaderManager {
            shader_cache: HashMap::new()

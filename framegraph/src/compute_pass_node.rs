@@ -1,23 +1,18 @@
-use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
-use std::rc::Rc;
-use std::sync::{Arc, Mutex};
 use ash::vk::CommandBuffer;
-use api_types::device::DeviceWrapper;
-use context::vulkan_render_context::VulkanRenderContext;
 use crate::binding::ResourceBinding;
 use crate::pass_node::{FillCallback, PassNode};
 use crate::pipeline::ComputePipelineDescription;
 
-pub struct ComputePassNode {
-    pub inputs: Vec<ResourceBinding>,
-    pub outputs: Vec<ResourceBinding>,
+pub struct ComputePassNode<'d> {
+    pub inputs: Vec<ResourceBinding<'d>>,
+    pub outputs: Vec<ResourceBinding<'d>>,
     pub fill_callback: Box<FillCallback>,
     pub pipeline_description: ComputePipelineDescription,
     name: String
 }
 
-impl Debug for ComputePassNode {
+impl Debug for ComputePassNode<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ComputePassNode")
             .field("name", &self.name)
@@ -28,8 +23,8 @@ impl Debug for ComputePassNode {
     }
 }
 
-impl ComputePassNode {
-    pub fn builder(name: String) -> ComputePassNodeBuilder {
+impl<'d> ComputePassNode<'d> {
+    pub fn builder(name: String) -> ComputePassNodeBuilder<'d> {
         ComputePassNodeBuilder {
             name,
             ..Default::default()
@@ -38,15 +33,13 @@ impl ComputePassNode {
 
     pub fn execute(
         &self,
-        device: Arc<Mutex<DeviceWrapper>>,
         command_buffer: CommandBuffer) {
         (self.fill_callback)(
-            device,
             command_buffer);
     }
 }
 
-impl PassNode for ComputePassNode {
+impl PassNode for ComputePassNode<'_> {
     fn get_name(&self) -> &str {
        &self.name
     }
@@ -71,15 +64,15 @@ impl PassNode for ComputePassNode {
 }
 
 #[derive(Default)]
-pub struct ComputePassNodeBuilder {
+pub struct ComputePassNodeBuilder<'d> {
     name: String,
-    inputs: Vec<ResourceBinding>,
-    outputs: Vec<ResourceBinding>,
+    inputs: Vec<ResourceBinding<'d>>,
+    outputs: Vec<ResourceBinding<'d>>,
     pipeline_description: Option<ComputePipelineDescription>,
     fill_callback: Option<Box<FillCallback>>,
 }
 
-impl ComputePassNodeBuilder {
+impl<'d> ComputePassNodeBuilder<'d> {
     pub fn pipeline_description(mut self, pipeline_description: ComputePipelineDescription) -> Self {
         self.pipeline_description = Some(pipeline_description);
         self
@@ -100,7 +93,7 @@ impl ComputePassNodeBuilder {
         self
     }
 
-    pub fn build(mut self) -> Result<ComputePassNode, &'static str> {
+    pub fn build(mut self) -> Result<ComputePassNode<'d>, &'static str> {
         let inputs_len = self.inputs.len();
         let outputs_len = self.outputs.len();
 

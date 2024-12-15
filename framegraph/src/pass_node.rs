@@ -4,10 +4,9 @@ use ash::vk;
 
 pub type FillCallback = dyn (
 Fn(
-    Arc<Mutex<DeviceWrapper>>,
     vk::CommandBuffer
 )
-);
+) + Sync + Send;
 
 pub trait PassNode {
     fn get_name(&self) -> &str;

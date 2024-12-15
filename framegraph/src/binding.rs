@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Mutex};
 use ash::vk;
-use api_types::device::DeviceResource;
+use api_types::device::resource::DeviceResource;
 
 #[derive(Clone)]
 pub struct ImageBindingInfo {
@@ -55,7 +55,7 @@ impl Debug for BindingInfo {
 }
 
 #[derive(Clone, Debug)]
-pub struct ResourceBinding {
-    pub resource: Arc<Mutex<DeviceResource>>,
+pub struct ResourceBinding<'a> {
+    pub resource: Arc<Mutex<DeviceResource<'a>>>,
     pub binding_info: BindingInfo
 }

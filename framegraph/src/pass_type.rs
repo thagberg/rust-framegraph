@@ -6,15 +6,15 @@ use crate::pass_node::PassNode;
 use crate::present_pass_node::PresentPassNode;
 
 #[derive(Debug)]
-pub enum PassType {
-    Graphics(GraphicsPassNode),
-    Copy(CopyPassNode),
-    Compute(ComputePassNode),
-    Present(PresentPassNode)
+pub enum PassType<'d> {
+    Graphics(GraphicsPassNode<'d>),
+    Copy(CopyPassNode<'d>),
+    Compute(ComputePassNode<'d>),
+    Present(PresentPassNode<'d>)
 }
 
 // TODO: this could definitely be handled as a macro
-impl Deref for PassType {
+impl Deref for PassType<'_> {
     type Target = dyn PassNode;
 
     fn deref(&self) -> &Self::Target {

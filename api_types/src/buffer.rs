@@ -24,6 +24,9 @@ pub struct BufferWrapper {
     pub create_info: vk::BufferCreateInfo
 }
 
+unsafe impl Sync for BufferWrapper {}
+unsafe impl Send for BufferWrapper {}
+
 impl BufferWrapper {
     pub fn new(buffer: vk::Buffer, create_info: vk::BufferCreateInfo) -> BufferWrapper {
         BufferWrapper {
