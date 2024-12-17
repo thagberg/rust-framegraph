@@ -63,10 +63,10 @@ fn is_write(access: vk::AccessFlags, stage: vk::PipelineStageFlags) -> bool {
     (write_access & access != vk::AccessFlags::NONE) || (pipeline_write & stage != vk::PipelineStageFlags::NONE)
 }
 
-fn link_inputs(inputs: &[ResourceBinding], node_barrier: &mut NodeBarriers, usage_cache: &mut HashMap<u64, ResourceUsage>) {
+fn link_inputs<'d>(inputs: &[ResourceBinding<'d>], node_barrier: &mut NodeBarriers<'d>, usage_cache: &mut HashMap<u64, ResourceUsage>) {
     for input in inputs {
+        let mut input_ref = input.resource.lock().unwrap();
         let (handle, resolved_resource) = {
-            let mut input_ref = input.resource.lock().unwrap();
 
             let handle = input_ref.get_handle();
 
@@ -227,8 +227,8 @@ fn resolve_descriptors<'a, 'b>(
     enter_span!(tracing::Level::TRACE, "Resolve descriptors");
 
     for binding in bindings {
+        let binding_ref = binding.resource.lock().unwrap();
         let resolved_binding = {
-            let binding_ref = binding.resource.lock().unwrap();
             binding_ref.resource_type.as_ref().expect("Invalid resource in binding")
         };
         let descriptor_set = descriptor_sets[binding.binding_info.set as usize];
@@ -276,7 +276,7 @@ impl Debug for NodeBarriers<'_> {
     }
 }
 
-fn link_graphics_node<'d, 'a>(node: &'d mut GraphicsPassNode, usage_cache: &'a mut HashMap<u64, ResourceUsage>) -> NodeBarriers<'d> {
+fn link_graphics_node<'d, 'a>(node: &'a mut GraphicsPassNode<'d>, usage_cache: &'a mut HashMap<u64, ResourceUsage>) -> NodeBarriers<'d> {
     let mut node_barrier = NodeBarriers {
         image_barriers: vec![],
         buffer_barriers: vec![]
@@ -350,7 +350,7 @@ fn link_graphics_node<'d, 'a>(node: &'d mut GraphicsPassNode, usage_cache: &'a m
     node_barrier
 }
 
-fn link_copy_node<'d, 'a>(node: &'d mut CopyPassNode, usage_cache: &'a mut HashMap<u64, ResourceUsage>) -> NodeBarriers<'d> {
+fn link_copy_node<'d, 'a>(node: &'a mut CopyPassNode<'d>, usage_cache: &'a mut HashMap<u64, ResourceUsage>) -> NodeBarriers<'d> {
     let mut node_barrier = NodeBarriers {
         image_barriers: vec![],
         buffer_barriers: vec![]
@@ -433,7 +433,7 @@ fn link_copy_node<'d, 'a>(node: &'d mut CopyPassNode, usage_cache: &'a mut HashM
     node_barrier
 }
 
-fn link_compute_node<'d, 'a>(node: &'d mut ComputePassNode, usage_cache: &'a mut HashMap<u64, ResourceUsage>) -> NodeBarriers<'d> {
+fn link_compute_node<'d, 'a>(node: &'a mut ComputePassNode<'d>, usage_cache: &'a mut HashMap<u64, ResourceUsage>) -> NodeBarriers<'d> {
     let mut node_barrier = NodeBarriers {
         image_barriers: vec![],
         buffer_barriers: vec![]
@@ -446,7 +446,7 @@ fn link_compute_node<'d, 'a>(node: &'d mut ComputePassNode, usage_cache: &'a mut
     node_barrier
 }
 
-fn link_present_node<'d, 'a>(node: &'d mut PresentPassNode, usage_cache: &'a mut HashMap<u64, ResourceUsage>) -> NodeBarriers<'d> {
+fn link_present_node<'d, 'a>(node: &'a mut PresentPassNode<'d>, usage_cache: &'a mut HashMap<u64, ResourceUsage>) -> NodeBarriers<'d> {
     let mut node_barrier = NodeBarriers {
         image_barriers: vec![],
         buffer_barriers: vec![]
@@ -515,8 +515,8 @@ impl Drop for VulkanFrameGraph<'_> {
 
 impl<'d> VulkanFrameGraph<'d> {
     pub fn new(
-        renderpass_manager: VulkanRenderpassManager,
-        pipeline_manager: VulkanPipelineManager) -> VulkanFrameGraph<'d> {
+        renderpass_manager: VulkanRenderpassManager<'d>,
+        pipeline_manager: VulkanPipelineManager<'d>) -> VulkanFrameGraph<'d> {
 
         VulkanFrameGraph {
             pipeline_manager,
@@ -630,7 +630,9 @@ impl<'d> VulkanFrameGraph<'d> {
         // we can just iterate over the sorted nodes to do this
         let mut usage_cache: HashMap<u64, ResourceUsage> = HashMap::new();
         for node_index in sorted_nodes {
-            if let Some(node) = nodes.node_weight_mut(*node_index) {
+            let mut node_borrow = nodes.node_weight_mut(*node_index);
+            // if let Some(node) = nodes.node_weight_mut(*node_index) {
+            if let Some(node) = node_borrow {
                 let node_barrier = match node {
                     PassType::Graphics(gn) => {
                         link_graphics_node(gn, &mut usage_cache)
@@ -645,10 +647,10 @@ impl<'d> VulkanFrameGraph<'d> {
                         link_present_node(pn, &mut usage_cache)
                     }
                 };
-
-                current_list.nodes.push(*node_index);
-
-                self.node_barriers.insert(*node_index, node_barrier);
+            //
+            //     current_list.nodes.push(*node_index);
+            //
+            //     self.node_barriers.insert(*node_index, node_barrier);
             }
         }
 
@@ -675,7 +677,7 @@ impl<'d> VulkanFrameGraph<'d> {
         &mut self,
         descriptor_sets: &mut Vec<vk::DescriptorSet>,
         descriptor_pool: vk::DescriptorPool,
-        device: &DeviceInterface,
+        device: &'d DeviceInterface,
         command_buffer: vk::CommandBuffer,
         node: &mut ComputePassNode) {
 
@@ -738,13 +740,13 @@ impl<'d> VulkanFrameGraph<'d> {
     }
 
     #[tracing::instrument]
-    fn execute_graphics_node(
+    fn execute_graphics_node<'a>(
         &mut self,
         descriptor_sets: &mut Vec<vk::DescriptorSet>,
         descriptor_pool: vk::DescriptorPool,
-        render_context: &mut VulkanRenderContext,
+        render_context: &'a mut VulkanRenderContext<'d>,
         command_buffer: &vk::CommandBuffer,
-        node: &mut GraphicsPassNode) {
+        node: &mut GraphicsPassNode<'d>) where 'a : 'd {
 
         let active_pipeline = &node.pipeline_description;
         if let Some(pipeline_description) = active_pipeline {

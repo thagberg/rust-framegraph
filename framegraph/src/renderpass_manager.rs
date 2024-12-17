@@ -50,8 +50,10 @@ impl<'device> VulkanRenderpassManager<'device> {
         pass_name: &str,
         color_attachments: &[AttachmentReference<'device>],
         depth_attachment: &Option<AttachmentReference<'device>>,
-        device: &DeviceInterface) -> Arc<Mutex<DeviceRenderpass<'device>>> {
+        device: &'device DeviceInterface) -> Arc<Mutex<DeviceRenderpass<'device>>> {
         enter_span!(tracing::Level::TRACE, "Create or Fetch Renderpass");
+
+        // TODO PERF: I don't think we need to wrap DeviceRenderpass with a Mutex
 
         let renderpass = self.renderpass_map.entry(pass_name.to_string()).or_insert_with_key(|_| {
             // no cached renderpass found, create it and cache it now

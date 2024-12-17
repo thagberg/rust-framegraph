@@ -48,7 +48,7 @@ impl PassNode for ComputePassNode<'_> {
         let mut reads: Vec<u64> = Vec::new();
         reads.reserve(self.inputs.len());
         for input in &self.inputs {
-            reads.push(input.resource.borrow().get_handle());
+            reads.push(input.resource.lock().unwrap().get_handle());
         }
         reads
     }
@@ -57,7 +57,7 @@ impl PassNode for ComputePassNode<'_> {
         let mut writes: Vec<u64> = Vec::new();
         writes.reserve(self.outputs.len());
         for output in &self.outputs {
-            writes.push(output.resource.borrow().get_handle());
+            writes.push(output.resource.lock().unwrap().get_handle());
         }
         writes
     }

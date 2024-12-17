@@ -48,6 +48,14 @@ pub struct PipelineDescription<'a>
     fragment_shader: Arc<Mutex<Shader<'a>>>
 }
 
+/// Must impl Sync to allow vk::PipelineVertexInputStateCreateInfo to be shared between threads
+/// due to *const c_void member
+unsafe impl Sync for PipelineDescription<'_> {}
+
+/// Must impl Send to allow vk::PipelineVertexInputStateCreateInfo to be shared between threads
+/// due to *const c_void member
+unsafe impl Send for PipelineDescription<'_> {}
+
 impl Hash for PipelineDescription<'_>
 {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -57,7 +65,7 @@ impl Hash for PipelineDescription<'_>
     }
 }
 
-impl PipelineDescription<'_>
+impl<'a> PipelineDescription<'a>
 {
     pub fn new(
         vertex_input: vk::PipelineVertexInputStateCreateInfo,
@@ -66,8 +74,8 @@ impl PipelineDescription<'_>
         depth_stencil: DepthStencilType,
         blend: BlendType,
         name: &str,
-        vertex_shader: Arc<Mutex<Shader>>,
-        fragment_shader: Arc<Mutex<Shader>>) -> Self
+        vertex_shader: Arc<Mutex<Shader<'a>>>,
+        fragment_shader: Arc<Mutex<Shader<'a>>>) -> Self
     {
         PipelineDescription {
             vertex_input,
@@ -348,8 +356,8 @@ impl<'device> VulkanPipelineManager<'device> {
 
     pub fn create_compute_pipeline(
         &mut self,
-        device: &DeviceInterface,
-        pipeline_description: &ComputePipelineDescription) -> Arc<Mutex<Pipeline>> {
+        device: &'device DeviceInterface,
+        pipeline_description: &ComputePipelineDescription) -> Arc<Mutex<Pipeline<'device>>> {
 
         let mut pipeline_hasher = DefaultHasher::new();
         pipeline_description.hash(&mut pipeline_hasher);
@@ -415,9 +423,9 @@ impl<'device> VulkanPipelineManager<'device> {
 
     pub fn create_pipeline(
         &mut self,
-        device: &DeviceInterface,
+        device: &'device DeviceInterface,
         render_pass: vk::RenderPass,
-        pipeline_description: &PipelineDescription) -> Arc<Mutex<Pipeline>> {
+        pipeline_description: &PipelineDescription) -> Arc<Mutex<Pipeline<'device>>> {
         enter_span!(tracing::Level::TRACE, "Create or fetch Pipeline");
 
         // TODO: define a PipelineKey type and require the consumer to provide it here

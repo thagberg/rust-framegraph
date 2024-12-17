@@ -49,7 +49,7 @@ impl PassNode for PresentPassNode<'_> {
     }
 
     fn get_reads(&self) -> Vec<u64> {
-        vec![self.swapchain_image.borrow().get_handle()]
+        vec![self.swapchain_image.lock().unwrap().get_handle()]
     }
 
     fn get_writes(&self) -> Vec<u64> {

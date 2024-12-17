@@ -92,10 +92,10 @@ impl<'device> GraphicsPassNode<'device>  {
         }
     }
 
-    pub fn get_pipeline_description(&self) -> &Option<Arc<PipelineDescription>> { &self.pipeline_description }
+    pub fn get_pipeline_description(&self) -> &Option<Arc<PipelineDescription<'device>>> { &self.pipeline_description }
 
     // pub fn set_framebuffer(&mut self, framebuffer: DeviceFramebuffer) {
-    pub fn set_framebuffer(passnode: &mut Self, framebuffer: DeviceFramebuffer) {
+    pub fn set_framebuffer(passnode: &mut Self, framebuffer: DeviceFramebuffer<'device>) {
         passnode.framebuffer = Some(framebuffer);
     }
 
@@ -107,27 +107,27 @@ impl<'device> GraphicsPassNode<'device>  {
         }
     }
 
-    pub fn get_inputs(&self) -> &[ResourceBinding] {
+    pub fn get_inputs(&self) -> &[ResourceBinding<'device>] {
         &self.inputs
     }
 
-    pub fn get_inputs_mut(&mut self) -> &mut [ResourceBinding] {
+    pub fn get_inputs_mut(&mut self) -> &mut [ResourceBinding<'device>] {
         &mut self.inputs
     }
 
-    pub fn get_outputs(&self) -> &[ResourceBinding] {
+    pub fn get_outputs(&self) -> &[ResourceBinding<'device>] {
         &self.outputs
     }
 
-    pub fn get_outputs_mut(&mut self) -> &mut [ResourceBinding] {
+    pub fn get_outputs_mut(&mut self) -> &mut [ResourceBinding<'device>] {
         &mut self.outputs
     }
 
-    pub fn get_rendertargets_mut(&mut self) -> &mut [AttachmentReference] {
+    pub fn get_rendertargets_mut(&mut self) -> &mut [AttachmentReference<'device>] {
         &mut self.render_targets
     }
 
-    pub fn get_depth_mut(&mut self) -> &mut Option<AttachmentReference> {
+    pub fn get_depth_mut(&mut self) -> &mut Option<AttachmentReference<'device>> {
         &mut self.depth_target
     }
 
@@ -142,32 +142,32 @@ impl<'device> GraphicsPassNode<'device>  {
 }
 
 impl<'device> PassNodeBuilder<'device> {
-    pub fn pipeline_description(mut self, pipeline_description: Arc<PipelineDescription>) -> Self {
+    pub fn pipeline_description(mut self, pipeline_description: Arc<PipelineDescription<'device>>) -> Self {
         self.pipeline_description = Some(pipeline_description);
         self
     }
 
-    pub fn tag(mut self, tagged_resource: Arc<Mutex<DeviceResource>>) -> Self {
+    pub fn tag(mut self, tagged_resource: Arc<Mutex<DeviceResource<'device>>>) -> Self {
         self.tagged_resources.push(tagged_resource);
         self
     }
 
-    pub fn read(mut self, input: ResourceBinding) -> Self {
+    pub fn read(mut self, input: ResourceBinding<'device>) -> Self {
         self.inputs.push(input);
         self
     }
 
-    pub fn write(mut self, output: ResourceBinding) -> Self {
+    pub fn write(mut self, output: ResourceBinding<'device>) -> Self {
         self.outputs.push(output);
         self
     }
 
-    pub fn render_target(mut self, render_target: AttachmentReference) -> Self {
+    pub fn render_target(mut self, render_target: AttachmentReference<'device>) -> Self {
         self.render_targets.push(render_target);
         self
     }
 
-    pub fn depth_target(mut self, depth_target: AttachmentReference) -> Self {
+    pub fn depth_target(mut self, depth_target: AttachmentReference<'device>) -> Self {
         self.depth_target = Some(depth_target);
         self
     }

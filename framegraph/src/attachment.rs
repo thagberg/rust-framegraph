@@ -15,8 +15,9 @@ impl<'a> AttachmentReference<'a> {
         resource_image: Arc<Mutex<DeviceResource<'a>>>,
         samples: vk::SampleCountFlags) -> AttachmentReference<'a> {
 
-        assert!(resource_image.borrow().resource_type.is_some(), "AttachmentResource: resource_image must be valid DeviceResource");
-        let resource_ref = resource_image.borrow();
+        assert!(resource_image.lock().unwrap().resource_type.is_some(), "AttachmentResource: resource_image must be valid DeviceResource");
+        let resource_ref = resource_image.lock().unwrap();
+        let format = resource_ref.get_image().format;
         let resolved_resource = resource_ref.resource_type.as_ref().expect("AttachmentResource: resource_image must be valid resource");
         if let ResourceType::Buffer(_) = &resolved_resource {
             assert!(false, "AttachmentResource: resource_image must be an Image type");
@@ -24,7 +25,7 @@ impl<'a> AttachmentReference<'a> {
 
         AttachmentReference {
             resource_image: resource_image.clone(),
-            format: resource_image.borrow().get_image().format,
+            format,
             samples,
             layout: vk::ImageLayout::UNDEFINED
         }

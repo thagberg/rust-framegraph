@@ -127,6 +127,14 @@ pub struct Shader<'a>
     pub descriptor_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>>
 }
 
+/// Must impl Sync to allow vk::DescriptorSetLayoutBinding to be shared between threads
+/// due to *const c_void member
+unsafe impl Sync for Shader<'_> {}
+
+/// Must impl Sync to allow vk::DescriptorSetLayoutBinding to be shared between threads
+/// due to *const c_void member
+unsafe impl Send for Shader<'_> {}
+
 impl Shader<'_>
 {
     pub fn new(
@@ -162,7 +170,7 @@ impl<'device> ShaderManager<'device>
         }
     }
 
-    pub fn load_shader(&mut self, device: &DeviceInterface, file_name: &str) -> Arc<Mutex<Shader>>
+    pub fn load_shader(&mut self, device: &'device DeviceInterface, file_name: &str) -> Arc<Mutex<Shader<'device>>>
     {
         // TODO: can this return a &ShaderModule without a double mutable borrow error in PipelineManager::create_pipeline?
         //let full_path = concat!(concat!(env!("OUT_DIR"), "/shaders/"), file_name);
