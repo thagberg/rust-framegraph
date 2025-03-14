@@ -26,13 +26,13 @@ pub struct AttachmentInfo {
 }
 
 pub struct VulkanRenderpassManager<'device> {
-    renderpass_map: HashMap<String, Arc<Mutex<DeviceRenderpass<'device>>>>
+    renderpass_map: Mutex<HashMap<String, Arc<Mutex<DeviceRenderpass<'device>>>>>
 }
 
 impl Debug for VulkanRenderpassManager<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VulkanRenderpassManager")
-            .field("num renderpasses", &self.renderpass_map.len())
+            .field("num renderpasses", &self.renderpass_map.lock().unwrap().len())
             .finish()
     }
 }
@@ -41,12 +41,12 @@ impl<'device> VulkanRenderpassManager<'device> {
 
     pub fn new() -> Self {
         VulkanRenderpassManager {
-            renderpass_map: HashMap::new()
+            renderpass_map: Mutex::new(HashMap::new())
         }
     }
 
     pub fn create_or_fetch_renderpass(
-        &mut self,
+        &self,
         pass_name: &str,
         color_attachments: &[AttachmentReference<'device>],
         depth_attachment: &Option<AttachmentReference<'device>>,
@@ -55,7 +55,9 @@ impl<'device> VulkanRenderpassManager<'device> {
 
         // TODO PERF: I don't think we need to wrap DeviceRenderpass with a Mutex
 
-        let renderpass = self.renderpass_map.entry(pass_name.to_string()).or_insert_with_key(|_| {
+        let renderpass = self.renderpass_map.lock().unwrap()
+            .entry(pass_name.to_string()).or_insert_with_key(|_| {
+
             // no cached renderpass found, create it and cache it now
             let mut attachment_descs: Vec<vk::AttachmentDescription> = Vec::new();
             let mut color_attachment_refs: Vec<vk::AttachmentReference> = Vec::new();

@@ -502,7 +502,7 @@ fn link_present_node<'d, 'a>(node: &'a mut PresentPassNode<'d>, usage_cache: &'a
 
 #[derive(Debug)]
 pub struct VulkanFrameGraph<'d> {
-    pipeline_manager: VulkanPipelineManager<'d>,
+    pipeline_manager: Mutex<VulkanPipelineManager<'d>>,
     renderpass_manager: VulkanRenderpassManager<'d>,
     node_barriers: HashMap<NodeIndex, NodeBarriers<'d>>
 }
@@ -514,13 +514,11 @@ impl Drop for VulkanFrameGraph<'_> {
 }
 
 impl<'d> VulkanFrameGraph<'d> {
-    pub fn new(
-        renderpass_manager: VulkanRenderpassManager<'d>,
-        pipeline_manager: VulkanPipelineManager<'d>) -> VulkanFrameGraph<'d> {
+    pub fn new() -> VulkanFrameGraph<'d> {
 
         VulkanFrameGraph {
-            pipeline_manager,
-            renderpass_manager,
+            pipeline_manager: Mutex::new(VulkanPipelineManager::new()),
+            renderpass_manager: VulkanRenderpassManager::new(),
             node_barriers: HashMap::new()
         }
     }
@@ -682,7 +680,7 @@ impl<'d> VulkanFrameGraph<'d> {
         node: &mut ComputePassNode) {
 
         // get compute pipeline from node's pipeline description
-        let pipeline = self.pipeline_manager.create_compute_pipeline(
+        let pipeline = self.pipeline_manager.lock().unwrap().create_compute_pipeline(
             device,
             &node.pipeline_description);
 
@@ -741,7 +739,7 @@ impl<'d> VulkanFrameGraph<'d> {
 
     #[tracing::instrument]
     fn execute_graphics_node<'a>(
-        &mut self,
+        &self,
         descriptor_sets: &mut Vec<vk::DescriptorSet>,
         descriptor_pool: vk::DescriptorPool,
         render_context: &'a mut VulkanRenderContext<'d>,
@@ -790,7 +788,7 @@ impl<'d> VulkanFrameGraph<'d> {
                     render_context.get_device());
                 let renderpass_ref = renderpass.lock().unwrap();
 
-                let pipeline = self.pipeline_manager.create_pipeline(
+                let pipeline = self.pipeline_manager.lock().unwrap().create_pipeline(
                     render_context.get_device(),
                     renderpass_ref.renderpass.clone(),
                     pipeline_description);
@@ -989,9 +987,11 @@ impl<'d> FrameGraph<'d> for VulkanFrameGraph<'d> {
         // excute nodes
         // let sorted_nodes = &frame.sorted_nodes;
         command_lists.par_iter().for_each(|command_list| {
+
             enter_span!(tracing::Level::TRACE, "Filling command lists");
             for index in &command_list.nodes {
                 enter_span!(tracing::Level::TRACE, "Node", "{}", index.index());
+                // Gets mutable ref of all nodes for each parallel commandlist?
                 let nodes = &mut frame.nodes;
                 let node = nodes.node_weight_mut(*index).unwrap();
                 render_context.get_device().push_debug_label(*command_buffer, node.get_name());
