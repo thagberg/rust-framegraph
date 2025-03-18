@@ -20,7 +20,7 @@ pub trait FrameGraph<'a>
 
     fn end(
         &mut self,
-        frame: &mut Frame,
-        render_context: &mut Self::RC,
+        frame: &mut Frame<'a>,
+        render_context: &'a mut Self::RC,
         command_buffer: &Self::CB);
 }

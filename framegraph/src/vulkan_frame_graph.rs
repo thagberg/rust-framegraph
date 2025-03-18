@@ -23,9 +23,9 @@ use crate::renderpass_manager::VulkanRenderpassManager;
 
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use ash::vk::DeviceSize;
 use petgraph::data::DataMap;
 use petgraph::visit::Dfs;
@@ -531,12 +531,12 @@ impl<'d> VulkanFrameGraph<'d> {
     /// to elide any node which does not contribute to the root
     /// node (which is identified by the root_index)
     #[tracing::instrument]
-    fn compile(&mut self, nodes: &mut StableDiGraph<PassType, u32>, root_index: NodeIndex) -> Vec<NodeIndex>{
+    fn compile(&mut self, nodes: &mut StableDiGraph<RwLock<PassType>, u32>, root_index: NodeIndex) -> Vec<NodeIndex>{
         // create input/output maps to detect graph edges
         let mut input_map = MultiMap::new();
         let mut output_map = MultiMap::new();
         for node_index in nodes.node_indices() {
-            let node = &nodes[node_index];
+            let node = &nodes[node_index].read().unwrap();
             for read in node.get_reads() {
                 input_map.insert(read, node_index);
             }
@@ -590,7 +590,7 @@ impl<'d> VulkanFrameGraph<'d> {
                     // DFS requires we order nodes as input -> output, but for sorting we want output -> input
                     sorted_list.reverse();
                     for i in &sorted_list {
-                        log::trace!(target: "framegraph", "Sorted node: {:?}", nodes.node_weight(*i).unwrap().get_name())
+                        log::trace!(target: "framegraph", "Sorted node: {:?}", nodes.node_weight(*i).unwrap().read().unwrap().get_name())
                     }
                     sorted_nodes = sorted_list;
                 },
@@ -617,7 +617,7 @@ impl<'d> VulkanFrameGraph<'d> {
     #[tracing::instrument]
     fn link(
         &mut self,
-        nodes: &mut StableDiGraph<PassType, u32>,
+        nodes: &mut StableDiGraph<RwLock<PassType>, u32>,
         sorted_nodes: &[NodeIndex]) -> Vec<CommandList> {
 
         let mut command_lists: Vec<CommandList> = Vec::new();
@@ -628,10 +628,13 @@ impl<'d> VulkanFrameGraph<'d> {
         // we can just iterate over the sorted nodes to do this
         let mut usage_cache: HashMap<u64, ResourceUsage> = HashMap::new();
         for node_index in sorted_nodes {
-            let mut node_borrow = nodes.node_weight_mut(*node_index);
+            // let mut node_borrow = nodes.node_weight_mut(*node_index);
+            let node_borrow = nodes.node_weight(*node_index);
+            // let node_lock = nodes.node_weight(*node_index);
             // if let Some(node) = nodes.node_weight_mut(*node_index) {
-            if let Some(node) = node_borrow {
-                let node_barrier = match node {
+            if let Some(node_lock) = node_borrow {
+                let mut node = node_lock.write().unwrap();
+                let node_barrier = match node.deref_mut() {
                     PassType::Graphics(gn) => {
                         link_graphics_node(gn, &mut usage_cache)
                     }
@@ -658,10 +661,10 @@ impl<'d> VulkanFrameGraph<'d> {
 
     #[tracing::instrument]
     fn execute_copy_node(
-        &mut self,
-        descriptor_sets: &mut Vec<vk::DescriptorSet>,
+        &self,
+        descriptor_sets: Arc<RwLock<Vec<vk::DescriptorSet>>>,
         descriptor_pool: vk::DescriptorPool,
-        render_context: &mut VulkanRenderContext,
+        render_context: &VulkanRenderContext,
         command_buffer: &vk::CommandBuffer,
         node: &mut CopyPassNode) {
 
@@ -672,8 +675,8 @@ impl<'d> VulkanFrameGraph<'d> {
 
     #[tracing::instrument]
     fn execute_compute_node(
-        &mut self,
-        descriptor_sets: &mut Vec<vk::DescriptorSet>,
+        &self,
+        descriptor_sets: Arc<RwLock<Vec<vk::DescriptorSet>>>,
         descriptor_pool: vk::DescriptorPool,
         device: &'d DeviceInterface,
         command_buffer: vk::CommandBuffer,
@@ -740,9 +743,9 @@ impl<'d> VulkanFrameGraph<'d> {
     #[tracing::instrument]
     fn execute_graphics_node<'a>(
         &self,
-        descriptor_sets: &mut Vec<vk::DescriptorSet>,
+        descriptor_sets: Arc<RwLock<Vec<vk::DescriptorSet>>>,
         descriptor_pool: vk::DescriptorPool,
-        render_context: &'a mut VulkanRenderContext<'d>,
+        render_context: &'a VulkanRenderContext<'d>,
         command_buffer: &vk::CommandBuffer,
         node: &mut GraphicsPassNode<'d>) where 'a : 'd {
 
@@ -886,7 +889,9 @@ impl<'d> VulkanFrameGraph<'d> {
                     }
                 }
 
-                descriptor_sets.append(&mut new_descriptor_sets);
+                {
+                    descriptor_sets.write().unwrap().append(&mut new_descriptor_sets);
+                }
             }
 
         }
@@ -945,8 +950,8 @@ impl<'d> FrameGraph<'d> for VulkanFrameGraph<'d> {
 
     fn end(
         &mut self,
-        frame: &mut Frame,
-        render_context: &mut Self::RC,
+        frame: &mut Frame<'d>,
+        render_context: &'d mut Self::RC,
         command_buffer: &Self::CB) {
 
         let span = span!(Level::TRACE, "Framegraph End");
@@ -989,11 +994,15 @@ impl<'d> FrameGraph<'d> for VulkanFrameGraph<'d> {
         command_lists.par_iter().for_each(|command_list| {
 
             enter_span!(tracing::Level::TRACE, "Filling command lists");
+            // let nodes = &mut frame.nodes;
+            let descriptor_sets = frame.descriptor_sets.clone();
+            let descriptor_pool = frame.descriptor_pool.clone();
+            let nodes = &frame.nodes;
             for index in &command_list.nodes {
                 enter_span!(tracing::Level::TRACE, "Node", "{}", index.index());
                 // Gets mutable ref of all nodes for each parallel commandlist?
-                let nodes = &mut frame.nodes;
-                let node = nodes.node_weight_mut(*index).unwrap();
+                // let node = nodes.node_weight_mut(*index).unwrap();
+                let mut node = nodes.node_weight(*index).unwrap().write().unwrap();
                 render_context.get_device().push_debug_label(*command_buffer, node.get_name());
 
                 // Prepare and execute resource barriers
@@ -1081,17 +1090,17 @@ impl<'d> FrameGraph<'d> for VulkanFrameGraph<'d> {
                     let node_name = node.get_name();
                     trace!(target: "framegraph", "Executing node: {node_name}");
                 }
-                match node {
+                match node.deref_mut() {
                     PassType::Graphics(graphics_node) => {
-                        self.execute_graphics_node(&mut frame.descriptor_sets, frame.descriptor_pool, render_context, command_buffer, graphics_node);
+                        self.execute_graphics_node(descriptor_sets.clone(), descriptor_pool, render_context, command_buffer, graphics_node);
                     },
                     PassType::Copy(copy_node) => {
-                        self.execute_copy_node(&mut frame.descriptor_sets, frame.descriptor_pool, render_context, command_buffer, copy_node);
+                        self.execute_copy_node(descriptor_sets.clone(), descriptor_pool, render_context, command_buffer, copy_node);
                     },
                     PassType::Compute(compute_node) => {
                         self.execute_compute_node(
-                            &mut frame.descriptor_sets,
-                            frame.descriptor_pool,
+                            descriptor_sets.clone(),
+                            descriptor_pool,
                             render_context.get_device(),
                             *command_buffer,
                             compute_node);

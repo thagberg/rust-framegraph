@@ -39,7 +39,7 @@ impl<'d> ComputePassNode<'d> {
     }
 }
 
-impl PassNode for ComputePassNode<'_> {
+impl<'d> PassNode<'d> for ComputePassNode<'d> {
     fn get_name(&self) -> &str {
        &self.name
     }
@@ -78,12 +78,12 @@ impl<'d> ComputePassNodeBuilder<'d> {
         self
     }
 
-    pub fn input(mut self, input: ResourceBinding) -> Self {
+    pub fn input(mut self, input: ResourceBinding<'d>) -> Self {
         self.inputs.push(input);
         self
     }
 
-    pub fn output(mut self, output: ResourceBinding) -> Self {
+    pub fn output(mut self, output: ResourceBinding<'d>) -> Self {
         self.outputs.push(output);
         self
     }

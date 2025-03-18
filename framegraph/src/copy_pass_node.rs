@@ -35,7 +35,7 @@ impl<'d> CopyPassNode<'d> {
     }
 }
 
-impl PassNode for CopyPassNode<'_> {
+impl<'d> PassNode<'d> for CopyPassNode<'d> {
     fn get_name(&self) -> &str {
         &self.name
     }

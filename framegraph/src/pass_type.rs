@@ -14,22 +14,23 @@ pub enum PassType<'d> {
 }
 
 // TODO: this could definitely be handled as a macro
-impl Deref for PassType<'_> {
-    type Target = dyn PassNode;
+impl<'d> Deref for PassType<'d> {
+    type Target = dyn PassNode<'d> + 'd;
 
-    fn deref(&self) -> &Self::Target {
+    // fn deref(& self) -> &Self::Target {
+    fn deref(& self) -> &(dyn PassNode<'d> + 'd) {
         match self {
             PassType::Graphics(gn) => {
-                gn as &dyn PassNode
+                gn
             },
             PassType::Copy(cn) => {
-                cn as &dyn PassNode
+                cn
             },
             PassType::Compute(cn) => {
-                cn as &dyn PassNode
+                cn
             },
             PassType::Present(pn) => {
-                pn as &dyn PassNode
+                pn
             }
         }
     }

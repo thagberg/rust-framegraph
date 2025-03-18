@@ -8,7 +8,7 @@ Fn(
 )
 ) + Sync + Send;
 
-pub trait PassNode {
+pub trait PassNode<'d> {
     fn get_name(&self) -> &str;
 
     fn get_reads(&self) -> Vec<u64>;

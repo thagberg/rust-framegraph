@@ -36,7 +36,7 @@ pub struct PassNodeBuilder<'device> {
     name: String
 }
 
-impl PassNode for GraphicsPassNode<'_>  {
+impl<'d> PassNode<'d> for GraphicsPassNode<'d>  {
 
     fn get_name(&self) -> &str {
         &self.name

@@ -43,7 +43,7 @@ impl<'a> PresentPassNodeBuilder<'a> {
     }
 }
 
-impl PassNode for PresentPassNode<'_> {
+impl<'d> PassNode<'d> for PresentPassNode<'d> {
     fn get_name(&self) -> &str {
         &self.name
     }

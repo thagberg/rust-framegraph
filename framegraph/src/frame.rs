@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
+use std::sync::{Arc, RwLock};
 use ash::vk;
 use petgraph::stable_graph::{StableDiGraph, NodeIndex};
 use api_types::device::interface::DeviceInterface;
@@ -15,13 +16,13 @@ enum FrameState {
 }
 
 pub struct Frame<'a> {
-    pub nodes: StableDiGraph<PassType<'a>, u32>,
+    pub nodes: StableDiGraph<RwLock<PassType<'a>>, u32>,
     root_index: Option<NodeIndex>,
     state: FrameState,
     pub sorted_nodes: Vec<NodeIndex>,
     device: &'a DeviceInterface,
     pub(crate) descriptor_pool: vk::DescriptorPool,
-    pub descriptor_sets: Vec<vk::DescriptorSet>
+    pub descriptor_sets: Arc<RwLock<Vec<vk::DescriptorSet>>>
 }
 
 impl Debug for Frame<'_> {
@@ -36,9 +37,10 @@ impl Drop for Frame<'_> {
     fn drop(&mut self) {
         log::trace!(target: "frame", "Dropping frame");
         unsafe {
+            let descriptor_sets = self.descriptor_sets.read().unwrap();
             self.device.get().free_descriptor_sets(
                 self.descriptor_pool,
-                &self.descriptor_sets)
+                &descriptor_sets)
                 .expect("Failed to free Descriptor Sets for Frame");
         }
     }
@@ -55,16 +57,16 @@ impl<'a> Frame<'a> {
             sorted_nodes: Vec::new(),
             device,
             descriptor_pool,
-            descriptor_sets: Vec::new()
+            descriptor_sets: Arc::new(RwLock::new(Vec::new()))
         }
     }
 
-    pub fn add_node(&mut self, node: PassType) -> NodeIndex {
+    pub fn add_node(&mut self, node: PassType<'a>) -> NodeIndex {
         assert!(self.state == FrameState::Started, "Frame must be started before adding nodes");
-        self.nodes.add_node(node)
+        self.nodes.add_node(RwLock::new(node))
     }
 
-    pub fn start(&mut self, root_node: PassType) {
+    pub fn start(&mut self, root_node: PassType<'a>) {
         assert!(self.state == FrameState::New, "Frame has already been started");
         self.state = FrameState::Started;
         self.root_index = Some(self.add_node(root_node));
