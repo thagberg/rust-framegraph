@@ -1,9 +1,11 @@
 use std::fmt::{Debug};
 use std::sync::{Arc, Mutex};
+use api_types::device::interface::DeviceInterface;
 use ash::vk;
 
 pub type FillCallback = dyn (
 Fn(
+    &DeviceInterface,
     vk::CommandBuffer
 )
 ) + Sync + Send;

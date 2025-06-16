@@ -670,6 +670,7 @@ impl<'d> VulkanFrameGraph<'d> {
 
         // Copy node is ez-pz
         node.execute(
+            render_context.get_device(),
             *command_buffer);
     }
 
@@ -737,6 +738,7 @@ impl<'d> VulkanFrameGraph<'d> {
 
         // execute node
         node.execute(
+            device,
             command_buffer);
     }
 
@@ -915,10 +917,11 @@ impl<'d> VulkanFrameGraph<'d> {
                         std::slice::from_ref(scissor));
                 }
             }
+
+            // execute this node
+            node.execute(device, *command_buffer);
         }
 
-        // execute this node
-        node.execute(*command_buffer);
 
         // if we began a render pass and bound a pipeline for this node, end it
         if active_pipeline.is_some() {

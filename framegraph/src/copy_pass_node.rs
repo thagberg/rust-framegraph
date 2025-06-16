@@ -2,6 +2,7 @@ use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Mutex};
 use ash::vk::CommandBuffer;
 use api_types::device::resource::DeviceResource;
+use api_types::device::interface::DeviceInterface;
 use context::vulkan_render_context::VulkanRenderContext;
 use crate::pass_node::{FillCallback, PassNode};
 
@@ -30,8 +31,14 @@ impl<'d> CopyPassNode<'d> {
         }
     }
 
-    pub fn execute(&self, command_buffer: CommandBuffer) {
-        (self.fill_callback)(command_buffer);
+    pub fn execute(
+        &self, 
+        device: &DeviceInterface,
+        command_buffer: CommandBuffer) {
+        (self.fill_callback)(
+            device,
+            command_buffer
+        );
     }
 }
 

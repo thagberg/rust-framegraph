@@ -1,5 +1,7 @@
 use std::fmt::{Debug, Formatter};
 use ash::vk::CommandBuffer;
+
+use api_types::device::interface::DeviceInterface;
 use crate::binding::ResourceBinding;
 use crate::pass_node::{FillCallback, PassNode};
 use crate::pipeline::ComputePipelineDescription;
@@ -33,8 +35,10 @@ impl<'d> ComputePassNode<'d> {
 
     pub fn execute(
         &self,
+        device: &DeviceInterface,
         command_buffer: CommandBuffer) {
         (self.fill_callback)(
+            device,
             command_buffer);
     }
 }

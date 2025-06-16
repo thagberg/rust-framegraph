@@ -1,5 +1,7 @@
 use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Mutex};
+use api_types::device;
+use api_types::device::interface::DeviceInterface;
 use ash::vk;
 use api_types::device::resource::DeviceResource;
 use api_types::framebuffer::DeviceFramebuffer;
@@ -133,9 +135,11 @@ impl<'device> GraphicsPassNode<'device>  {
 
     pub fn execute(
         &self,
+        device: &DeviceInterface,
         command_buffer: vk::CommandBuffer)
     {
         (self.fill_callback)(
+            device,
             command_buffer);
     }
 
