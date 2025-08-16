@@ -20,7 +20,7 @@ pub struct GraphicsPassNode<'device> {
     pub framebuffer: Option<DeviceFramebuffer<'device>>,
     pub viewport: Option<vk::Viewport>,
     pub scissor: Option<vk::Rect2D>,
-    pub fill_callback: Box<FillCallback>,
+    pub fill_callback: Box<FillCallback<'device>>,
     name: String
 }
 
@@ -32,7 +32,7 @@ pub struct PassNodeBuilder<'device> {
     inputs: Vec<ResourceBinding<'device>>,
     outputs: Vec<ResourceBinding<'device>>,
     tagged_resources: Vec<Arc<Mutex<DeviceResource<'device>>>>,
-    fill_callback: Option<Box<FillCallback>>,
+    fill_callback: Option<Box<FillCallback<'device>>>,
     viewport: Option<vk::Viewport>,
     scissor: Option<vk::Rect2D>,
     name: String
@@ -176,7 +176,7 @@ impl<'device> PassNodeBuilder<'device> {
         self
     }
 
-    pub fn fill_commands(mut self, fill_callback: Box<FillCallback>) -> Self
+    pub fn fill_commands(mut self, fill_callback: Box<FillCallback<'device>>) -> Self
     {
         self.fill_callback = Some(fill_callback);
         self

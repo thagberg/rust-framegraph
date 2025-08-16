@@ -9,7 +9,7 @@ use crate::pipeline::ComputePipelineDescription;
 pub struct ComputePassNode<'d> {
     pub inputs: Vec<ResourceBinding<'d>>,
     pub outputs: Vec<ResourceBinding<'d>>,
-    pub fill_callback: Box<FillCallback>,
+    pub fill_callback: Box<FillCallback<'d>>,
     pub pipeline_description: ComputePipelineDescription,
     name: String
 }
@@ -73,7 +73,7 @@ pub struct ComputePassNodeBuilder<'d> {
     inputs: Vec<ResourceBinding<'d>>,
     outputs: Vec<ResourceBinding<'d>>,
     pipeline_description: Option<ComputePipelineDescription>,
-    fill_callback: Option<Box<FillCallback>>,
+    fill_callback: Option<Box<FillCallback<'d>>>,
 }
 
 impl<'d> ComputePassNodeBuilder<'d> {
@@ -92,7 +92,7 @@ impl<'d> ComputePassNodeBuilder<'d> {
         self
     }
 
-    pub fn fill_commands(mut self, fill_callback: Box<FillCallback>) -> Self {
+    pub fn fill_commands(mut self, fill_callback: Box<FillCallback<'d>>) -> Self {
         self.fill_callback = Some(fill_callback);
         self
     }

@@ -9,7 +9,7 @@ use crate::pass_node::{FillCallback, PassNode};
 pub struct CopyPassNode<'d> {
     pub copy_sources: Vec<Arc<Mutex<DeviceResource<'d>>>>,
     pub copy_dests: Vec<Arc<Mutex<DeviceResource<'d>>>>,
-    pub fill_callback: Box<FillCallback>,
+    pub fill_callback: Box<FillCallback<'d>>,
     name: String
 }
 
@@ -72,7 +72,7 @@ impl<'d> PassNode<'d> for CopyPassNode<'d> {
 pub struct CopyPassNodeBuilder<'d> {
     copy_sources: Vec<Arc<Mutex<DeviceResource<'d>>>>,
     copy_dests: Vec<Arc<Mutex<DeviceResource<'d>>>>,
-    fill_callback: Option<Box<FillCallback>>,
+    fill_callback: Option<Box<FillCallback<'d>>>,
     name: String
 }
 
@@ -87,7 +87,7 @@ impl<'d> CopyPassNodeBuilder<'d> {
         self
     }
 
-    pub fn fill_commands(mut self, fill_callback: Box<FillCallback>) -> Self
+    pub fn fill_commands(mut self, fill_callback: Box<FillCallback<'d>>) -> Self
     {
         self.fill_callback = Some(fill_callback);
         self
