@@ -7,6 +7,7 @@ use ash::vk;
 use ash::vk::{DeviceSize, Handle};
 use gpu_allocator::MemoryLocation;
 use imgui::{DrawData, DrawVert, DrawIdx};
+use log::warn;
 use api_types::buffer::BufferCreateInfo;
 use api_types::device::allocator::ResourceAllocator;
 use api_types::device::resource::{DeviceResource, ResourceType};
@@ -171,8 +172,8 @@ impl<'d> ImguiRender<'d> {
         &self,
         allocator: Arc<Mutex<ResourceAllocator>>,
         draw_data: &DrawData,
-        render_target: AttachmentReference,
-        device: &DeviceInterface) -> Vec<PassType> {
+        render_target: AttachmentReference<'d>,
+        device: &'d DeviceInterface) -> Vec<PassType<'d>> {
 
         enter_span!(tracing::Level::TRACE, "Generate Imgui Passes");
 
@@ -314,7 +315,7 @@ impl<'d> ImguiRender<'d> {
             };
 
             let (viewport, scissor) = {
-                let extent = render_target.resource_image.borrow().get_image().extent;
+                let extent = render_target.resource_image.lock().unwrap().get_image().extent;
                 let v = vk::Viewport::builder()
                     .x(0.0)
                     .y(0.0)
@@ -342,19 +343,17 @@ impl<'d> ImguiRender<'d> {
                 .viewport(viewport)
                 .scissor(scissor)
                 .fill_commands(Box::new(
-                    move |render_ctx: &VulkanRenderContext,
-                          command_buffer: &vk::CommandBuffer | {
+                    move |device: &DeviceInterface,
+                          command_buffer: vk::CommandBuffer | {
                         unsafe {
                             enter_span!(tracing::Level::TRACE, "Imgui Draw");
                             // let x = render_ctx.get_device().borrow().get()
-                            let device = render_ctx.get_device();
-                            let borrowed_device = device.borrow();
-                            enter_gpu_span!("Imgui Draw GPU", "UI", borrowed_device.get(), command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
+                            enter_gpu_span!("Imgui Draw GPU", "UI", device.get(), &command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
                             // set vertex buffer
                             {
-                                if let ResourceType::Buffer(vb) = &vtx_buffer.borrow().resource_type.as_ref().unwrap() {
-                                    render_ctx.get_device().borrow().get().cmd_bind_vertex_buffers(
-                                        *command_buffer,
+                                if let ResourceType::Buffer(vb) = &vtx_buffer.lock().unwrap().resource_type.as_ref().unwrap() {
+                                    device.get().cmd_bind_vertex_buffers(
+                                        command_buffer,
                                         0,
                                          &[vb.buffer],
                                         &[0 as vk::DeviceSize]
@@ -366,9 +365,9 @@ impl<'d> ImguiRender<'d> {
 
                             // set index buffer
                             {
-                                if let ResourceType::Buffer(ib) = &idx_buffer.borrow().resource_type.as_ref().unwrap() {
-                                    render_ctx.get_device().borrow().get().cmd_bind_index_buffer(
-                                        *command_buffer,
+                                if let ResourceType::Buffer(ib) = &idx_buffer.lock().unwrap().resource_type.as_ref().unwrap() {
+                                    device.get().cmd_bind_index_buffer(
+                                        command_buffer,
                                         ib.buffer,
                                         0 as vk::DeviceSize,
                                         vk::IndexType::UINT16
@@ -378,8 +377,8 @@ impl<'d> ImguiRender<'d> {
                                 }
                             }
 
-                            render_ctx.get_device().borrow().get().cmd_draw_indexed(
-                                *command_buffer,
+                            device.get().cmd_draw_indexed(
+                                command_buffer,
                                 idx_length,
                                 1,
                                 0,
