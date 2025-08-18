@@ -62,8 +62,8 @@ pub struct DisplayBuffer {
 }
 
 pub struct ImguiRender<'d> {
-    vertex_shader: Rc<RefCell<Shader<'d>>>,
-    fragment_shader: Rc<RefCell<Shader<'d>>>,
+    vertex_shader: Arc<Mutex<Shader<'d>>>,
+    fragment_shader: Arc<Mutex<Shader<'d>>>,
     font_texture: Arc<Mutex<DeviceResource<'d>>>
 }
 
@@ -88,9 +88,9 @@ impl<'d> ImguiRender<'d> {
         immediate_command_buffer: &vk::CommandBuffer,
         font_atlas: imgui::FontAtlasTexture) -> ImguiRender<'d> {
 
-        let vert_shader = Rc::new(RefCell::new(
+        let vert_shader = Arc::new(Mutex::new(
             shader::create_shader_module_from_bytes(device, "imgui-vert", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-vert.spv")))));
-        let frag_shader = Rc::new(RefCell::new(
+        let frag_shader = Arc::new(Mutex::new(
             shader::create_shader_module_from_bytes(device, "imgui-frag", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-frag.spv")))));
 
         let font_texture_create =
@@ -216,7 +216,7 @@ impl<'d> ImguiRender<'d> {
                 }
             });
 
-            Rc::new(RefCell::new(display_buffer))
+            Arc::new(Mutex::new(display_buffer))
         };
 
 
@@ -228,13 +228,13 @@ impl<'d> ImguiRender<'d> {
                                                        .build(),
                                                    "imgui_vtx_buffer".to_string());
 
-            let vtx_buffer = Rc::new(RefCell::new(device.create_buffer(
+            let vtx_buffer = Arc::new(Mutex::new(device.create_buffer(
                 0, // TODO: create real buffer handle
                 &vtx_create,
                 allocator.clone(),
                 MemoryLocation::CpuToGpu)));
             let vtx_data = draw_list.vtx_buffer();
-            device.update_buffer(&vtx_buffer.borrow(), |mapped_memory: *mut c_void, _size: u64| {
+            device.update_buffer(&vtx_buffer.lock().unwrap(), |mapped_memory: *mut c_void, _size: u64| {
                 unsafe {
                     core::ptr::copy_nonoverlapping(
                         vtx_data.as_ptr(),
@@ -251,14 +251,14 @@ impl<'d> ImguiRender<'d> {
                                                        .build(),
                                                    "imgui_idx_buffer".to_string());
 
-            let idx_buffer = Rc::new(RefCell::new(device.create_buffer(
+            let idx_buffer = Arc::new(Mutex::new(device.create_buffer(
                 0, // TODO: create buffer handle
                 &idx_create,
                 allocator.clone(),
                 MemoryLocation::CpuToGpu)));
 
             let idx_data = draw_list.idx_buffer();
-            device.update_buffer(&idx_buffer.borrow(), |mapped_memory: *mut c_void, _size: u64| {
+            device.update_buffer(&idx_buffer.lock().unwrap(), |mapped_memory: *mut c_void, _size: u64| {
                 unsafe {
                     core::ptr::copy_nonoverlapping(
                         idx_data.as_ptr(),
@@ -290,7 +290,7 @@ impl<'d> ImguiRender<'d> {
 
             let dynamic_states = vec!(vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR);
 
-            let pipeline_description = PipelineDescription::new(
+            let pipeline_description = Arc::new(PipelineDescription::new(
                 vertex_input,
                 dynamic_states,
                 RasterizationType::Standard,
@@ -298,7 +298,7 @@ impl<'d> ImguiRender<'d> {
                 BlendType::Transparent,
                 "imgui",
                 self.vertex_shader.clone(),
-                self.fragment_shader.clone());
+                self.fragment_shader.clone()));
 
             let display_binding = ResourceBinding {
                 resource: display_buffer.clone(),
