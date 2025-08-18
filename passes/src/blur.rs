@@ -1,9 +1,11 @@
 use std::cell::RefCell;
 use std::rc::Rc;
-
+use std::sync::{Arc, Mutex};
 use ash::vk;
 use gpu_allocator::MemoryLocation;
-use api_types::device::{DeviceResource, DeviceWrapper};
+use api_types::device::allocator::ResourceAllocator;
+use api_types::device::resource::DeviceResource;
+use api_types::device::interface::DeviceInterface;
 use api_types::image::{ImageCreateInfo, ImageType};
 
 use context::render_context::RenderContext;
@@ -14,12 +16,13 @@ use framegraph::pass_type::PassType;
 use framegraph::pipeline::ComputePipelineDescription;
 use profiling::{enter_gpu_span, enter_span};
 
-pub fn generate_pass(
-    device: Rc<RefCell<DeviceWrapper>>,
-    source: Rc<RefCell<DeviceResource>>
-) -> (PassType, Rc<RefCell<DeviceResource>>) {
+pub fn generate_pass<'d>(
+    device: &'d DeviceInterface,
+    allocator: Arc<Mutex<ResourceAllocator>>,
+    source: Arc<Mutex<DeviceResource<'d>>>
+) -> (PassType<'d>, Arc<Mutex<DeviceResource<'d>>>) {
 
-    let image_extent = source.borrow().get_image().extent.clone();
+    let image_extent = source.lock().unwrap().get_image().extent.clone();
 
     let blur_target_create_info: ImageCreateInfo = ImageCreateInfo::new(
         vk::ImageCreateInfo::builder()
@@ -48,9 +51,10 @@ pub fn generate_pass(
         }
     };
 
-    let blur_target = Rc::new(RefCell::new(DeviceWrapper::create_image(
-        device,
+    let blur_target = Arc::new(Mutex::new(device.create_image(
+        0, // TODO: create image handle
         &blur_target_create_info,
+        allocator.clone(),
         MemoryLocation::GpuOnly)));
 
     let target_binding = ResourceBinding {
@@ -73,17 +77,15 @@ pub fn generate_pass(
         .input(source_binding)
         .output(target_binding)
         .fill_commands(Box::new(
-            move |render_ctx: &VulkanRenderContext,
-                  command_buffer: &vk::CommandBuffer | {
+            move |device: &DeviceInterface,
+                  command_buffer: vk::CommandBuffer | {
 
                 enter_span!(tracing::Level::TRACE, "Blur");
-                let device = render_ctx.get_device();
-                let borrowed_device = device.borrow();
-                enter_gpu_span!("Blur GPU", "Passes", borrowed_device.get(), command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
+                enter_gpu_span!("Blur GPU", "Passes", device, &command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
 
                 unsafe {
-                    render_ctx.get_device().borrow().get().cmd_dispatch(
-                        *command_buffer,
+                    device.get().cmd_dispatch(
+                        command_buffer,
                         image_extent.width / 8,
                         image_extent.height / 8,
                         1);
