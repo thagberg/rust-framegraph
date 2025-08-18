@@ -2,13 +2,15 @@ use std::cell::RefCell;
 use std::ffi::c_void;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-
+use std::sync::{Arc, Mutex};
 use ash::vk;
 use ash::vk::{DeviceSize, Handle};
 use gpu_allocator::MemoryLocation;
 use imgui::{DrawData, DrawVert, DrawIdx};
 use api_types::buffer::BufferCreateInfo;
-use api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
+use api_types::device::allocator::ResourceAllocator;
+use api_types::device::resource::{DeviceResource, ResourceType};
+use api_types::device::interface::DeviceInterface;
 
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
@@ -59,36 +61,37 @@ pub struct DisplayBuffer {
     pos: [f32; 2]
 }
 
-pub struct ImguiRender {
-    vertex_shader: Rc<RefCell<Shader>>,
-    fragment_shader: Rc<RefCell<Shader>>,
-    font_texture: Rc<RefCell<DeviceResource>>
+pub struct ImguiRender<'d> {
+    vertex_shader: Rc<RefCell<Shader<'d>>>,
+    fragment_shader: Rc<RefCell<Shader<'d>>>,
+    font_texture: Arc<Mutex<DeviceResource<'d>>>
 }
 
-impl Debug for ImguiRender {
+impl<'d> Debug for ImguiRender<'d> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ImguiRender")
             .finish()
     }
 }
 
-impl Drop for ImguiRender {
+impl<'d> Drop for ImguiRender<'d> {
     fn drop(&mut self) {
         println!("Dropping ImguiRender");
     }
 }
 
-impl ImguiRender {
+impl<'d> ImguiRender<'d> {
     pub fn new(
-        device: Rc<RefCell<DeviceWrapper>>,
+        device: &'d DeviceInterface,
         render_context: &VulkanRenderContext,
+        allocator: Arc<Mutex<ResourceAllocator>>,
         immediate_command_buffer: &vk::CommandBuffer,
-        font_atlas: imgui::FontAtlasTexture) -> ImguiRender {
+        font_atlas: imgui::FontAtlasTexture) -> ImguiRender<'d> {
 
         let vert_shader = Rc::new(RefCell::new(
-            shader::create_shader_module_from_bytes(device.clone(), "imgui-vert", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-vert.spv")))));
+            shader::create_shader_module_from_bytes(device, "imgui-vert", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-vert.spv")))));
         let frag_shader = Rc::new(RefCell::new(
-            shader::create_shader_module_from_bytes(device.clone(), "imgui-frag", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-frag.spv")))));
+            shader::create_shader_module_from_bytes(device, "imgui-frag", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-frag.spv")))));
 
         let font_texture_create =
             vk::ImageCreateInfo::builder()
@@ -108,9 +111,12 @@ impl ImguiRender {
                 .build();
 
         let mut font_texture = image::create_from_bytes(
-            device.clone(),
-            render_context,
+            0 as u64,
+            device,
+            allocator,
             immediate_command_buffer,
+            render_context.get_graphics_queue_index(),
+            render_context.get_graphics_queue(),
             font_texture_create,
             font_atlas.data,
             "font-atlas"
@@ -127,9 +133,9 @@ impl ImguiRender {
                 .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
                 .build();
 
-            let sampler = device.borrow().get().create_sampler(&sampler_create, None)
+            let sampler = device.get().create_sampler(&sampler_create, None)
                 .expect("Failed to create font texture sampler");
-            device.borrow().set_debug_name(vk::ObjectType::SAMPLER, sampler.as_raw(), "font_sampler");
+            device.set_debug_name(vk::ObjectType::SAMPLER, sampler.as_raw(), "font_sampler");
             sampler
         };
 
@@ -150,22 +156,23 @@ impl ImguiRender {
             // ensure we've waited for the font buffer -> image copy to be complete
             // so that we don't attempt to destroy the buffer while it's still in-use by
             // a command buffer
-            device.borrow().get().device_wait_idle()
+            device.get().device_wait_idle()
                 .expect("Error while waiting for font buffer -> image copy operation to complete");
         }
 
         ImguiRender {
             vertex_shader: vert_shader,
             fragment_shader: frag_shader,
-            font_texture: Rc::new(RefCell::new(font_texture)),
+            font_texture: Arc::new(Mutex::new(font_texture)),
         }
     }
 
     pub fn generate_passes(
         &self,
+        allocator: Arc<Mutex<ResourceAllocator>>,
         draw_data: &DrawData,
         render_target: AttachmentReference,
-        device: Rc<RefCell<DeviceWrapper>>) -> Vec<PassType> {
+        device: &DeviceInterface) -> Vec<PassType> {
 
         enter_span!(tracing::Level::TRACE, "Generate Imgui Passes");
 
@@ -181,12 +188,13 @@ impl ImguiRender {
                     .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
                     .build(),
                 "Imgui_display_buffer".to_string());
-            let display_buffer = DeviceWrapper::create_buffer(
-                device.clone(),
+            let display_buffer = device.create_buffer(
+                0, // TODO: need to generate a real handle value
                 &display_create_info,
+                allocator.clone(),
                 MemoryLocation::CpuToGpu);
 
-            device.borrow().update_buffer(&display_buffer, |mapped_memory: *mut c_void, _size: u64| {
+            device.update_buffer(&display_buffer, |mapped_memory: *mut c_void, _size: u64| {
                 let mut display_scale: [f32; 2] = [0.0, 0.0];
                 display_scale[0] = 2.0 / draw_data.display_size[0];
                 display_scale[1] = 2.0 / draw_data.display_size[1];
@@ -220,12 +228,13 @@ impl ImguiRender {
                                                        .build(),
                                                    "imgui_vtx_buffer".to_string());
 
-            let vtx_buffer = Rc::new(RefCell::new(DeviceWrapper::create_buffer(
-                device.clone(),
+            let vtx_buffer = Rc::new(RefCell::new(device.create_buffer(
+                0, // TODO: create real buffer handle
                 &vtx_create,
+                allocator.clone(),
                 MemoryLocation::CpuToGpu)));
             let vtx_data = draw_list.vtx_buffer();
-            device.borrow().update_buffer(&vtx_buffer.borrow(), |mapped_memory: *mut c_void, _size: u64| {
+            device.update_buffer(&vtx_buffer.borrow(), |mapped_memory: *mut c_void, _size: u64| {
                 unsafe {
                     core::ptr::copy_nonoverlapping(
                         vtx_data.as_ptr(),
@@ -242,13 +251,14 @@ impl ImguiRender {
                                                        .build(),
                                                    "imgui_idx_buffer".to_string());
 
-            let idx_buffer = Rc::new(RefCell::new(DeviceWrapper::create_buffer(
-                device.clone(),
+            let idx_buffer = Rc::new(RefCell::new(device.create_buffer(
+                0, // TODO: create buffer handle
                 &idx_create,
+                allocator.clone(),
                 MemoryLocation::CpuToGpu)));
 
             let idx_data = draw_list.idx_buffer();
-            device.borrow().update_buffer(&idx_buffer.borrow(), |mapped_memory: *mut c_void, _size: u64| {
+            device.update_buffer(&idx_buffer.borrow(), |mapped_memory: *mut c_void, _size: u64| {
                 unsafe {
                     core::ptr::copy_nonoverlapping(
                         idx_data.as_ptr(),
