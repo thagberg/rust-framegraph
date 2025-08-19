@@ -1,11 +1,14 @@
 use core::ffi::c_void;
 use alloc::rc::Rc;
 use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 use ash::vk;
 use gpu_allocator::MemoryLocation;
 use imgui::Ui;
 use api_types::buffer::BufferCreateInfo;
-use api_types::device::{DeviceResource, DeviceWrapper};
+use api_types::device::allocator::ResourceAllocator;
+use api_types::device::resource::DeviceResource;
+use api_types::device::interface::DeviceInterface;
 use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::attachment::AttachmentReference;
@@ -20,25 +23,30 @@ use crate::example::Example;
 pub struct UBO {
     pub color: [f32; 3]
 }
-pub struct UboExample {
-    uniform_buffer: Rc<RefCell<DeviceResource>>,
-    vert_shader: Rc<RefCell<shader::Shader>>,
-    frag_shader: Rc<RefCell<shader::Shader>>
+pub struct UboExample<'d> {
+    uniform_buffer: Arc<Mutex<DeviceResource<'d>>>,
+    vert_shader: Arc<Mutex<shader::Shader<'d>>>,
+    frag_shader: Arc<Mutex<shader::Shader<'d>>>
 }
 
-impl Example for UboExample {
+impl<'d> Example<'d> for UboExample<'d> {
     fn get_name(&self) -> &'static str {
         "UBO"
     }
 
-    fn execute(&self, device: Rc<RefCell<DeviceWrapper>>, imgui_ui: &mut Ui, back_buffer: AttachmentReference) -> Vec<PassType> {
+    fn execute(
+        &self,
+        device: &'d DeviceInterface,
+        imgui_ui: &mut Ui,
+        back_buffer: AttachmentReference<'d>) -> Vec<PassType<'d>> {
+
         let vertex_state_create = vk::PipelineVertexInputStateCreateInfo::builder()
             .vertex_attribute_descriptions(&[])
             .vertex_binding_descriptions(&[]);
 
         let dynamic_states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
 
-        let pipeline_description = PipelineDescription::new(
+        let pipeline_description = Arc::new(PipelineDescription::new(
             Default::default(),
             dynamic_states,
             RasterizationType::Standard,
@@ -46,7 +54,7 @@ impl Example for UboExample {
             BlendType::None,
             "ubo",
             self.vert_shader.clone(),
-            self.frag_shader.clone());
+            self.frag_shader.clone()));
         
         let ubo_binding = ResourceBinding {
             resource: self.uniform_buffer.clone(),
@@ -66,13 +74,11 @@ impl Example for UboExample {
             .read(ubo_binding)
             .render_target(back_buffer)
             .fill_commands(Box::new(
-                move |render_ctx: &VulkanRenderContext,
-                     command_buffer: &vk::CommandBuffer | {
+                move |device: &DeviceInterface,
+                     command_buffer: vk::CommandBuffer | {
 
                     enter_span!(tracing::Level::TRACE, "Draw Triangle");
-                    let device = render_ctx.get_device();
-                    let borrowed_device = device.borrow();
-                    enter_gpu_span!("Draw Triangle GPU", "examples", borrowed_device.get(), command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
+                    enter_gpu_span!("Draw Triangle GPU", "examples", device, &command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
 
                     let viewport = vk::Viewport::builder()
                         .x(0.0)
@@ -89,18 +95,18 @@ impl Example for UboExample {
                         .build();
 
                     unsafe {
-                        render_ctx.get_device().borrow().get().cmd_set_viewport(
-                            *command_buffer,
+                        device.get().cmd_set_viewport(
+                            command_buffer,
                             0,
                             std::slice::from_ref(&viewport));
 
-                        render_ctx.get_device().borrow().get().cmd_set_scissor(
-                            *command_buffer,
+                        device.get().cmd_set_scissor(
+                            command_buffer,
                             0,
                             std::slice::from_ref(&scissor));
 
-                        render_ctx.get_device().borrow().get().cmd_draw(
-                            *command_buffer,
+                        device.get().cmd_draw(
+                            command_buffer,
                             3,
                             1,
                             0,
@@ -115,8 +121,10 @@ impl Example for UboExample {
     }
 }
 
-impl UboExample {
-    pub fn new(device: Rc<RefCell<DeviceWrapper>>) -> Self{
+impl<'d> UboExample<'d> {
+    pub fn new(
+        device: &'d DeviceInterface,
+        allocator: Arc<Mutex<ResourceAllocator>>) -> Self{
         let ubo_create = BufferCreateInfo::new(
             vk::BufferCreateInfo::builder()
                 .size(std::mem::size_of::<UBO>() as vk::DeviceSize)
@@ -126,16 +134,17 @@ impl UboExample {
             "ubo_example_buffer".to_string()
         );
 
-        let ubo = DeviceWrapper::create_buffer(
-            device.clone(),
+        let ubo = device.create_buffer(
+            0, // TODO: create buffer handle
             &ubo_create,
+            allocator.clone(),
             MemoryLocation::CpuToGpu);
 
         let ubo_value = UBO {
             color: [1.0, 0.0, 0.0]
         };
 
-        device.borrow().update_buffer(&ubo, |mapped_memory: *mut c_void, _size: u64| {
+        device.update_buffer(&ubo, |mapped_memory: *mut c_void, _size: u64| {
             unsafe {
                 core::ptr::copy_nonoverlapping(
                     &ubo_value,
@@ -144,13 +153,13 @@ impl UboExample {
             }
         });
 
-        let vert_shader = Rc::new(RefCell::new(
-            shader::create_shader_module_from_bytes(device.clone(), "ubo-vert", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/ubo-vert.spv")))));
-        let frag_shader = Rc::new(RefCell::new(
-            shader::create_shader_module_from_bytes(device.clone(), "ubo-frag", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/ubo-frag.spv")))));
+        let vert_shader = Arc::new(Mutex::new(
+            shader::create_shader_module_from_bytes(device, "ubo-vert", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/ubo-vert.spv")))));
+        let frag_shader = Arc::new(Mutex::new(
+            shader::create_shader_module_from_bytes(device, "ubo-frag", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/ubo-frag.spv")))));
 
         UboExample {
-            uniform_buffer: Rc::new(RefCell::new(ubo)),
+            uniform_buffer: Arc::new(Mutex::new(ubo)),
             vert_shader,
             frag_shader
         }
