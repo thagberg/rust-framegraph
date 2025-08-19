@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::ops::Mul;
-
+use std::sync::{Arc, Mutex};
 use ash::vk;
 use ash::vk::{Handle};
 use imgui::{Condition, Ui};
@@ -24,7 +24,9 @@ use gltf::camera::Projection;
 use gltf::image::Source;
 use gltf::json::accessor::{Type};
 use api_types::buffer::BufferCreateInfo;
-use api_types::device::{DeviceResource, DeviceWrapper, ResourceType};
+use api_types::device::allocator::ResourceAllocator;
+use api_types::device::resource::{DeviceResource, ResourceType};
+use api_types::device::interface::DeviceInterface;
 use api_types::image::{ImageCreateInfo, ImageType};
 use context::render_context::RenderContext;
 use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding};
@@ -79,15 +81,15 @@ const VERTEX_BINDING:  vk::VertexInputBindingDescription = vk::VertexInputBindin
     input_rate: vk::VertexInputRate::VERTEX,
 };
 
-pub struct RenderMesh {
+pub struct RenderMesh<'d> {
     // TODO: add primitive topology (also need to support this in pipeline.rs)
-    vertex_buffer: Rc<RefCell<DeviceResource>>,
-    index_buffer: Option<Rc<RefCell<DeviceResource>>>,
+    vertex_buffer: Arc<Mutex<DeviceResource<'d>>>,
+    index_buffer: Option<Arc<Mutex<DeviceResource<'d>>>>,
     num_indices: usize,
     vertex_binding: vk::VertexInputBindingDescription,
     vertex_attributes: [vk::VertexInputAttributeDescription; 3],
     transform: glm::TMat4<f32>,
-    albedo_tex: Option<Rc<RefCell<DeviceResource>>>
+    albedo_tex: Option<Arc<Mutex<DeviceResource<'d>>>>
 }
 
 #[derive(Eq, PartialEq, Hash)]
@@ -295,20 +297,26 @@ fn get_glm_format(data_type: DataType, dimensions: Dimensions, data_pointer: *co
     }
 }
 
-pub struct ModelExample {
-    vertex_shader: Rc<RefCell<Shader>>,
-    fragment_shader: Rc<RefCell<Shader>>,
+pub struct ModelExample<'d> {
+    vertex_shader: Arc<Mutex<Shader<'d>>>,
+    fragment_shader: Arc<Mutex<Shader<'d>>>,
     camera: Camera,
     duck_model: GltfModel,
-    render_meshes: Vec<RenderMesh>
+    render_meshes: Vec<RenderMesh<'d>>
 }
 
-impl Example for ModelExample {
+impl<'d> Example<'d> for ModelExample<'d> {
     fn get_name(&self) -> &'static str {
         "Model Render"
     }
 
-    fn execute(&self, device: Rc<RefCell<DeviceWrapper>>, imgui_ui: &mut Ui, back_buffer: AttachmentReference) -> Vec<PassType> {
+    fn execute(
+        &self,
+        device: &'d DeviceInterface,
+        allocator: Arc<Mutex<ResourceAllocator>>,
+        imgui_ui: &mut Ui,
+        back_buffer: AttachmentReference<'d>) -> Vec<PassType<'d>> {
+
         enter_span!(tracing::Level::TRACE, "Generating Model Pass");
 
         // build UI
@@ -322,7 +330,7 @@ impl Example for ModelExample {
 
         let depth_attachment = {
             let depth_image = {
-                let rt_extent = back_buffer.resource_image.borrow().get_image().extent.clone();
+                let rt_extent = back_buffer.resource_image.lock().unwrap().get_image().extent.clone();
                 let depth_create = vk::ImageCreateInfo::builder()
                     .format(vk::Format::D32_SFLOAT)
                     .image_type(vk::ImageType::TYPE_2D)
@@ -344,21 +352,23 @@ impl Example for ModelExample {
                     ImageType::Depth
                 );
 
-                DeviceWrapper::create_image(
-                    device.clone(),
+                device.create_image(
+                    0, // TODO: create image handle
                     &image_create,
+                    allocator.clone(),
                     MemoryLocation::GpuOnly
                 )
             };
 
             AttachmentReference::new(
-                Rc::new(RefCell::new(depth_image)),
+                Arc::new(Mutex::new(depth_image)),
                 vk::SampleCountFlags::TYPE_1
             )
         };
 
         // add depth clear pass
         passes.push(clear::clear(
+            device,
             depth_attachment.resource_image.clone(),
             vk::ImageAspectFlags::DEPTH));
 
@@ -372,13 +382,14 @@ impl Example for ModelExample {
                         .build(),
                     "MVP_buffer".to_string()
                 );
-                let buffer = DeviceWrapper::create_buffer(
-                    device.clone(),
+                let buffer = device.create_buffer(
+                    0, // TODO: create buffer handle
                     &create_info,
+                    allocator.clone(),
                     MemoryLocation::CpuToGpu
                 );
 
-                device.borrow().update_buffer(&buffer, |mapped_memory: *mut c_void, _size: u64| {
+                device.update_buffer(&buffer, |mapped_memory: *mut c_void, _size: u64| {
                     let mvp = MVP {
                         model: render_mesh.transform.clone(),
                         view: self.camera.get_view(),
@@ -394,7 +405,7 @@ impl Example for ModelExample {
                     }
                 });
 
-                Rc::new(RefCell::new(buffer))
+                Arc::new(Mutex::new(buffer))
             };
 
             let mvp_binding = ResourceBinding {
@@ -417,7 +428,7 @@ impl Example for ModelExample {
                 .vertex_attribute_descriptions(&render_mesh.vertex_attributes)
                 .build();
 
-            let pipeline_description = PipelineDescription::new(
+            let pipeline_description = Arc::new(PipelineDescription::new(
                 vertex_input,
                 dynamic_states,
                 RasterizationType::Standard,
@@ -425,10 +436,10 @@ impl Example for ModelExample {
                 BlendType::None,
                 "gltf-model-draw",
                 self.vertex_shader.clone(),
-                self.fragment_shader.clone());
+                self.fragment_shader.clone()));
 
             let (viewport, scissor) = {
-                let extent = back_buffer.resource_image.borrow().get_image().extent;
+                let extent = back_buffer.resource_image.lock().unwrap().get_image().extent;
                 let v = vk::Viewport::builder()
                     .x(0.0)
                     // .y(0.0)
@@ -475,21 +486,19 @@ impl Example for ModelExample {
                     .viewport(viewport)
                     .scissor(scissor)
                     .fill_commands(Box::new(
-                        move | render_ctx: &VulkanRenderContext,
-                               command_buffer: &vk::CommandBuffer | {
+                        move | device: &DeviceInterface,
+                               command_buffer: vk::CommandBuffer | {
 
                             enter_span!(tracing::Level::TRACE, "Draw RenderMesh");
-                            let device = render_ctx.get_device();
-                            let borrowed_device = device.borrow();
-                            enter_gpu_span!("RenderMesh GPU", "examples", borrowed_device.get(), command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
+                            enter_gpu_span!("RenderMesh GPU", "examples", device.get(), &command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
 
                             unsafe {
                                 enter_span!(tracing::Level::TRACE, "Model Draw");
                                 // set vertex buffer
                                 {
-                                    if let ResourceType::Buffer(vb) = vbo.borrow().resource_type.as_ref().unwrap() {
-                                        render_ctx.get_device().borrow().get().cmd_bind_vertex_buffers(
-                                            *command_buffer,
+                                    if let ResourceType::Buffer(vb) = vbo.lock().unwrap().resource_type.as_ref().unwrap() {
+                                        device.get().cmd_bind_vertex_buffers(
+                                            command_buffer,
                                             0,
                                             &[vb.buffer],
                                             &[0 as vk::DeviceSize]
@@ -501,9 +510,9 @@ impl Example for ModelExample {
 
                                 // set index buffer
                                 {
-                                    if let ResourceType::Buffer(ib) = ibo.borrow().resource_type.as_ref().unwrap() {
-                                        render_ctx.get_device().borrow().get().cmd_bind_index_buffer(
-                                            *command_buffer,
+                                    if let ResourceType::Buffer(ib) = ibo.lock().unwrap().resource_type.as_ref().unwrap() {
+                                        device.get().cmd_bind_index_buffer(
+                                            command_buffer,
                                             ib.buffer,
                                             0 as vk::DeviceSize,
                                             vk::IndexType::UINT16
@@ -513,8 +522,8 @@ impl Example for ModelExample {
                                     }
                                 }
 
-                                render_ctx.get_device().borrow().get().cmd_draw_indexed(
-                                    *command_buffer,
+                                device.get().cmd_draw_indexed(
+                                    command_buffer,
                                     idx_length as u32,
                                     1,
                                     0,
@@ -559,10 +568,11 @@ fn gltf_to_decomposed_matrix(t: gltf::scene::Transform) -> DecomposedMatrix {
         glm::Vec3::new(scale[0], scale[1], scale[2]))
 }
 
-impl ModelExample {
+impl<'d> ModelExample<'d> {
     pub fn new(
-        device: Rc<RefCell<DeviceWrapper>>,
+        device: &'d DeviceInterface,
         render_context: &VulkanRenderContext,
+        allocator: Arc<Mutex<ResourceAllocator>>,
         immediate_command_buffer: &vk::CommandBuffer) -> Self {
 
         let duck_import = gltf::import("assets/models/gltf/duck/Duck.gltf");
@@ -625,7 +635,7 @@ impl ModelExample {
                     }
                     if let Some(mesh) = child.mesh() {
                         for (i, primitive) in mesh.primitives().enumerate() {
-                            let mut ibo: Option<Rc<RefCell<DeviceResource>>> = None;
+                            let mut ibo: Option<Arc<Mutex<DeviceResource>>> = None;
 
                             let primitive_name = {
                                 if let Some(mesh_name) = mesh.name() {
@@ -652,16 +662,17 @@ impl ModelExample {
                                             .build(),
                                         primitive_name.clone()
                                     );
-                                    Rc::new(RefCell::new(DeviceWrapper::create_buffer(
-                                        device.clone(),
+                                    Arc::new(Mutex::new(device.create_buffer(
+                                        0, // TODO: create buffer handle
                                         &ibo_create,
+                                        allocator.clone(),
                                         MemoryLocation::CpuToGpu
                                     )))
                                 });
 
                                 // * memory map the buffer
                                 // * use the indices accessor to copy indices data into the GPU buffer
-                                device.borrow().update_buffer(&ibo.as_ref().unwrap().borrow(), |mapped_memory: *mut c_void, _size: u64| {
+                                device.update_buffer(&ibo.as_ref().unwrap().lock().unwrap(), |mapped_memory: *mut c_void, _size: u64| {
                                     unsafe {
                                         let view = indices_accessor.view().expect("Failed to get view for index buffer");
                                         let buffer_data = duck_gltf.buffers.get(view.buffer().index())
@@ -742,9 +753,10 @@ impl ModelExample {
                                         .build(),
                                     primitive_name.clone()
                                 );
-                                DeviceWrapper::create_buffer(
-                                    device.clone(),
+                                device.create_buffer(
+                                    0, // TODO: create buffer handle
                                     &vbo_create,
+                                    allocator.clone(),
                                     MemoryLocation::CpuToGpu
                                 )
                             };
@@ -827,7 +839,7 @@ impl ModelExample {
                                 }
                             }
 
-                            device.borrow().update_buffer(&vbo, |mapped_memory: *mut c_void, _size: u64| {
+                            device.update_buffer(&vbo, |mapped_memory: *mut c_void, _size: u64| {
                                 unsafe {
                                     // core::ptr::copy_nonoverlapping(
                                     //     vertices.as_ptr(),
@@ -857,7 +869,7 @@ impl ModelExample {
                             });
 
                             // process  material
-                            let mut albedo_dev_tex: Option<Rc<RefCell<DeviceResource>>> = None;
+                            let mut albedo_dev_tex: Option<Arc<Mutex<DeviceResource>>> = None;
                             {
                                 let material = primitive.material();
                                 if let Some(material_id) = material.index() {
@@ -884,9 +896,12 @@ impl ModelExample {
                                             }
                                             Source::Uri{ uri, mime_type } => {
                                                 let mut tex = util::image::create_from_uri(
-                                                    device.clone(),
-                                                    render_context,
+                                                    0, // TODO: create image handle
+                                                    device,
+                                                    allocator.clone(),
                                                     immediate_command_buffer,
+                                                    render_context.get_graphics_queue_index(),
+                                                    render_context.get_graphics_queue(),
                                                     &format!("{}{}", "assets/models/gltf/duck/", uri),
                                                     true
                                                 );
@@ -902,13 +917,13 @@ impl ModelExample {
                                                         .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
                                                         .build();
 
-                                                    let sampler = device.borrow().get().create_sampler(&create, None)
+                                                    let sampler = device.get().create_sampler(&create, None)
                                                         .expect("Failed to create sampler for albedo texture");
-                                                    device.borrow().set_debug_name(vk::ObjectType::SAMPLER, sampler.as_raw(), "albedo_sampler");
+                                                    device.set_debug_name(vk::ObjectType::SAMPLER, sampler.as_raw(), "albedo_sampler");
 
                                                     tex.get_image_mut().sampler = Some(sampler);
                                                 };
-                                                albedo_dev_tex = Some(Rc::new(RefCell::new(tex)));
+                                                albedo_dev_tex = Some(Arc::new(Mutex::new(tex)));
                                             }
                                         }
 
@@ -920,7 +935,7 @@ impl ModelExample {
                             }
 
                             let render_mesh = RenderMesh {
-                                vertex_buffer: Rc::new(RefCell::new(vbo)),
+                                vertex_buffer: Arc::new(Mutex::new(vbo)),
                                 index_buffer: ibo,
                                 num_indices,
                                 vertex_binding: VERTEX_BINDING,
@@ -990,12 +1005,12 @@ impl ModelExample {
         //     Vec4::from(m[3])
         // ])
 
-        let vert_shader = Rc::new(RefCell::new(
+        let vert_shader = Arc::new(Mutex::new(
             shader::create_shader_module_from_bytes(
                 device.clone(),
                 "model-vert",
                 include_bytes!(concat!(env!("OUT_DIR"), "/shaders/model-vert.spv")))));
-        let frag_shader = Rc::new(RefCell::new(
+        let frag_shader = Arc::new(Mutex::new(
             shader::create_shader_module_from_bytes(
                 device.clone(),
                 "model-frag",

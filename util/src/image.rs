@@ -23,7 +23,7 @@ pub fn create_from_bytes<'a, 'b>(
     graphics_queue: vk::Queue,
     image_info: vk::ImageCreateInfo,
     image_bytes: &'b [u8],
-    name: &'a str) -> DeviceResource<'a> {
+    name: &str) -> DeviceResource<'a> {
     // create CPU-to-GPU buffer
     let buffer_create = BufferCreateInfo::new(
         vk::BufferCreateInfo::builder()
@@ -194,7 +194,7 @@ pub fn create_from_uri<'a>(
     immediate_command_buffer: &vk::CommandBuffer,
     graphics_queue_index: u32,
     graphics_queue: vk::Queue,
-    uri: &'a str,
+    uri: &str,
     is_linear: bool
 ) -> DeviceResource<'a> {
     let mut img = {

@@ -36,8 +36,9 @@ impl<'d> Example<'d> for UboExample<'d> {
 
     fn execute(
         &self,
-        device: &'d DeviceInterface,
-        imgui_ui: &mut Ui,
+        _device: &'d DeviceInterface,
+        _allocator: Arc<Mutex<ResourceAllocator>>,
+        _imgui_ui: &mut Ui,
         back_buffer: AttachmentReference<'d>) -> Vec<PassType<'d>> {
 
         let vertex_state_create = vk::PipelineVertexInputStateCreateInfo::builder()
