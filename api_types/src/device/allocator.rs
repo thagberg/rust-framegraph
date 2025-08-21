@@ -15,7 +15,7 @@ impl Drop for ResourceAllocator {
 
 impl ResourceAllocator {
     pub fn new(
-        device: ash::Device,
+        device: &ash::Device,
         instance: &ash::Instance,
         physical_device: &PhysicalDeviceWrapper
     ) -> Self {
