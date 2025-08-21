@@ -12,7 +12,6 @@ use framegraph::pass_type::PassType;
 use profiling::{enter_gpu_span, enter_span};
 
 pub fn clear<'d>(
-    device: &'d DeviceInterface,
     target: Arc<Mutex<DeviceResource<'d>>>,
     aspect_mask: vk::ImageAspectFlags) -> PassType<'d>{
 
