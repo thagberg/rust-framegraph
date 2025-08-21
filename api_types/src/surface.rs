@@ -1,19 +1,20 @@
 use std::fmt::{Debug, Formatter};
 use std::os::raw::{c_char};
 use ash::vk;
-use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use ash::khr::surface as ash_surface;
+use winit::raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use crate::device::physical::PhysicalDeviceWrapper;
 
 
 pub fn get_required_surface_extensions(window: &winit::window::Window) -> &'static [*const c_char] {
     let handle = window.raw_display_handle();
-    ash_window::enumerate_required_extensions(handle)
+    ash_window::enumerate_required_extensions(handle.unwrap())
         .expect("Failed to find required surface extension names")
 }
 
 pub struct SurfaceWrapper {
     surface: vk::SurfaceKHR,
-    surface_loader: ash::extensions::khr::Surface
+    surface_loader: ash_surface::Instance
 }
 
 impl Debug for SurfaceWrapper {
@@ -51,10 +52,15 @@ impl SurfaceWrapper {
         window: &winit::window::Window
     ) -> SurfaceWrapper {
         let surface = unsafe {
-            ash_window::create_surface(entry, instance, window.raw_display_handle(), window.raw_window_handle(), None)
+            ash_window::create_surface(
+                entry,
+                instance,
+                window.raw_display_handle().unwrap(),
+                window.raw_window_handle().unwrap(),
+                None)
                 .expect("Failed to create window surface")
         };
-        let surface_loader = ash::extensions::khr::Surface::new(entry, instance);
+        let surface_loader = ash_surface::Instance::new(entry, instance);
 
         SurfaceWrapper {
             surface,
@@ -66,7 +72,7 @@ impl SurfaceWrapper {
         self.surface
     }
 
-    pub fn get_loader(&self) -> &ash::extensions::khr::Surface {
+    pub fn get_loader(&self) -> &ash_surface::Instance {
         &self.surface_loader
     }
 

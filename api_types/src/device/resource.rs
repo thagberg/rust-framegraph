@@ -7,21 +7,21 @@ use crate::device::interface::DeviceInterface;
 use crate::image::ImageWrapper;
 
 #[derive(Clone)]
-pub enum ResourceType {
-    Buffer(BufferWrapper),
+pub enum ResourceType<'m> {
+    Buffer(BufferWrapper<'m>),
     Image(ImageWrapper)
 }
 
-pub struct DeviceResource<'a> {
+pub struct DeviceResource<'a, 'm> {
     pub allocation: Option<Allocation>,
-    pub resource_type: Option<ResourceType>,
+    pub resource_type: Option<ResourceType<'m>>,
 
     handle: u64,
     device: &'a DeviceInterface,
     allocator: Option<Arc<Mutex<ResourceAllocator>>>
 }
 
-impl Debug for DeviceResource<'_> {
+impl Debug for DeviceResource<'_, '_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DeviceResource")
             .field("handle", &self.handle)
@@ -29,7 +29,7 @@ impl Debug for DeviceResource<'_> {
     }
 }
 
-impl Drop for DeviceResource<'_> {
+impl Drop for DeviceResource<'_, '_> {
     fn drop(&mut self) {
         if let Some(resource_type) = &mut self.resource_type {
             match resource_type {
@@ -53,18 +53,18 @@ impl Drop for DeviceResource<'_> {
     }
 }
 
-impl PartialEq<Self> for DeviceResource<'_> {
+impl PartialEq<Self> for DeviceResource<'_, '_> {
     fn eq(&self, other: &Self) -> bool {
         self.handle == other.handle
     }
 }
-impl Eq for DeviceResource<'_> {}
+impl Eq for DeviceResource<'_, '_> {}
 
-impl<'a> DeviceResource<'a> {
+impl<'a, 'm> DeviceResource<'a, 'm> {
 
     pub(crate) fn new(
         allocation: Option<Allocation>,
-        resource_type: Option<ResourceType>,
+        resource_type: Option<ResourceType<'m>>,
         handle: u64,
         device: &'a DeviceInterface,
         allocator: Option<Arc<Mutex<ResourceAllocator>>>

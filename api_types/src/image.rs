@@ -7,14 +7,14 @@ pub enum ImageType {
     DepthStencil,
     Stencil
 }
-pub struct ImageCreateInfo {
-    create_info: vk::ImageCreateInfo,
+pub struct ImageCreateInfo<'m> {
+    create_info: vk::ImageCreateInfo<'m>,
     name: String,
     image_type: ImageType
 }
 
-impl ImageCreateInfo {
-    pub fn new(create_info: vk::ImageCreateInfo, name: String, image_type: ImageType) -> Self {
+impl<'m> ImageCreateInfo<'m> {
+    pub fn new(create_info: ash::vk::ImageCreateInfo<'m>, name: String, image_type: ImageType) -> Self {
         ImageCreateInfo {
             create_info,
             name,

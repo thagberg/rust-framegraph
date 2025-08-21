@@ -1,12 +1,12 @@
 use ash::vk;
 
-pub struct BufferCreateInfo {
-    create_info: vk::BufferCreateInfo,
+pub struct BufferCreateInfo<'m> {
+    create_info: vk::BufferCreateInfo<'m>,
     name: String
 }
 
-impl BufferCreateInfo {
-    pub fn new(create_info: vk::BufferCreateInfo, name: String) -> Self {
+impl<'m> BufferCreateInfo<'m> {
+    pub fn new(create_info: vk::BufferCreateInfo<'m>, name: String) -> Self {
         BufferCreateInfo {
             create_info,
             name
@@ -19,16 +19,16 @@ impl BufferCreateInfo {
 }
 
 #[derive(Clone)]
-pub struct BufferWrapper {
+pub struct BufferWrapper<'m> {
     pub buffer: vk::Buffer,
-    pub create_info: vk::BufferCreateInfo
+    pub create_info: vk::BufferCreateInfo<'m>
 }
 
-unsafe impl Sync for BufferWrapper {}
-unsafe impl Send for BufferWrapper {}
+unsafe impl Sync for BufferWrapper<'_> {}
+unsafe impl Send for BufferWrapper<'_> {}
 
-impl BufferWrapper {
-    pub fn new(buffer: vk::Buffer, create_info: vk::BufferCreateInfo) -> BufferWrapper {
+impl<'m> BufferWrapper<'m> {
+    pub fn new(buffer: vk::Buffer, create_info: vk::BufferCreateInfo<'m>) -> Self {
         BufferWrapper {
             buffer,
             create_info

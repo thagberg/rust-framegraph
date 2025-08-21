@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ash                 = {version = "^0.37"}
+ash                 = {version = "^0.38"}
 gpu-allocator       = "^0.25"
 nalgebra-glm        = "0.18.0"
 context             = {path="../context"}

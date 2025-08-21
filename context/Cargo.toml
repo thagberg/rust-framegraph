@@ -4,13 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-winit           = "0.27.1"
-raw-window-handle = "0.5.0"
-ash             = {version = "^0.37", features = ["linked"]}
-ash-window      = "0.12"
-gpu-allocator   = "^0.25"
-    log             = "0.4"
-image           = "^0.23"
+winit           = "^0.29"
+ash             = {version = "^0.38", features = ["linked"]}
 num             = "^0.4"
 tracing         = "0.1.40"
 api_types       = {path="../api_types"}

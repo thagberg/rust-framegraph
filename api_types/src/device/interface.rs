@@ -60,18 +60,16 @@ impl DeviceInterface {
 
     pub fn get_queue_families(&self) -> &QueueFamilies { &self.queue_families }
 
-    pub fn set_debug_name(&self, object_type: vk::ObjectType, handle: u64, name: &str)
+    pub fn set_debug_name<T: ash::vk::Handle>(&self, handle: T, name: &str)
     {
         let c_name = CString::new(name)
             .expect("Failed to create C-name for debug object");
-        let debug_info = DebugUtilsObjectNameInfoEXT::builder()
-            .object_type(object_type)
+        let debug_info = DebugUtilsObjectNameInfoEXT::default()
             .object_handle(handle)
-            .object_name(&c_name)
-            .build();
+            .object_name(&c_name);
         unsafe {
             if let Some(debug) = &self.debug {
-                debug.debug_utils.debug_utils_set_object_name(self.device.handle(), &debug_info)
+                debug.debug_utils.set_debug_utils_object_name(&debug_info)
                     .expect("Failed to set debug object name");
             }
         }
@@ -79,7 +77,7 @@ impl DeviceInterface {
 
     pub fn set_image_name(&self, image: &ImageWrapper, name: &str)
     {
-        self.set_debug_name(vk::ObjectType::IMAGE, image.get().as_raw(), name);
+        self.set_debug_name(image.get(), name);
     }
 
     pub fn create_image_view(
@@ -90,27 +88,24 @@ impl DeviceInterface {
         aspect_flags: vk::ImageAspectFlags,
         mip_levels: u32) -> vk::ImageView
     {
-        let create_info = vk::ImageViewCreateInfo {
-            s_type: vk::StructureType::IMAGE_VIEW_CREATE_INFO,
-            p_next: std::ptr::null(),
-            flags: image_view_flags,
-            view_type: vk::ImageViewType::TYPE_2D,
-            format,
-            components: vk::ComponentMapping {
+        let create_info = vk::ImageViewCreateInfo::default()
+            .flags(image_view_flags)
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(format)
+            .components(vk::ComponentMapping {
                 r: vk::ComponentSwizzle::IDENTITY,
                 g: vk::ComponentSwizzle::IDENTITY,
                 b: vk::ComponentSwizzle::IDENTITY,
                 a: vk::ComponentSwizzle::IDENTITY
-            },
-            subresource_range: vk::ImageSubresourceRange {
+            })
+            .subresource_range( vk::ImageSubresourceRange {
                 aspect_mask: aspect_flags,
                 base_mip_level: 0,
                 level_count: mip_levels,
                 base_array_layer: 0,
                 layer_count: 1
-            },
-            image: image
-        };
+            })
+            .image(image);
 
         unsafe {
             self.device.create_image_view(&create_info, None)
@@ -174,7 +169,7 @@ impl DeviceInterface {
                 vk::ImageViewCreateFlags::empty(),
                 aspect_flags,
                 1);
-            self.set_debug_name(vk::ObjectType::IMAGE_VIEW, image_view.as_raw(), image_desc.get_name());
+            self.set_debug_name(image_view, image_desc.get_name());
             let image_wrapper = ImageWrapper::new(
                 image,
                 image_view,
@@ -247,15 +242,15 @@ impl DeviceInterface {
 
     pub fn set_buffer_name(&self, buffer: &BufferWrapper, name: &str)
     {
-        self.set_debug_name(vk::ObjectType::BUFFER, buffer.get().as_raw(), name);
+        self.set_debug_name(buffer.get(), name);
     }
 
-    pub fn create_buffer(
+    pub fn create_buffer<'m>(
         &self,
         handle: u64,
-        buffer_desc: &BufferCreateInfo,
+        buffer_desc: &'m BufferCreateInfo<'m>,
         allocator: Arc<Mutex<ResourceAllocator>>,
-        memory_location: MemoryLocation) -> DeviceResource {
+        memory_location: MemoryLocation) -> DeviceResource<'_, 'm> {
 
         let device_buffer = {
             log::trace!(target: "resource", "Creating buffer: {} -- {}", handle, buffer_desc.get_name());
@@ -313,7 +308,7 @@ impl DeviceInterface {
         if let Some(resolved_resource) = &device_buffer.resource_type {
             if let ResourceType::Buffer(resolved_buffer) = &resolved_resource {
                 let mapped_range = unsafe {
-                    vk::MappedMemoryRange::builder()
+                    vk::MappedMemoryRange::default()
                         .memory(allocation.memory())
                         .size(vk::WHOLE_SIZE)
                         .offset(allocation.offset())
@@ -368,7 +363,7 @@ impl DeviceInterface {
                 .expect("Failed to create shader module")
         };
 
-        self.set_debug_name(ObjectType::SHADER_MODULE, shader.as_raw(), name);
+        self.set_debug_name(shader, name);
 
         DeviceShader::new(shader, &self)
     }
@@ -388,8 +383,8 @@ impl DeviceInterface {
                 .expect("Failed to create Graphics Pipeline")
         }[0];
 
-        self.set_debug_name(vk::ObjectType::PIPELINE, pipeline.as_raw(), name);
-        self.set_debug_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.as_raw(), &(name.to_owned() + "_layout"));
+        self.set_debug_name(pipeline, name);
+        self.set_debug_name(pipeline_layout, &(name.to_owned() + "_layout"));
 
         DevicePipeline::new(
             pipeline,
@@ -413,8 +408,8 @@ impl DeviceInterface {
                 .expect("Failed to create Graphics Pipeline")
         }[0];
 
-        self.set_debug_name(vk::ObjectType::PIPELINE, pipeline.as_raw(), name);
-        self.set_debug_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.as_raw(), &(name.to_owned() + "_layout"));
+        self.set_debug_name(pipeline, name);
+        self.set_debug_name(pipeline_layout, &(name.to_owned() + "_layout"));
 
         DevicePipeline::new(
             pipeline,
@@ -432,7 +427,7 @@ impl DeviceInterface {
             self.device.create_render_pass(create_info, None)
                 .expect("Failed to create renderpass")
         };
-        self.set_debug_name(vk::ObjectType::RENDER_PASS, renderpass.as_raw(), name);
+        self.set_debug_name(renderpass, name);
 
         DeviceRenderpass::new(
             renderpass,
@@ -448,9 +443,8 @@ impl DeviceInterface {
             unsafe {
                 let c_label = CString::new(label)
                     .expect("Failed to create C-string for debug label");
-                let debug_label = DebugUtilsLabelEXT::builder()
-                    .label_name(&c_label)
-                    .build();
+                let debug_label = DebugUtilsLabelEXT::default()
+                    .label_name(&c_label);
                 debug.debug_utils.cmd_begin_debug_utils_label(command_buffer, &debug_label);
             }
         }

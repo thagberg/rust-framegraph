@@ -1,9 +1,10 @@
 use std::fmt::{Debug, Formatter};
-use ash::extensions::ext::DebugUtils;
+// use ash::extensions::ext::DebugUtils;
+use ash::ext::debug_utils::Device;
 use ash::vk::DebugUtilsMessengerEXT;
 
 pub struct VulkanDebug {
-    pub debug_utils: DebugUtils,
+    pub debug_utils: Device,
     pub debug_messenger: DebugUtilsMessengerEXT
 }
 

@@ -4,6 +4,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use ash::prelude::VkResult;
 use ash::vk;
+use ash::khr::swapchain as ash_swapchain;
 use crate::device::interface::DeviceInterface;
 use crate::device::resource::DeviceResource;
 
@@ -15,15 +16,15 @@ pub enum SwapchainStatus {
 }
 
 pub struct NextImage<'a> {
-    pub image: Option<Arc<Mutex<DeviceResource<'a>>>>,
+    pub image: Option<Arc<Mutex<DeviceResource<'a, 'a>>>>,
     pub status: SwapchainStatus
 }
 
 pub struct SwapchainWrapper<'a> {
     device: &'a DeviceInterface,
-    loader: ash::extensions::khr::Swapchain,
+    loader: ash_swapchain::Device,
     swapchain: vk::SwapchainKHR,
-    images: Vec<Arc<Mutex<DeviceResource<'a>>>>,
+    images: Vec<Arc<Mutex<DeviceResource<'a, 'a>>>>,
     format: vk::Format,
     extent: vk::Extent2D,
     present_fences: Vec<vk::Fence>
@@ -39,9 +40,9 @@ impl Debug for SwapchainWrapper<'_> {
 impl<'a> SwapchainWrapper<'a> {
     pub fn new(
         device: &'a DeviceInterface,
-        loader: ash::extensions::khr::Swapchain,
+        loader: ash_swapchain::Device,
         swapchain: vk::SwapchainKHR,
-        images: Vec<Arc<Mutex<DeviceResource<'a>>>>,
+        images: Vec<Arc<Mutex<DeviceResource<'a, 'a>>>>,
         format: vk::Format,
         extent: vk::Extent2D,
         present_fences: Vec<vk::Fence>
@@ -65,7 +66,7 @@ impl<'a> SwapchainWrapper<'a> {
 
     pub fn get_extent(&self) -> vk::Extent2D { self.extent }
 
-    pub fn get_loader(&self) -> &ash::extensions::khr::Swapchain { &self.loader }
+    pub fn get_loader(&self) -> &ash_swapchain::Device { &self.loader }
 
     pub fn get_present_fence(&self, index: u32) -> vk::Fence {
         self.present_fences[index as usize].clone()
