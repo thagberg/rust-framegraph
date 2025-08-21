@@ -43,13 +43,13 @@ use crate::ubo_example::UboExample;
 
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 
-struct Examples {
-    examples: Vec<Box<dyn Example>>,
+struct Examples<'d> {
+    examples: Vec<Box<dyn Example<'d>>>,
     active_example_index: Option<usize>
 }
 
-impl Examples {
-    pub fn new(examples: Vec<Box<dyn Example>>) -> Self {
+impl<'d> Examples<'d> {
+    pub fn new(examples: Vec<Box<dyn Example<'d>>>) -> Self {
         Examples {
             examples,
             active_example_index: None
@@ -57,7 +57,7 @@ impl Examples {
     }
 }
 
-struct WindowedVulkanApp {
+struct WindowedVulkanApp<'d> {
     window: Window,
     platform: WinitPlatform,
     imgui: imgui::Context,
@@ -65,28 +65,28 @@ struct WindowedVulkanApp {
     frame_index: u32,
     render_semaphores: Vec<vk::Semaphore>,
     frame_fences: Vec<vk::Fence>,
-    frames: Vec<Option<Box<Frame>>>,
+    frames: Vec<Option<Box<Frame<'d>>>>,
 
     // examples: Vec<Box<dyn Example>>,
-    examples: Examples,
+    examples: Examples<'d>,
 
-    imgui_renderer: ImguiRender,
-    frame_graph: VulkanFrameGraph,
+    imgui_renderer: ImguiRender<'d>,
+    frame_graph: VulkanFrameGraph<'d>,
 
-    render_context: VulkanRenderContext,
+    render_context: VulkanRenderContext<'d>,
 
     tracy: tracy_client::Client
 }
 
-impl Debug for WindowedVulkanApp {
+impl Debug for WindowedVulkanApp<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("WindowedVulkanApp")
             .finish()
     }
 }
 
-impl WindowedVulkanApp {
-    pub fn new(event_loop: &EventLoop<()>, title: &str, width: u32, height: u32) -> WindowedVulkanApp {
+impl<'d> WindowedVulkanApp<'d> {
+    pub fn new(event_loop: &EventLoop<()>, title: &str, width: u32, height: u32) -> WindowedVulkanApp<'d> {
         let tracy = tracy_client::Client::start();
 
         // SimpleLogger::new().init().unwrap();
