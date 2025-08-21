@@ -368,7 +368,6 @@ impl<'d> Example<'d> for ModelExample<'d> {
 
         // add depth clear pass
         passes.push(clear::clear(
-            device,
             depth_attachment.resource_image.clone(),
             vk::ImageAspectFlags::DEPTH));
 
