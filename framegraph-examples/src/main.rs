@@ -9,6 +9,7 @@ extern crate core;
 use core::fmt::{Debug, Formatter};
 use std::ffi::CString;
 use std::mem::swap;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use ash::vk;
 
@@ -24,6 +25,7 @@ use imgui;
 use imgui::BackendFlags;
 use tracy_client::span_location;
 use winit::error::EventLoopError;
+use api_types::device::allocator::ResourceAllocator;
 use api_types::swapchain::SwapchainStatus;
 use context::render_context::RenderContext;
 use context::vulkan_render_context::{VulkanFrameObjects, VulkanRenderContext};
@@ -74,6 +76,7 @@ struct WindowedVulkanApp<'d> {
     frame_graph: VulkanFrameGraph<'d>,
 
     render_context: VulkanRenderContext<'d>,
+    allocator: Arc<Mutex<ResourceAllocator>>,
 
     tracy: tracy_client::Client
 }
@@ -121,9 +124,7 @@ impl<'d> WindowedVulkanApp<'d> {
                 Some(&window))
         };
 
-        let frame_graph = VulkanFrameGraph::new(
-            VulkanRenderpassManager::new(),
-            VulkanPipelineManager::new());
+        let frame_graph = VulkanFrameGraph::new();
 
         let max_frames_in_flight = {
             match render_context.get_swapchain() {
@@ -151,20 +152,25 @@ impl<'d> WindowedVulkanApp<'d> {
             unsafe {
                 for _ in 0..max_frames_in_flight {
                     frame_fences.push(
-                        render_context.get_device().borrow().get().create_fence(
+                        render_context.get_device().get().create_fence(
                             &fence_create,
                             None)
                             .expect("Failed to create Frame fence")
                     );
 
                     render_semaphores.push(
-                        render_context.get_device().borrow().get().create_semaphore(
+                        render_context.get_device().get().create_semaphore(
                             &semaphore_create, None)
                             .expect("Failed to create Render semaphore")
                     );
                 }
             }
         }
+
+        let allocator = Arc::new(Mutex::new(ResourceAllocator::new(
+            render_context.get_device().get(),
+            render_context.get_instance(),
+            render_context.get_physical_device())));
 
         let immediate_command_buffer = render_context.get_immediate_command_buffer();
 
@@ -177,13 +183,20 @@ impl<'d> WindowedVulkanApp<'d> {
             ImguiRender::new(
                 render_context.get_device().clone(),
                 &render_context,
+                allocator.clone(),
                 &immediate_command_buffer,
                 font_texture)
         };
 
         let examples: Vec<Box<dyn Example>> = vec![
-            Box::new(UboExample::new(render_context.get_device().clone())),
-            Box::new(ModelExample::new(render_context.get_device().clone(), &render_context, &immediate_command_buffer))
+            Box::new(UboExample::new(
+                render_context.get_device(),
+                allocator.clone())),
+            Box::new(ModelExample::new(
+                render_context.get_device(),
+                &render_context,
+                allocator.clone(),
+                &immediate_command_buffer))
         ];
 
         let mut frames: Vec<Option<Box<Frame>>> = Vec::new();
@@ -201,6 +214,7 @@ impl<'d> WindowedVulkanApp<'d> {
             frame_fences,
             frame_index: 0,
             render_context,
+            allocator,
             tracy
         }
     }
@@ -209,16 +223,16 @@ impl<'d> WindowedVulkanApp<'d> {
         println!("Shutting down");
         unsafe {
             let device = self.render_context.get_device();
-            device.borrow().get()
+            device.get()
                 .device_wait_idle()
                 .expect("Failed to wait for GPU to be idle");
 
             for semaphore in &self.render_semaphores {
-                device.borrow().get().destroy_semaphore(*semaphore, None);
+                device.get().destroy_semaphore(*semaphore, None);
             }
 
             for fence in &self.frame_fences {
-                device.borrow().get().destroy_fence(*fence, None);
+                device.get().destroy_fence(*fence, None);
             }
 
         }
@@ -232,7 +246,7 @@ impl<'d> WindowedVulkanApp<'d> {
         log::trace!(target: "frame", "Waiting for frame: {}", self.frame_index);
         unsafe {
             let _span = tracy_client::span!("Wait on Frame fence");
-            self.render_context.get_device().borrow().get()
+            self.render_context.get_device().get()
                 .wait_for_fences(
                     // std::slice::from_ref(&wait_fence),
                     &wait_fences,
@@ -268,14 +282,14 @@ impl<'d> WindowedVulkanApp<'d> {
         // begin commandbuffer
         unsafe {
             let _span = tracy_client::span!("Begin commandbuffer");
-            self.render_context.get_device().borrow().get().reset_command_buffer(
+            self.render_context.get_device().get().reset_command_buffer(
                 command_buffer,
                 vk::CommandBufferResetFlags::empty())
                 .expect("Failed to reset command buffer");
             let begin_info = vk::CommandBufferBeginInfo::builder()
                 .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)
                 .build();
-            self.render_context.get_device().borrow().get().begin_command_buffer(command_buffer, &begin_info)
+            self.render_context.get_device().get().begin_command_buffer(command_buffer, &begin_info)
                 .expect("Failed to begin recording command buffer");
         }
 
@@ -325,6 +339,7 @@ impl<'d> WindowedVulkanApp<'d> {
                     if let Some(active_example) = self.examples.examples.get(index) {
                         let nodes = active_example.execute(
                             self.render_context.get_device(),
+                            self.allocator.clone(),
                             ui,
                             rt_ref.clone());
                         for node in nodes {
@@ -336,6 +351,7 @@ impl<'d> WindowedVulkanApp<'d> {
                 let imgui_draw_data = self.imgui.render();
 
                 let imgui_nodes = self.imgui_renderer.generate_passes(
+                    self.allocator.clone(),
                     imgui_draw_data,
                     rt_ref.clone(),
                     self.render_context.get_device());
@@ -354,7 +370,7 @@ impl<'d> WindowedVulkanApp<'d> {
         // end command buffer
         // TODO: support multiple command buffers
         unsafe {
-            self.render_context.get_device().borrow().get().end_command_buffer(command_buffer)
+            self.render_context.get_device().get().end_command_buffer(command_buffer)
                 .expect("Failed to finish recording command buffer");
         }
 
@@ -362,7 +378,7 @@ impl<'d> WindowedVulkanApp<'d> {
         {
             unsafe {
                 let fences_to_reset = [frame_fence];
-                self.render_context.get_device().borrow().get()
+                self.render_context.get_device().get()
                     // .reset_fences(std::slice::from_ref(&frame_fence))
                     .reset_fences(&fences_to_reset)
                     .expect("Failed to reset Frame Fence");
