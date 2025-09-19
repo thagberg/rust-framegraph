@@ -6,7 +6,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::thread::Thread;
 use ash::{vk};
-use ash::vk::{ExtendsPhysicalDeviceFeatures2, PFN_vkGetPhysicalDeviceFeatures2, PhysicalDeviceFeatures2, PhysicalDeviceFeatures2Builder, PresentModeKHR};
+use ash::vk::{ExtendsPhysicalDeviceFeatures2, PFN_vkGetPhysicalDeviceFeatures2, PhysicalDeviceFeatures2, PresentModeKHR};
 
 use ash::vk::DebugUtilsMessageSeverityFlagsEXT as severity_flags;
 use ash::vk::DebugUtilsMessageTypeFlagsEXT as type_flags;
@@ -59,11 +59,13 @@ unsafe extern "system" fn debug_utils_callback(
 #[cfg(target_os = "macos")]
 fn get_instance_extensions() -> Vec<&'static CStr> {
     // Need to support portability drivers for MoltenVK
+    // ash::khr::get_physical_device_properties2::Instance
+    // ash::khr::get_physical_device_properties2::NAME
     vec![
-        vk::KhrPortabilityEnumerationFn::name(),
-        vk::KhrGetPhysicalDeviceProperties2Fn::name(),
-        vk::KhrGetSurfaceCapabilities2Fn::name(), // dependency of EXTSurfaceMaintenance1
-        vk::ExtSurfaceMaintenance1Fn::name(), // dependency of device extension EXTSwapchainMaintenance1
+        ash::vk::extensions::KHR_PORTABILITY_ENUMERATION_NAME,
+        ash::khr::get_physical_device_properties2::NAME,
+        ash::khr::get_surface_capabilities2::NAME,
+        ash::ext::surface_maintenance1::NAME,
     ]
 }
 
@@ -83,9 +85,9 @@ fn get_instance_extensions() -> Vec<&'static CStr> {
 #[cfg(target_os = "macos")]
 fn get_logical_device_extensions() -> Vec<&'static CStr> {
     vec![
-        ash::extensions::khr::Swapchain::name(),
+        ash::khr::swapchain::NAME,
         // Needed for MoltenVK
-        vk::KhrPortabilitySubsetFn::name()
+        ash::khr::portability_subset::NAME,
     ]
 }
 
@@ -98,9 +100,8 @@ fn get_logical_device_extensions() -> Vec<&'static CStr> {
 
 fn get_physical_device_extensions() -> Vec<&'static CStr> {
     vec![
-        ash::extensions::khr::Swapchain::name(),
-        vk::ExtSwapchainMaintenance1Fn::name()  // required for present signaling
-
+        ash::khr::swapchain::NAME,
+        ash::ext::swapchain_maintenance1::NAME // required for present signaling
     ]
 }
 
