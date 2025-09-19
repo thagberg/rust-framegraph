@@ -4,7 +4,7 @@ use ash::ext::debug_utils::Device;
 use ash::vk::DebugUtilsMessengerEXT;
 
 pub struct VulkanDebug {
-    pub debug_utils: Device,
+    pub debug_utils: ash::ext::debug_utils::Instance,
     pub debug_messenger: DebugUtilsMessengerEXT
 }
 

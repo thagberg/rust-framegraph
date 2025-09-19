@@ -121,23 +121,23 @@ trait PhysicalDeviceFeatureChecker {
     fn check_feature(&self, device_features: &vk::PhysicalDeviceFeatures2) -> bool;
 }
 
-struct HostQueryResetPhysicalDeviceFeature {
-    feature: vk::PhysicalDeviceHostQueryResetFeatures
+struct HostQueryResetPhysicalDeviceFeature<'a> {
+    // I'm not actually sure why this requires a lifetime, because it just holds a PhantomData
+    feature: vk::PhysicalDeviceHostQueryResetFeatures<'a>
 }
 
-impl HostQueryResetPhysicalDeviceFeature {
+impl<'a> HostQueryResetPhysicalDeviceFeature<'a> {
     pub fn new() -> Self {
-        let feature = vk::PhysicalDeviceHostQueryResetFeatures::builder()
-            .host_query_reset(true)
-            .build();
+        let feature = vk::PhysicalDeviceHostQueryResetFeatures::default()
+            .host_query_reset(true);
         HostQueryResetPhysicalDeviceFeature {
             feature: feature
         }
     }
 }
 
-impl PhysicalDeviceFeatureChecker for HostQueryResetPhysicalDeviceFeature {
-    fn add_feature<'a>(&'a mut self, device_features: PhysicalDeviceFeatures2Builder<'a>) -> vk::PhysicalDeviceFeatures2Builder<'a> {
+impl<'a> PhysicalDeviceFeatureChecker for HostQueryResetPhysicalDeviceFeature<'a> {
+    fn add_feature(&'a mut self, device_features: PhysicalDeviceFeatures2<'a>) -> vk::PhysicalDeviceFeatures2<'a> {
         device_features.push_next(&mut self.feature)
     }
 
@@ -148,7 +148,7 @@ impl PhysicalDeviceFeatureChecker for HostQueryResetPhysicalDeviceFeature {
 
 fn get_required_physical_device_features() -> Vec<Box<dyn PhysicalDeviceFeatureChecker>> {
     vec![
-        Box::new(HostQueryResetPhysicalDeviceFeature::new())
+        Box::new(HostQueryResetPhysicalDeviceFeature::new()) // required for GPU time querying for instrumentation
     ]
 }
 
@@ -299,22 +299,21 @@ fn is_physical_device_suitable(
 
     let mut required_features = get_required_physical_device_features();
 
-    let mut physical_device_features = vk::PhysicalDeviceFeatures2::builder();
+    let mut physical_device_features = vk::PhysicalDeviceFeatures2::default();
     for mut required_feature in &mut required_features {
         physical_device_features = required_feature.add_feature(physical_device_features);
     }
 
-    let mut resolved_physical_device_features = physical_device_features.build();
 
     unsafe {
         instance.get().get_physical_device_features2(
             physical_device,
-            &mut resolved_physical_device_features);
+            &mut physical_device_features);
     }
 
     let mut required_features_supported = true;
     for mut required_feature in required_features {
-        if !required_feature.check_feature(&resolved_physical_device_features) {
+        if !required_feature.check_feature(&physical_device_features) {
             required_features_supported = false;
         }
     }
@@ -417,15 +416,12 @@ fn create_logical_device(
         queue_create_infos.push(queue_create_info);
     }
 
-    let mut core_physical_device_features = vk::PhysicalDeviceFeatures::builder().build();
-    let mut physical_device_features = vk::PhysicalDeviceFeatures2::builder();
+    let mut physical_device_features = vk::PhysicalDeviceFeatures2::default();
     // TODO: make this an argument rather than a function call here
     let mut required_features = get_required_physical_device_features();
     for mut required_feature in &mut required_features {
         physical_device_features = required_feature.add_feature(physical_device_features);
     }
-
-    let mut resolved_physical_device_features = physical_device_features.build();
 
     // convert layer names to const char*
     let p_layers: Vec<*const c_char> = layers.iter().map(|c_layer| {
@@ -437,12 +433,11 @@ fn create_logical_device(
         c_extension.as_ptr()
     }).collect();
 
-    let device_create_info = vk::DeviceCreateInfo::builder()
+    let device_create_info = vk::DeviceCreateInfo::default()
         .queue_create_infos(&queue_create_infos)
         .enabled_layer_names(&p_layers)
         .enabled_extension_names(&p_extensions)
-        .push_next(&mut resolved_physical_device_features)
-        .build();
+        .push_next(&mut physical_device_features);
 
     let device = unsafe {
         instance.get().create_device(physical_device.get(), &device_create_info, None)
@@ -515,15 +510,15 @@ fn create_debug_util(
     instance: &ash::Instance,
     severity: severity_flags,
     message_flags: type_flags) -> VulkanDebug {
-    let debug_utils_loader = ash::extensions::ext::DebugUtils::new(&entry, &instance);
+
+    let debug_utils_loader = ash::ext::debug_utils::Instance::new(entry, instance);
 
     let messenger = unsafe {
         debug_utils_loader.create_debug_utils_messenger(
-            &vk::DebugUtilsMessengerCreateInfoEXT::builder()
+            &vk::DebugUtilsMessengerCreateInfoEXT::default()
                 .message_severity(severity)
                 .message_type(message_flags)
-                .pfn_user_callback(Some(debug_utils_callback))
-                .build(),
+                .pfn_user_callback(Some(debug_utils_callback)),
             None)
             .expect("Failed to create Debug Utils Messenger")
     };
@@ -635,7 +630,8 @@ fn create_swapchain<'a, 'b>(
         image_array_layers: 1
     };
 
-    let swapchain_loader = ash::extensions::khr::Swapchain::new(
+    // ash::khr::swapchain::Device
+    let swapchain_loader = ash::khr::swapchain::Device::new(
         instance.get(),
         device.get());
     let swapchain = unsafe {
