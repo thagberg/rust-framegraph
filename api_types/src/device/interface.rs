@@ -67,11 +67,8 @@ impl DeviceInterface {
         let debug_info = DebugUtilsObjectNameInfoEXT::default()
             .object_handle(handle)
             .object_name(&c_name);
-        unsafe {
-            if let Some(debug) = &self.debug {
-                debug.debug_utils.set_debug_utils_object_name(&debug_info)
-                    .expect("Failed to set debug object name");
-            }
+        if let Some(debug) = &self.debug {
+            debug.set_object_name(&debug_info);
         }
     }
 
@@ -440,13 +437,7 @@ impl DeviceInterface {
         command_buffer: vk::CommandBuffer,
         label: &str) {
         if let Some(debug) = &self.debug {
-            unsafe {
-                let c_label = CString::new(label)
-                    .expect("Failed to create C-string for debug label");
-                let debug_label = DebugUtilsLabelEXT::default()
-                    .label_name(&c_label);
-                debug.debug_utils.cmd_begin_debug_utils_label(command_buffer, &debug_label);
-            }
+            debug.begin_label(label, command_buffer);
         }
     }
 
@@ -454,9 +445,7 @@ impl DeviceInterface {
         &self,
         command_buffer: vk::CommandBuffer) {
         if let Some(debug) = &self.debug {
-            unsafe {
-                debug.debug_utils.cmd_end_debug_utils_label(command_buffer);
-            }
+            debug.end_label(command_buffer);
         }
     }
 }

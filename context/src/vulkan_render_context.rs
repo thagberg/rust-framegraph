@@ -59,10 +59,8 @@ unsafe extern "system" fn debug_utils_callback(
 #[cfg(target_os = "macos")]
 fn get_instance_extensions() -> Vec<&'static CStr> {
     // Need to support portability drivers for MoltenVK
-    // ash::khr::get_physical_device_properties2::Instance
-    // ash::khr::get_physical_device_properties2::NAME
     vec![
-        ash::vk::extensions::KHR_PORTABILITY_ENUMERATION_NAME,
+        ash::khr::portability_enumeration::NAME,
         ash::khr::get_physical_device_properties2::NAME,
         ash::khr::get_surface_capabilities2::NAME,
         ash::ext::surface_maintenance1::NAME,
@@ -116,7 +114,7 @@ fn get_instance_flags() -> vk::InstanceCreateFlags {
 }
 
 trait PhysicalDeviceFeatureChecker {
-    fn add_feature<'a>(&'a mut self, device_features: vk::PhysicalDeviceFeatures2Builder<'a>) -> vk::PhysicalDeviceFeatures2Builder<'a>;
+    fn add_feature<'a>(&'a mut self, device_features: vk::PhysicalDeviceFeatures2<'a>) -> vk::PhysicalDeviceFeatures2<'a>;
 
     fn check_feature(&self, device_features: &vk::PhysicalDeviceFeatures2) -> bool;
 }
@@ -168,17 +166,16 @@ fn create_vulkan_instance(
         .map(|extension_name| extension_name.as_ptr())
         .collect();
 
-    let mut builder = vk::InstanceCreateInfo::builder()
+    let mut builder = vk::InstanceCreateInfo::default()
         .application_info(&application_info)
         .enabled_layer_names(&raw_layer_names)
         .enabled_extension_names(&raw_extension_names)
         .flags(get_instance_flags());
 
-    let mut instance_debug = vk::DebugUtilsMessengerCreateInfoEXT::builder()
+    let mut instance_debug = vk::DebugUtilsMessengerCreateInfoEXT::default()
         .message_severity(severity_flags::WARNING | severity_flags::ERROR)
         .message_type(type_flags::GENERAL | type_flags::PERFORMANCE | type_flags::VALIDATION)
-        .pfn_user_callback(Some(debug_utils_callback))
-        .build();
+        .pfn_user_callback(Some(debug_utils_callback));
 
     if required_layer_names.len() > 0 {
         builder = builder.push_next(&mut instance_debug);
@@ -409,10 +406,9 @@ fn create_logical_device(
     let priorities = [1.0_f32];
     let mut queue_create_infos = vec![];
     for &family_index in unique_family_indices.iter() {
-        let queue_create_info = vk::DeviceQueueCreateInfo::builder()
+        let queue_create_info = vk::DeviceQueueCreateInfo::default()
             .queue_family_index(family_index)
-            .queue_priorities(&priorities)
-            .build();
+            .queue_priorities(&priorities);
         queue_create_infos.push(queue_create_info);
     }
 
@@ -748,7 +744,7 @@ impl<'a> Drop for VulkanRenderContext<'a> {
 }
 
 impl<'a> RenderContext for VulkanRenderContext<'a> {
-    type Create = vk::RenderPassCreateInfo;
+    type Create = vk::RenderPassCreateInfo<'a>; // TODO: this is probably the wrong scope (scope is for subpass refs)
     type RP = vk::RenderPass;
 
     fn get_device(&self) -> &DeviceInterface { &self.device }
@@ -767,7 +763,7 @@ impl<'a> VulkanRenderContext<'a> {
         ];
 
         let mut instance_extensions = vec![
-            ash::extensions::ext::DebugUtils::name()
+            ash::ext::debug_utils::NAME
         ];
 
         if let Some(resolved_window) = window {
