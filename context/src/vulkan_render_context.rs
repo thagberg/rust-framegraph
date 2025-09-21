@@ -599,26 +599,22 @@ fn create_swapchain<'a, 'b>(
         Some(old) => {old.swapchain.get()}
         None => {vk::SwapchainKHR::null()}
     };
-    let create_info = vk::SwapchainCreateInfoKHR {
-        s_type: vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR,
-        p_next: std::ptr::null(),
-        flags: vk::SwapchainCreateFlagsKHR::empty(),
-        surface: surface.get_surface(),
-        min_image_count: image_count,
-        image_color_space: swapchain_format.color_space,
-        image_format: swapchain_format.format,
-        image_extent: swapchain_extent,
-        image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST,
-        image_sharing_mode,
-        queue_family_index_count: 0,
-        p_queue_family_indices: std::ptr::null(),
-        pre_transform: swapchain_capabilities.capabilities.current_transform,
-        composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
-        present_mode: swapchain_present_mode,
-        clipped: vk::TRUE,
-        old_swapchain: old,
-        image_array_layers: 1
-    };
+
+    let create_info = vk::SwapchainCreateInfoKHR::default()
+        .flags(vk::SwapchainCreateFlagsKHR::empty())
+        .surface(surface.get_surface())
+        .min_image_count(image_count)
+        .image_color_space(swapchain_format.color_space)
+        .image_format(swapchain_format.format)
+        .image_extent(swapchain_extent)
+        .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST)
+        .image_sharing_mode(image_sharing_mode)
+        .pre_transform(swapchain_capabilities.capabilities.current_transform)
+        .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
+        .present_mode(swapchain_present_mode)
+        .clipped(true)
+        .old_swapchain(old)
+        .image_array_layers(1);
 
     // ash::khr::swapchain::Device
     let swapchain_loader = ash::khr::swapchain::Device::new(
@@ -655,9 +651,8 @@ fn create_swapchain<'a, 'b>(
 
     let mut present_fences: Vec<vk::Fence> = Vec::new();
     unsafe {
-        let fence_create = vk::FenceCreateInfo::builder()
-            .flags(vk::FenceCreateFlags::SIGNALED)
-            .build();
+        let fence_create = vk::FenceCreateInfo::default()
+            .flags(vk::FenceCreateFlags::SIGNALED);
         for _ in 0..swapchain_images.len() {
             present_fences.push(
                 device.get().create_fence(
@@ -891,10 +886,9 @@ impl<'a> VulkanRenderContext<'a> {
             ty: vk::DescriptorType::INPUT_ATTACHMENT,
             descriptor_count: 16
         };
-        let combined_sampler_pool_size = vk::DescriptorPoolSize::builder()
+        let combined_sampler_pool_size = vk::DescriptorPoolSize::default()
             .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .descriptor_count(16)
-            .build();
+            .descriptor_count(16);
         let descriptor_pool_sizes = [ubo_pool_size, image_pool_size, combined_sampler_pool_size];
 
         self.swapchain = {
@@ -917,8 +911,7 @@ impl<'a> VulkanRenderContext<'a> {
             if let Some(s) = &self.swapchain {
                 semaphores.reserve(s.get_images().len());
                 for i in 0..s.get_images().len() {
-                    let create_info = vk::SemaphoreCreateInfo::builder()
-                        .build();
+                    let create_info = vk::SemaphoreCreateInfo::default();
 
                     semaphores.push(unsafe {
                         self.device.get().create_semaphore(&create_info, None)
