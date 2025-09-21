@@ -135,7 +135,7 @@ impl<'a> HostQueryResetPhysicalDeviceFeature<'a> {
 }
 
 impl<'a> PhysicalDeviceFeatureChecker for HostQueryResetPhysicalDeviceFeature<'a> {
-    fn add_feature(&'a mut self, device_features: PhysicalDeviceFeatures2<'a>) -> vk::PhysicalDeviceFeatures2<'a> {
+    fn add_feature<'b>(&'b mut self, device_features: PhysicalDeviceFeatures2<'b>) -> vk::PhysicalDeviceFeatures2<'b> {
         device_features.push_next(&mut self.feature)
     }
 
@@ -450,12 +450,9 @@ fn create_command_pool(
     device: &DeviceInterface,
     queue_family_index: u32
 ) -> vk::CommandPool {
-    let create_info = vk::CommandPoolCreateInfo {
-        s_type: vk::StructureType::COMMAND_POOL_CREATE_INFO,
-        p_next: std::ptr::null(),
-        flags: vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
-        queue_family_index
-    };
+    let create_info = vk::CommandPoolCreateInfo::default()
+        .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+        .queue_family_index(queue_family_index);
 
     unsafe {
         device.get().create_command_pool(&create_info, None)
@@ -479,7 +476,7 @@ fn create_per_thread_objects<'a>(
         device.get_queue_families().compute.unwrap());
 
     let descriptor_pool = unsafe {
-        let descriptor_pool_create = vk::DescriptorPoolCreateInfo::builder()
+        let descriptor_pool_create = vk::DescriptorPoolCreateInfo::default()
             .flags(vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET)
             .max_sets(max_descriptor_sets)
             .pool_sizes(&descriptor_pool_sizes);
