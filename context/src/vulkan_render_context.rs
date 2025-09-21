@@ -516,10 +516,7 @@ fn create_debug_util(
             .expect("Failed to create Debug Utils Messenger")
     };
 
-    VulkanDebug{
-        debug_utils: debug_utils_loader,
-        debug_messenger: messenger,
-    }
+    VulkanDebug::new(debug_utils_loader, messenger)
 }
 
 fn create_swapchain<'a, 'b>(

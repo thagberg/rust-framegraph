@@ -20,6 +20,16 @@ impl Debug for VulkanDebug {
 
 impl VulkanDebug {
 
+    pub fn new(
+        debug_utils: ash::ext::debug_utils::Instance,
+        debug_messenger: DebugUtilsMessengerEXT) -> Self {
+        VulkanDebug {
+            debug_utils,
+            device_utils: None,
+            debug_messenger,
+        }
+    }
+
     pub fn create_device_utils(&mut self, instance: &ash::Instance, device: &ash::Device) {
         let device_utils = ash::ext::debug_utils::Device::new(instance, device);
         self.device_utils = Some(device_utils);
