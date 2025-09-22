@@ -7,4 +7,4 @@ edition = "2021"
 api_types           = {path="../api_types"}
 tracing = "0.1.40"
 tracy-client = "0.17.1"
-ash             = {version = "^0.37", features = ["linked"]}
+ash             = {version = "^0.38", features = ["linked"]}

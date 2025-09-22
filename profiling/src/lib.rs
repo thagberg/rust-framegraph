@@ -99,8 +99,7 @@ impl FrameSpans {
             unsafe {
                 device.get_query_pool_results(
                     self.query_pool,
-                    0,
-                    self.query_index,
+                    0, // should this be query_index?
                     &mut self.data,
                     vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT)
                     .expect("Failed to retrieve query results");
@@ -217,10 +216,9 @@ impl GpuSpanManager {
 
             let mut frames: Vec<FrameSpans> = Vec::new();
 
-            let query_pool_create = vk::QueryPoolCreateInfo::builder()
+            let query_pool_create = vk::QueryPoolCreateInfo::default()
                 .query_type(vk::QueryType::TIMESTAMP)
-                .query_count(MAX_QUERIES)
-                .build();
+                .query_count(MAX_QUERIES);
 
             for _i in 0..num_frames {
                 let query_pool = device.create_query_pool(
@@ -247,9 +245,8 @@ impl GpuSpanManager {
                     1
                 );
 
-                let begin_info = vk::CommandBufferBeginInfo::builder()
-                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
-                    .build();
+                let begin_info = vk::CommandBufferBeginInfo::default()
+                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
                 device.begin_command_buffer(*command_buffer, &begin_info);
 
                 device.cmd_write_timestamp(
@@ -261,9 +258,8 @@ impl GpuSpanManager {
 
                 device.end_command_buffer(*command_buffer);
 
-                let submit_info = vk::SubmitInfo::builder()
-                    .command_buffers(std::slice::from_ref(command_buffer))
-                    .build();
+                let submit_info = vk::SubmitInfo::default()
+                    .command_buffers(std::slice::from_ref(command_buffer));
 
                 device.queue_submit(
                     queue.clone(),
@@ -277,7 +273,6 @@ impl GpuSpanManager {
                 device.get_query_pool_results(
                     frames[0].query_pool,
                     0,
-                    1,
                     std::slice::from_mut(&mut timestamp_value),
                     vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT
                 ).expect("Failed to retrieve initial GPU timestamp");
