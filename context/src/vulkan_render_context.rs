@@ -116,7 +116,7 @@ fn get_instance_flags() -> vk::InstanceCreateFlags {
 trait PhysicalDeviceFeatureChecker {
     fn add_feature<'a>(&'a mut self, device_features: vk::PhysicalDeviceFeatures2<'a>) -> vk::PhysicalDeviceFeatures2<'a>;
 
-    fn check_feature(&self, device_features: &vk::PhysicalDeviceFeatures2) -> bool;
+    fn check_feature(&self) -> bool;
 }
 
 struct HostQueryResetPhysicalDeviceFeature<'a> {
@@ -139,7 +139,7 @@ impl<'a> PhysicalDeviceFeatureChecker for HostQueryResetPhysicalDeviceFeature<'a
         device_features.push_next(&mut self.feature)
     }
 
-    fn check_feature(&self, device_features: &PhysicalDeviceFeatures2) -> bool {
+    fn check_feature(&self) -> bool {
         self.feature.host_query_reset > 0
     }
 }
@@ -296,21 +296,26 @@ fn is_physical_device_suitable(
 
     let mut required_features = get_required_physical_device_features();
 
-    let mut physical_device_features = vk::PhysicalDeviceFeatures2::default();
-    for mut required_feature in &mut required_features {
-        physical_device_features = required_feature.add_feature(physical_device_features);
-    }
+    {
+        // The daisy-chained PhysicalDeviceFeatures2 will each hold a reference to a
+        // feature owned by a PhysicalDeviceFeatureChecker, which is why we want to limit
+        // the scope of physical_device_features to ensure the borrows are released quickly
+        let mut physical_device_features = vk::PhysicalDeviceFeatures2::default();
+        // for mut required_feature in &mut copy_features {
+        for mut required_feature in &mut required_features {
+            physical_device_features = required_feature.add_feature(physical_device_features);
+        }
 
-
-    unsafe {
-        instance.get().get_physical_device_features2(
-            physical_device,
-            &mut physical_device_features);
+        unsafe {
+            instance.get().get_physical_device_features2(
+                physical_device,
+                &mut physical_device_features);
+        }
     }
 
     let mut required_features_supported = true;
-    for mut required_feature in required_features {
-        if !required_feature.check_feature(&physical_device_features) {
+    for required_feature in &required_features {
+        if !required_feature.check_feature() {
             required_features_supported = false;
         }
     }
@@ -1094,13 +1099,9 @@ impl<'a> VulkanRenderContext<'a> {
         enter_span!(tracing::Level::TRACE, "Create Descriptorsets");
 
         if layouts.len() > 0 {
-            let alloc_info = vk::DescriptorSetAllocateInfo {
-                s_type: vk::StructureType::DESCRIPTOR_SET_ALLOCATE_INFO,
-                p_next: std::ptr::null(),
-                descriptor_pool: descriptor_pool,
-                descriptor_set_count: layouts.len() as u32,
-                p_set_layouts: layouts.as_ptr()
-            };
+            let alloc_info = vk::DescriptorSetAllocateInfo::default()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(layouts);
 
             let descriptor_sets = unsafe {
                 self.device.allocate_descriptor_sets(&alloc_info)
@@ -1132,7 +1133,7 @@ impl<'a> VulkanRenderContext<'a> {
             image_views.push(image.view);
         }
 
-        let create_info = vk::FramebufferCreateInfo::builder()
+        let create_info = vk::FramebufferCreateInfo::default()
             .render_pass(render_pass)
             .attachments(&image_views)
             .width(extent.width)
@@ -1154,12 +1155,11 @@ impl<'a> VulkanRenderContext<'a> {
         wait_semaphores: &[vk::Semaphore],
         signal_semaphores: &[vk::Semaphore]) {
 
-        let submit_info = vk::SubmitInfo::builder()
+        let submit_info = vk::SubmitInfo::default()
             .wait_semaphores(wait_semaphores)
             .wait_dst_stage_mask(std::slice::from_ref(&vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT))
             .command_buffers(command_buffers)
-            .signal_semaphores(signal_semaphores)
-            .build();
+            .signal_semaphores(signal_semaphores);
 
         unsafe {
             self.device.get()
@@ -1190,7 +1190,7 @@ impl<'a> VulkanRenderContext<'a> {
 
         let raw_swapchain = swapchain.get();
         let swapchain_index = self.swapchain_index;
-        let mut present_info = vk::PresentInfoKHR::builder()
+        let mut present_info = vk::PresentInfoKHR::default()
             .wait_semaphores(wait_semaphores)
             .swapchains(std::slice::from_ref(&raw_swapchain))
             .image_indices(std::slice::from_ref(&swapchain_index));
@@ -1209,11 +1209,10 @@ impl<'a> VulkanRenderContext<'a> {
                 std::slice::from_ref(&present_fence)
             ).expect("Failed to reset Present fence");
         }
-        let mut swapchain_fence = vk::SwapchainPresentFenceInfoEXT::builder()
-            .fences(std::slice::from_ref(&present_fence))
-            .build();
+        let mut swapchain_fence = vk::SwapchainPresentFenceInfoEXT::default()
+            .fences(std::slice::from_ref(&present_fence));
 
-        let resolved_present_info = present_info.push_next(&mut swapchain_fence).build();
+        let resolved_present_info = present_info.push_next(&mut swapchain_fence);
 
         let is_suboptimal = unsafe {
             swapchain.get_loader().queue_present(

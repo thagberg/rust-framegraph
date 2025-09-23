@@ -24,11 +24,10 @@ fn create_command_buffers(
     command_pool: vk::CommandPool,
     command_buffer_level: vk::CommandBufferLevel,
     num_command_buffers: u32) -> Vec<vk::CommandBuffer> {
-    let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
+    let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::default()
         .command_buffer_count(num_command_buffers)
         .command_pool(command_pool)
-        .level(command_buffer_level)
-        .build();
+        .level(command_buffer_level);
 
     unsafe {
         device.get().allocate_command_buffers(&command_buffer_allocate_info)
