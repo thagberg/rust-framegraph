@@ -203,13 +203,13 @@ fn get_descriptor_buffer_info(
 /// Wrapper for all info required for vk::WriteDescriptorSet
 /// This ensures that the image / buffer info references held in WriteDescriptorSet
 /// will live long enough
-struct DescriptorUpdate {
-    descriptor_writes: Vec<vk::WriteDescriptorSet>,
+struct DescriptorUpdate<'i> {
+    descriptor_writes: Vec<vk::WriteDescriptorSet<'i>>,
     image_infos: Vec<vk::DescriptorImageInfo>,
     buffer_infos: Vec<vk::DescriptorBufferInfo>
 }
 
-impl DescriptorUpdate {
+impl<'i> DescriptorUpdate<'i> {
     pub fn new() -> Self {
         DescriptorUpdate {
             descriptor_writes: vec![],

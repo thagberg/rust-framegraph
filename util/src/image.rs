@@ -14,7 +14,7 @@ use api_types::device::resource::{DeviceResource, ResourceType};
 use api_types::image::{ImageCreateInfo, ImageType};
 use context::vulkan_render_context::VulkanRenderContext;
 
-pub fn create_from_bytes<'a, 'b>(
+pub fn create_from_bytes<'a, 'b, 'c>(
     image_handle: u64,
     device: &'a DeviceInterface,
     allocator: Arc<Mutex<ResourceAllocator>>,
@@ -23,14 +23,13 @@ pub fn create_from_bytes<'a, 'b>(
     graphics_queue: vk::Queue,
     image_info: vk::ImageCreateInfo,
     image_bytes: &'b [u8],
-    name: &str) -> DeviceResource<'a> {
+    name: &str) -> DeviceResource<'a, 'c> {
     // create CPU-to-GPU buffer
     let buffer_create = BufferCreateInfo::new(
-        vk::BufferCreateInfo::builder()
+        vk::BufferCreateInfo::default()
             .size(image_bytes.len() as DeviceSize)
             .usage(vk::BufferUsageFlags::TRANSFER_SRC)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .build(),
+            .sharing_mode(vk::SharingMode::EXCLUSIVE),
         name.to_string()
     );
     let buffer = device.create_buffer(
@@ -81,33 +80,29 @@ pub fn create_from_bytes<'a, 'b>(
             }
         };
 
-        let copy_region = vk::BufferImageCopy::builder()
+        let copy_region = vk::BufferImageCopy::default()
             .buffer_offset(0)
             .buffer_row_length(0)
             .buffer_image_height(0)
-            .image_subresource(vk::ImageSubresourceLayers::builder()
+            .image_subresource(vk::ImageSubresourceLayers::default()
                 .aspect_mask(vk::ImageAspectFlags::COLOR)
                 .layer_count(1)
                 .base_array_layer(0)
-                .mip_level(0)
-                .build())
-            .image_offset(vk::Offset3D::builder()
+                .mip_level(0))
+            .image_offset(vk::Offset3D::default()
                 .x(0)
                 .y(0)
-                .z(0)
-                .build())
-            .image_extent(resolved_texture.extent.clone())
-            .build();
+                .z(0))
+            .image_extent(resolved_texture.extent.clone());
 
-        let barrier_subresource_range = vk::ImageSubresourceRange::builder()
+        let barrier_subresource_range = vk::ImageSubresourceRange::default()
             .level_count(1)
             .base_mip_level(0)
             .layer_count(1)
             .base_array_layer(0)
-            .aspect_mask(vk::ImageAspectFlags::COLOR)
-            .build();
+            .aspect_mask(vk::ImageAspectFlags::COLOR);
 
-        let pre_barrier = vk::ImageMemoryBarrier::builder()
+        let pre_barrier = vk::ImageMemoryBarrier::default()
             .image(resolved_texture.image)
             .old_layout(vk::ImageLayout::UNDEFINED)
             .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
@@ -115,10 +110,9 @@ pub fn create_from_bytes<'a, 'b>(
             .src_queue_family_index(graphics_queue_index)
             .dst_queue_family_index(graphics_queue_index)
             .src_access_mask(vk::AccessFlags::NONE)
-            .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
-            .build();
+            .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE);
 
-        let post_barrier = vk::ImageMemoryBarrier::builder()
+        let post_barrier = vk::ImageMemoryBarrier::default()
             .image(resolved_texture.image)
             .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
@@ -126,8 +120,7 @@ pub fn create_from_bytes<'a, 'b>(
             .src_queue_family_index(graphics_queue_index)
             .dst_queue_family_index(graphics_queue_index)
             .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
-            .dst_access_mask(vk::AccessFlags::SHADER_READ)
-            .build();
+            .dst_access_mask(vk::AccessFlags::SHADER_READ);
 
         unsafe {
             device.get().reset_command_buffer(
@@ -135,9 +128,8 @@ pub fn create_from_bytes<'a, 'b>(
                 vk::CommandBufferResetFlags::empty())
                 .expect("Failed to reset command buffer");
 
-            let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
-                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
-                .build();
+            let command_buffer_begin_info = vk::CommandBufferBeginInfo::default()
+                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
             device.get().begin_command_buffer(*immediate_command_buffer, &command_buffer_begin_info)
                 .expect("Failed to begin recording command buffer");
 
@@ -169,9 +161,8 @@ pub fn create_from_bytes<'a, 'b>(
             device.get().end_command_buffer(*immediate_command_buffer)
                 .expect("Failed to record command buffer");
 
-            let submit = vk::SubmitInfo::builder()
-                .command_buffers(std::slice::from_ref(immediate_command_buffer))
-                .build();
+            let submit = vk::SubmitInfo::default()
+                .command_buffers(std::slice::from_ref(immediate_command_buffer));
 
             device.get().queue_submit(
                 graphics_queue,
@@ -187,7 +178,7 @@ pub fn create_from_bytes<'a, 'b>(
         image
     }
 }
-pub fn create_from_uri<'a>(
+pub fn create_from_uri<'a, 'b>(
     image_handle: u64,
     device: &'a DeviceInterface,
     allocator: Arc<Mutex<ResourceAllocator>>,
@@ -196,7 +187,7 @@ pub fn create_from_uri<'a>(
     graphics_queue: vk::Queue,
     uri: &str,
     is_linear: bool
-) -> DeviceResource<'a> {
+) -> DeviceResource<'a, 'b> {
     let mut img = {
         let image = ImageReader::open(uri)
             .expect("Unable to load image");
@@ -230,21 +221,19 @@ pub fn create_from_uri<'a>(
         }
     };
 
-    let texture_create = vk::ImageCreateInfo::builder()
+    let texture_create = vk::ImageCreateInfo::default()
         .format(format)
         .image_type(vk::ImageType::TYPE_2D)
         .sharing_mode(vk::SharingMode::EXCLUSIVE)
         .initial_layout(vk::ImageLayout::UNDEFINED)
         .samples(vk::SampleCountFlags::TYPE_1)
         .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED)
-        .extent(vk::Extent3D::builder()
+        .extent(vk::Extent3D::default()
             .height(img.height())
             .width(img.width())
-            .depth(1)
-            .build())
+            .depth(1))
         .mip_levels(1)
-        .array_layers(1)
-        .build();
+        .array_layers(1);
 
     create_from_bytes(
         image_handle,

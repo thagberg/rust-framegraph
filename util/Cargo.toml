@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 ash                 = {version = "^0.38"}
-gpu-allocator       = "^0.25"
+gpu-allocator       = "^0.27"
 nalgebra-glm        = "0.18.0"
 context             = {path="../context"}
 api_types           = {path="../api_types"}

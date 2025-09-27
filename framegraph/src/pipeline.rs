@@ -1,5 +1,6 @@
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::ffi::CString;
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
@@ -36,27 +37,27 @@ pub enum RasterizationType
     Standard
 }
 
-pub struct PipelineDescription<'a>
+pub struct PipelineDescription<'a, 'b>
 {
-    vertex_input: vk::PipelineVertexInputStateCreateInfo,
+    vertex_input: vk::PipelineVertexInputStateCreateInfo<'b>,
     dynamic_states: Vec<vk::DynamicState>,
     rasterization: RasterizationType,
     depth_stencil: DepthStencilType,
     blend: BlendType,
     name: String,
-    vertex_shader: Arc<Mutex<Shader<'a>>>,
-    fragment_shader: Arc<Mutex<Shader<'a>>>
+    vertex_shader: Arc<Mutex<Shader<'a, '_>>>,
+    fragment_shader: Arc<Mutex<Shader<'a, '_>>>
 }
 
 /// Must impl Sync to allow vk::PipelineVertexInputStateCreateInfo to be shared between threads
 /// due to *const c_void member
-unsafe impl Sync for PipelineDescription<'_> {}
+unsafe impl Sync for PipelineDescription<'_, '_> {}
 
 /// Must impl Send to allow vk::PipelineVertexInputStateCreateInfo to be shared between threads
 /// due to *const c_void member
-unsafe impl Send for PipelineDescription<'_> {}
+unsafe impl Send for PipelineDescription<'_, '_> {}
 
-impl Hash for PipelineDescription<'_>
+impl Hash for PipelineDescription<'_, '_>
 {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // TODO: this is an inadequate hash
@@ -65,10 +66,10 @@ impl Hash for PipelineDescription<'_>
     }
 }
 
-impl<'a> PipelineDescription<'a>
+impl<'a, 'b> PipelineDescription<'a, 'b>
 {
     pub fn new(
-        vertex_input: vk::PipelineVertexInputStateCreateInfo,
+        vertex_input: vk::PipelineVertexInputStateCreateInfo<'b>,
         dynamic_states: Vec<vk::DynamicState>,
         rasterization: RasterizationType,
         depth_stencil: DepthStencilType,
@@ -164,27 +165,23 @@ const STENCIL_STATE_KEEP: vk::StencilOpState = vk::StencilOpState {
     reference: 0,
 };
 
-fn generate_rasteration_state(rasterization_type: RasterizationType) -> vk::PipelineRasterizationStateCreateInfo
+fn generate_rasteration_state<'n>(rasterization_type: RasterizationType) -> vk::PipelineRasterizationStateCreateInfo<'n>
 {
     match rasterization_type
     {
         RasterizationType::Standard => {
-            vk::PipelineRasterizationStateCreateInfo
-            {
-                s_type: vk::StructureType::PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-                p_next: std::ptr::null(),
-                flags: vk::PipelineRasterizationStateCreateFlags::empty(),
-                depth_clamp_enable: vk::FALSE,
-                cull_mode: vk::CullModeFlags::NONE,
-                front_face: vk::FrontFace::CLOCKWISE,
-                line_width: 1.0,
-                polygon_mode: vk::PolygonMode::FILL,
-                rasterizer_discard_enable: vk::FALSE,
-                depth_bias_clamp: 0.0,
-                depth_bias_constant_factor: 0.0,
-                depth_bias_enable: vk::FALSE,
-                depth_bias_slope_factor: 0.0,
-            }
+            vk::PipelineRasterizationStateCreateInfo::default()
+                .flags(vk::PipelineRasterizationStateCreateFlags::empty())
+                .depth_clamp_enable(false)
+                .cull_mode(vk::CullModeFlags::NONE)
+                .front_face(vk::FrontFace::CLOCKWISE)
+                .line_width(1.0)
+                .polygon_mode(vk::PolygonMode::FILL)
+                .rasterizer_discard_enable(false)
+                .depth_bias_clamp(0.0)
+                .depth_bias_constant_factor(0.0)
+                .depth_bias_enable(false)
+                .depth_bias_slope_factor(0.0)
         },
         _ => {
             panic!("Invalid Rasterization Type")
@@ -192,41 +189,35 @@ fn generate_rasteration_state(rasterization_type: RasterizationType) -> vk::Pipe
     }
 }
 
-fn generate_depth_stencil_state(depth_stencil_type: DepthStencilType) -> vk::PipelineDepthStencilStateCreateInfo
+fn generate_depth_stencil_state<'n>(depth_stencil_type: DepthStencilType) -> vk::PipelineDepthStencilStateCreateInfo<'n>
 {
     match depth_stencil_type
     {
         DepthStencilType::Enable => {
-            vk::PipelineDepthStencilStateCreateInfo {
-                s_type: vk::StructureType::PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-                p_next: std::ptr::null(),
-                flags: vk::PipelineDepthStencilStateCreateFlags::empty(),
-                depth_test_enable: vk::TRUE,
-                depth_write_enable: vk::TRUE,
-                depth_compare_op: vk::CompareOp::LESS_OR_EQUAL,
-                depth_bounds_test_enable: vk::FALSE,
-                stencil_test_enable: vk::FALSE,
-                front: STENCIL_STATE_KEEP,
-                back: STENCIL_STATE_KEEP,
-                max_depth_bounds: 1.0,
-                min_depth_bounds: 0.0,
-            }
+            vk::PipelineDepthStencilStateCreateInfo::default()
+                .flags(vk::PipelineDepthStencilStateCreateFlags::empty())
+                .depth_test_enable(true)
+                .depth_write_enable(true)
+                .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+                .depth_bounds_test_enable(false)
+                .stencil_test_enable(false)
+                .front(STENCIL_STATE_KEEP)
+                .back(STENCIL_STATE_KEEP)
+                .max_depth_bounds(1.0)
+                .min_depth_bounds(0.0)
         },
         _ => {
-            vk::PipelineDepthStencilStateCreateInfo {
-                s_type: vk::StructureType::PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-                p_next: std::ptr::null(),
-                flags: vk::PipelineDepthStencilStateCreateFlags::empty(),
-                depth_test_enable: vk::FALSE,
-                depth_write_enable: vk::FALSE,
-                depth_compare_op: vk::CompareOp::LESS_OR_EQUAL,
-                depth_bounds_test_enable: vk::FALSE,
-                stencil_test_enable: vk::FALSE,
-                front: STENCIL_STATE_KEEP,
-                back: STENCIL_STATE_KEEP,
-                max_depth_bounds: 1.0,
-                min_depth_bounds: 0.0
-            }
+            vk::PipelineDepthStencilStateCreateInfo::default()
+                .flags(vk::PipelineDepthStencilStateCreateFlags::empty())
+                .depth_test_enable(false)
+                .depth_write_enable(false)
+                .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+                .depth_bounds_test_enable(false)
+                .stencil_test_enable(false)
+                .front(STENCIL_STATE_KEEP)
+                .back(STENCIL_STATE_KEEP)
+                .max_depth_bounds(1.0)
+                .min_depth_bounds(0.0)
         }
     }
 }
@@ -246,14 +237,13 @@ fn generate_blend_attachments(blend_type: BlendType) -> [vk::PipelineColorBlendA
             //     dst_alpha_blend_factor: vk::BlendFactor::ZERO,
             //     alpha_blend_op: vk::BlendOp::ADD,
             // }];
-            [vk::PipelineColorBlendAttachmentState::builder()
+            [vk::PipelineColorBlendAttachmentState::default()
                 .blend_enable(false)
                 .color_blend_op(vk::BlendOp::ADD)
-                .color_write_mask(vk::ColorComponentFlags::RGBA)
-                .build()]
+                .color_write_mask(vk::ColorComponentFlags::RGBA)]
         },
         BlendType::Transparent => {
-            [vk::PipelineColorBlendAttachmentState::builder()
+            [vk::PipelineColorBlendAttachmentState::default()
                 .blend_enable(true)
                 .color_blend_op(vk::BlendOp::ADD)
                 .color_write_mask(vk::ColorComponentFlags::RGBA)
@@ -261,8 +251,7 @@ fn generate_blend_attachments(blend_type: BlendType) -> [vk::PipelineColorBlendA
                 .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
                 .src_alpha_blend_factor(vk::BlendFactor::ONE)
                 .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
-                .alpha_blend_op(vk::BlendOp::ADD)
-                .build()]
+                .alpha_blend_op(vk::BlendOp::ADD)]
         }
         _ => {
             panic!("Need to implement the rest of the blend states")
@@ -275,12 +264,11 @@ fn generate_blend_state(blend_type: BlendType, attachments: &[vk::PipelineColorB
     match blend_type
     {
         BlendType::None => {
-            vk::PipelineColorBlendStateCreateInfo::builder()
+            vk::PipelineColorBlendStateCreateInfo::default()
                 .logic_op_enable(false)
                 .logic_op(vk::LogicOp::NO_OP)
                 .attachments(attachments)
                 .blend_constants([0.0, 0.0, 0.0, 0.0])
-                .build()
             // vk::PipelineColorBlendStateCreateInfo {
             //     s_type: vk::StructureType::PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
             //     p_next: std::ptr::null(),
@@ -293,10 +281,9 @@ fn generate_blend_state(blend_type: BlendType, attachments: &[vk::PipelineColorB
             // }
         },
         BlendType::Transparent => {
-            vk::PipelineColorBlendStateCreateInfo::builder()
+            vk::PipelineColorBlendStateCreateInfo::default()
                 .attachments(attachments)
                 .blend_constants([1.0, 1.0, 1.0, 1.0])
-                .build()
         }
         _ => {
             panic!("Need to implement the rest of the blend states")
@@ -324,9 +311,8 @@ fn create_descriptor_set_layouts(device: &DeviceInterface, full_bindings: &HashM
     // e.g. if a pipeline explicitly uses sets 0 and 2, set 1 will be a null handle
     for set in (0..=highest_set) {
         if let Some(bindings) = full_bindings.get(&set) {
-            let layout_create_info = vk::DescriptorSetLayoutCreateInfo::builder()
-                .bindings(&bindings)
-                .build();
+            let layout_create_info = vk::DescriptorSetLayoutCreateInfo::default()
+                .bindings(&bindings);
 
             let layout = unsafe {
                 device.get().create_descriptor_set_layout(
@@ -386,7 +372,7 @@ impl<'device> VulkanPipelineManager<'device> {
 
                 let pipeline = {
                     let pipeline_layout = {
-                        let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
+                        let pipeline_layout_create = vk::PipelineLayoutCreateInfo::default()
                             .set_layouts(&descriptor_set_layouts);
                         unsafe {
                             device.get().create_pipeline_layout(&pipeline_layout_create, None)
@@ -395,15 +381,14 @@ impl<'device> VulkanPipelineManager<'device> {
                     };
 
                     let main_name = std::ffi::CString::new("main").unwrap();
-                    let shader_stage = vk::PipelineShaderStageCreateInfo::builder()
+                    let shader_stage = vk::PipelineShaderStageCreateInfo::default()
                         .module(compute_shader_ref.shader.shader_module.clone())
                         .name(&main_name)
                         .stage(vk::ShaderStageFlags::COMPUTE);
 
-                    let compute_pipeline_info = vk::ComputePipelineCreateInfo::builder()
+                    let compute_pipeline_info = vk::ComputePipelineCreateInfo::default()
                         .stage(*shader_stage)
-                        .layout(pipeline_layout)
-                        .build();
+                        .layout(pipeline_layout);
 
                     let device_pipeline = device.create_compute_pipeline(
                         &compute_pipeline_info,
@@ -473,7 +458,7 @@ impl<'device> VulkanPipelineManager<'device> {
                 // let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
 
                 let pipeline_layout = {
-                        let pipeline_layout_create = vk::PipelineLayoutCreateInfo::builder()
+                        let pipeline_layout_create = vk::PipelineLayoutCreateInfo::default()
                             .set_layouts(&descriptor_set_layouts);
                         unsafe {
                             device.get().create_pipeline_layout(&pipeline_layout_create, None)
@@ -481,62 +466,42 @@ impl<'device> VulkanPipelineManager<'device> {
                         }
                 };
 
-                let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo {
-                    s_type: vk::StructureType::PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-                    flags: vk::PipelineInputAssemblyStateCreateFlags::empty(),
-                    p_next: std::ptr::null(),
-                    primitive_restart_enable: vk::FALSE,
-                    topology: vk::PrimitiveTopology::TRIANGLE_LIST,
-                };
+                let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo::default()
+                    .flags(vk::PipelineInputAssemblyStateCreateFlags::empty())
+                    .primitive_restart_enable(false)
+                    .topology(vk::PrimitiveTopology::TRIANGLE_LIST);
 
                 // TODO: parameterize multisample state
-                let multisample_state_create_info = vk::PipelineMultisampleStateCreateInfo {
-                    s_type: vk::StructureType::PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-                    flags: vk::PipelineMultisampleStateCreateFlags::empty(),
-                    p_next: std::ptr::null(),
-                    rasterization_samples: vk::SampleCountFlags::TYPE_1,
-                    sample_shading_enable: vk::FALSE,
-                    min_sample_shading: 0.0,
-                    p_sample_mask: std::ptr::null(),
-                    alpha_to_one_enable: vk::FALSE,
-                    alpha_to_coverage_enable: vk::FALSE,
-                };
+                let multisample_state_create_info = vk::PipelineMultisampleStateCreateInfo::default()
+                    .flags(vk::PipelineMultisampleStateCreateFlags::empty())
+                    .rasterization_samples(vk::SampleCountFlags::TYPE_1)
+                    .sample_shading_enable(false)
+                    .min_sample_shading(0.0)
+                    .alpha_to_one_enable(false)
+                    .alpha_to_coverage_enable(false);
 
-                let viewport_state = vk::PipelineViewportStateCreateInfo {
-                    s_type: vk::StructureType::PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-                    p_next: std::ptr::null(),
-                    flags: vk::PipelineViewportStateCreateFlags::empty(),
-                    viewport_count: 1,
-                    p_viewports: std::ptr::null(),
-                    scissor_count: 1,
-                    p_scissors: std::ptr::null()
-                };
+                let viewport_state = vk::PipelineViewportStateCreateInfo::default()
+                    .flags(vk::PipelineViewportStateCreateFlags::empty())
+                    .viewport_count(1)
+                    .scissor_count(1);
 
                 let main_name = std::ffi::CString::new("main").unwrap();
                 let shader_stages = [
-                    vk::PipelineShaderStageCreateInfo {
+                    vk::PipelineShaderStageCreateInfo::default()
                         // Vertex Shader
-                        s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
-                        p_next: std::ptr::null(),
-                        flags: vk::PipelineShaderStageCreateFlags::empty(),
-                        module: pipeline_description.vertex_shader.lock().unwrap().shader.shader_module.clone(),
-                        p_name: main_name.as_ptr(),
-                        p_specialization_info: std::ptr::null(),
-                        stage: vk::ShaderStageFlags::VERTEX,
-                    },
-                    vk::PipelineShaderStageCreateInfo {
+                        .flags(vk::PipelineShaderStageCreateFlags::empty())
+                        .module(pipeline_description.vertex_shader.lock().unwrap().shader.shader_module.clone())
+                        .name(main_name.as_c_str())
+                        .stage(vk::ShaderStageFlags::VERTEX),
+                    vk::PipelineShaderStageCreateInfo::default()
                         // Fragment Shader
-                        s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
-                        p_next: std::ptr::null(),
-                        flags: vk::PipelineShaderStageCreateFlags::empty(),
-                        module: pipeline_description.fragment_shader.lock().unwrap().shader.shader_module.clone(),
-                        p_name: main_name.as_ptr(),
-                        p_specialization_info: std::ptr::null(),
-                        stage: vk::ShaderStageFlags::FRAGMENT,
-                    },
+                        .flags(vk::PipelineShaderStageCreateFlags::empty())
+                        .module(pipeline_description.fragment_shader.lock().unwrap().shader.shader_module.clone())
+                        .name(main_name.as_c_str())
+                        .stage(vk::ShaderStageFlags::FRAGMENT)
                 ];
 
-                let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
+                let dynamic_state = vk::PipelineDynamicStateCreateInfo::default()
                     .dynamic_states(&pipeline_description.dynamic_states);
 
                 let rasterization_state = generate_rasteration_state(pipeline_description.rasterization);
@@ -544,7 +509,7 @@ impl<'device> VulkanPipelineManager<'device> {
                 let blend_attachments = generate_blend_attachments(pipeline_description.blend);
                 let blend_state = generate_blend_state(pipeline_description.blend, &blend_attachments);
 
-                let graphics_pipeline_info = vk::GraphicsPipelineCreateInfo::builder()
+                let graphics_pipeline_info = vk::GraphicsPipelineCreateInfo::default()
                     .stages(&shader_stages)
                     .input_assembly_state(&vertex_input_assembly_state_info)
                     .vertex_input_state(&pipeline_description.vertex_input)
@@ -559,7 +524,6 @@ impl<'device> VulkanPipelineManager<'device> {
                     .layout(pipeline_layout)
                     .render_pass(render_pass)
                     .subpass(0); // TODO: this shouldn't be static
-                // .build();
 
                 let device_pipeline = device.create_pipeline(
                     &graphics_pipeline_info,

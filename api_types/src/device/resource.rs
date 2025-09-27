@@ -12,7 +12,7 @@ pub enum ResourceType<'m> {
     Image(ImageWrapper)
 }
 
-pub struct DeviceResource<'a, 'm> {
+pub struct DeviceResource<'a, 'm> where 'a : 'm{
     pub allocation: Option<Allocation>,
     pub resource_type: Option<ResourceType<'m>>,
 

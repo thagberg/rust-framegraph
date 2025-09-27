@@ -89,9 +89,9 @@ checksum = "b3d1d046238990b9cf5bcde22a3fb3584ee5cf65fb2765f454ed428c7a0063da"
 name = "api_types"
 version = "0.1.0"
 dependencies = [
- "ash 0.38.0+1.3.281",
+ "ash",
  "ash-window",
- "gpu-allocator 0.27.0",
+ "gpu-allocator",
  "log",
  "raw-window-handle 0.5.2",
  "tracing",
@@ -144,12 +144,6 @@ checksum = "175571dd1d178ced59193a6fc02dde1b972eb0bc56c892cde9beeceac5bf0f6b"
 
 [[package]]
 name = "ash"
-version = "0.37.3+1.3.251"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39e9c3835d686b0a6084ab4234fcd1b07dbf6e4767dce60874b12356a25ecd4a"
-
-[[package]]
-name = "ash"
 version = "0.38.0+1.3.281"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bb44936d800fea8f016d7f2311c6a4f97aebd5dc86f09906139ec848cf3a46f"
@@ -163,7 +157,7 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52bca67b61cb81e5553babde81b8211f713cb6db79766f80168f3e5f40ea6c82"
 dependencies = [
- "ash 0.38.0+1.3.281",
+ "ash",
  "raw-window-handle 0.6.0",
  "raw-window-metal",
 ]
@@ -434,7 +428,7 @@ name = "context"
 version = "0.1.0"
 dependencies = [
  "api_types",
- "ash 0.38.0+1.3.281",
+ "ash",
  "num",
  "profiling 0.1.0",
  "tracing",
@@ -662,7 +656,7 @@ name = "framegraph"
 version = "0.1.0"
 dependencies = [
  "api_types",
- "ash 0.38.0+1.3.281",
+ "ash",
  "context",
  "log",
  "multimap",
@@ -679,12 +673,12 @@ name = "framegraph-examples"
 version = "0.0.1"
 dependencies = [
  "api_types",
- "ash 0.38.0+1.3.281",
+ "ash",
  "context",
  "framegraph",
  "glob",
  "gltf",
- "gpu-allocator 0.27.0",
+ "gpu-allocator",
  "imgui",
  "imgui-winit-support",
  "log",
@@ -723,7 +717,7 @@ dependencies = [
  "libc",
  "log",
  "rustversion",
- "windows 0.58.0",
+ "windows",
 ]
 
 [[package]]
@@ -810,28 +804,15 @@ dependencies = [
 
 [[package]]
 name = "gpu-allocator"
-version = "0.25.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f56f6318968d03c18e1bcf4857ff88c61157e9da8e47c5f29055d60e1228884"
-dependencies = [
- "ash 0.37.3+1.3.251",
- "log",
- "presser",
- "thiserror",
- "windows 0.52.0",
-]
-
-[[package]]
-name = "gpu-allocator"
 version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c151a2a5ef800297b4e79efa4f4bec035c5f51d5ae587287c9b952bdf734cacd"
 dependencies = [
- "ash 0.38.0+1.3.281",
+ "ash",
  "log",
  "presser",
  "thiserror",
- "windows 0.58.0",
+ "windows",
 ]
 
 [[package]]
@@ -1517,12 +1498,12 @@ name = "passes"
 version = "0.1.0"
 dependencies = [
  "api_types",
- "ash 0.38.0+1.3.281",
+ "ash",
  "context",
  "framegraph",
  "glam",
  "glob",
- "gpu-allocator 0.27.0",
+ "gpu-allocator",
  "imgui",
  "log",
  "profiling 0.1.0",
@@ -1676,7 +1657,7 @@ name = "profiling"
 version = "0.1.0"
 dependencies = [
  "api_types",
- "ash 0.38.0+1.3.281",
+ "ash",
  "tracing",
  "tracy-client",
 ]
@@ -2492,9 +2473,9 @@ name = "util"
 version = "0.1.0"
 dependencies = [
  "api_types",
- "ash 0.38.0+1.3.281",
+ "ash",
  "context",
- "gpu-allocator 0.25.0",
+ "gpu-allocator",
  "image 0.25.2",
  "nalgebra-glm",
  "tracing",
@@ -2789,30 +2770,11 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "windows"
-version = "0.52.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e48a53791691ab099e5e2ad123536d0fff50652600abaf43bbf952894110d0be"
-dependencies = [
- "windows-core 0.52.0",
- "windows-targets 0.52.6",
-]
-
-[[package]]
-name = "windows"
 version = "0.58.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd04d41d93c4992d421894c18c8b43496aa748dd4c081bac0dc93eb0489272b6"
 dependencies = [
- "windows-core 0.58.0",
- "windows-targets 0.52.6",
-]
-
-[[package]]
-name = "windows-core"
-version = "0.52.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33ab640c8d7e35bf8ba19b884ba838ceb4fba93a4e8c65a9059d08afcfc683d9"
-dependencies = [
+ "windows-core",
  "windows-targets 0.52.6",
 ]
 
