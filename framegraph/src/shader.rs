@@ -121,25 +121,25 @@ pub fn create_shader_module_from_bytes<'a>(device: &'a DeviceInterface, name: &s
 }
 
 #[derive(Clone)]
-pub struct Shader<'a, 'samplers>
+pub struct Shader<'a>
 {
     pub shader: DeviceShader<'a>,
-    pub descriptor_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding<'samplers>>>
+    pub descriptor_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding<'static>>>
 }
 
 /// Must impl Sync to allow vk::DescriptorSetLayoutBinding to be shared between threads
 /// due to *const c_void member
-unsafe impl Sync for Shader<'_, '_> {}
+unsafe impl Sync for Shader<'_> {}
 
 /// Must impl Sync to allow vk::DescriptorSetLayoutBinding to be shared between threads
 /// due to *const c_void member
-unsafe impl Send for Shader<'_, '_> {}
+unsafe impl Send for Shader<'_> {}
 
-impl Shader<'_, '_>
+impl Shader<'_>
 {
-    pub fn new<'a, 'samplers>(
+    pub fn new<'a>(
         shader: DeviceShader<'a>,
-        descriptor_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>>) -> Shader<'a, 'samplers>
+        descriptor_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding<'static>>>) -> Shader<'a>
     {
         Shader {
             shader,

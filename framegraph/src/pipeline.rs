@@ -45,8 +45,8 @@ pub struct PipelineDescription<'a, 'b>
     depth_stencil: DepthStencilType,
     blend: BlendType,
     name: String,
-    vertex_shader: Arc<Mutex<Shader<'a, '_>>>,
-    fragment_shader: Arc<Mutex<Shader<'a, '_>>>
+    vertex_shader: Arc<Mutex<Shader<'a>>>,
+    fragment_shader: Arc<Mutex<Shader<'a>>>
 }
 
 /// Must impl Sync to allow vk::PipelineVertexInputStateCreateInfo to be shared between threads
