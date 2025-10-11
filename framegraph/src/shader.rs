@@ -20,13 +20,12 @@ fn create_shader_module<'a>(device: &'a DeviceInterface, file_name: &str) -> Sha
         let reflection_module = rspirv_reflect::Reflection::new_from_spirv(&bytes)
             .expect(&format!("Failed to parse shader for reflection data at {}", file_name));
 
-        let create_info = vk::ShaderModuleCreateInfo {
-            s_type: vk::StructureType::SHADER_MODULE_CREATE_INFO,
-            p_next: std::ptr::null(),
-            flags: vk::ShaderModuleCreateFlags::empty(),
-            code_size: bytes.len(),
-            p_code: bytes.as_ptr() as *const u32
+        let code_bytes: &[u32] = unsafe {
+            std::slice::from_raw_parts(bytes.as_ptr() as *const u32, bytes.len() / 4)
         };
+
+        let create_info = vk::ShaderModuleCreateInfo::default()
+            .code(code_bytes);
 
         let shader = device.create_shader(file_name, &create_info);
 
@@ -52,12 +51,11 @@ fn create_shader_module<'a>(device: &'a DeviceInterface, file_name: &str) -> Sha
             let descriptor_type = vk::DescriptorType::from_raw(binding_reflect.1.ty.0 as i32);
 
             descriptor_set_bindings.push(
-                vk::DescriptorSetLayoutBinding::builder()
+                vk::DescriptorSetLayoutBinding::default()
                     .binding(binding_reflect.0)
                     .stage_flags(vk::ShaderStageFlags::empty())
                     .descriptor_count(binding_count as u32)
                     .descriptor_type(descriptor_type)
-                    .build()
             );
         }
 
@@ -73,13 +71,12 @@ pub fn create_shader_module_from_bytes<'a>(device: &'a DeviceInterface, name: &s
         let reflection_module = rspirv_reflect::Reflection::new_from_spirv(bytes)
             .expect(&format!("Failed to parse shader for reflection data for {}", name));
 
-        let create_info = vk::ShaderModuleCreateInfo {
-            s_type: vk::StructureType::SHADER_MODULE_CREATE_INFO,
-            p_next: std::ptr::null(),
-            flags: vk::ShaderModuleCreateFlags::empty(),
-            code_size: bytes.len(),
-            p_code: bytes.as_ptr() as *const u32
+        let code_bytes: &[u32] = unsafe {
+            std::slice::from_raw_parts(bytes.as_ptr() as *const u32, bytes.len() / 4)
         };
+
+        let create_info = vk::ShaderModuleCreateInfo::default()
+            .code(code_bytes);
 
         let shader = device.create_shader(name, &create_info);
 
@@ -105,12 +102,11 @@ pub fn create_shader_module_from_bytes<'a>(device: &'a DeviceInterface, name: &s
             let descriptor_type = vk::DescriptorType::from_raw(binding_reflect.1.ty.0 as i32);
 
             descriptor_set_bindings.push(
-                vk::DescriptorSetLayoutBinding::builder()
+                vk::DescriptorSetLayoutBinding::default()
                     .binding(binding_reflect.0)
                     .stage_flags(vk::ShaderStageFlags::empty())
                     .descriptor_count(binding_count as u32)
                     .descriptor_type(descriptor_type)
-                    .build()
             );
         }
 

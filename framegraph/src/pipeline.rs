@@ -37,9 +37,10 @@ pub enum RasterizationType
     Standard
 }
 
-pub struct PipelineDescription<'a, 'b>
+pub struct PipelineDescription<'a>
 {
-    vertex_input: vk::PipelineVertexInputStateCreateInfo<'b>,
+    vertex_binding_descriptions: Vec<vk::VertexInputBindingDescription>,
+    vertex_attribute_descriptions: Vec<vk::VertexInputAttributeDescription>,
     dynamic_states: Vec<vk::DynamicState>,
     rasterization: RasterizationType,
     depth_stencil: DepthStencilType,
@@ -51,13 +52,13 @@ pub struct PipelineDescription<'a, 'b>
 
 /// Must impl Sync to allow vk::PipelineVertexInputStateCreateInfo to be shared between threads
 /// due to *const c_void member
-unsafe impl Sync for PipelineDescription<'_, '_> {}
+unsafe impl Sync for PipelineDescription<'_> {}
 
 /// Must impl Send to allow vk::PipelineVertexInputStateCreateInfo to be shared between threads
 /// due to *const c_void member
-unsafe impl Send for PipelineDescription<'_, '_> {}
+unsafe impl Send for PipelineDescription<'_> {}
 
-impl Hash for PipelineDescription<'_, '_>
+impl Hash for PipelineDescription<'_>
 {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // TODO: this is an inadequate hash
@@ -66,10 +67,11 @@ impl Hash for PipelineDescription<'_, '_>
     }
 }
 
-impl<'a, 'b> PipelineDescription<'a, 'b>
+impl<'a> PipelineDescription<'a>
 {
     pub fn new(
-        vertex_input: vk::PipelineVertexInputStateCreateInfo<'b>,
+        vertex_binding_descriptions: Vec<vk::VertexInputBindingDescription>,
+        vertex_attribute_descriptions: Vec<vk::VertexInputAttributeDescription>,
         dynamic_states: Vec<vk::DynamicState>,
         rasterization: RasterizationType,
         depth_stencil: DepthStencilType,
@@ -78,8 +80,13 @@ impl<'a, 'b> PipelineDescription<'a, 'b>
         vertex_shader: Arc<Mutex<Shader<'a>>>,
         fragment_shader: Arc<Mutex<Shader<'a>>>) -> Self
     {
+        let vertex_input = vk::PipelineVertexInputStateCreateInfo::default()
+            .vertex_binding_descriptions(&vertex_binding_descriptions)
+            .vertex_attribute_descriptions(&vertex_attribute_descriptions);
+
         PipelineDescription {
-            vertex_input,
+            vertex_binding_descriptions,
+            vertex_attribute_descriptions,
             dynamic_states,
             rasterization,
             depth_stencil,
@@ -88,6 +95,12 @@ impl<'a, 'b> PipelineDescription<'a, 'b>
             vertex_shader,
             fragment_shader
         }
+    }
+
+    pub fn get_vertex_input_state(&self) -> vk::PipelineVertexInputStateCreateInfo {
+        vk::PipelineVertexInputStateCreateInfo::default()
+            .vertex_binding_descriptions(&self.vertex_binding_descriptions)
+            .vertex_attribute_descriptions(&self.vertex_attribute_descriptions)
     }
 
     pub fn get_name(&self) -> &str { &self.name }
@@ -387,7 +400,7 @@ impl<'device> VulkanPipelineManager<'device> {
                         .stage(vk::ShaderStageFlags::COMPUTE);
 
                     let compute_pipeline_info = vk::ComputePipelineCreateInfo::default()
-                        .stage(*shader_stage)
+                        .stage(shader_stage)
                         .layout(pipeline_layout);
 
                     let device_pipeline = device.create_compute_pipeline(
@@ -509,10 +522,12 @@ impl<'device> VulkanPipelineManager<'device> {
                 let blend_attachments = generate_blend_attachments(pipeline_description.blend);
                 let blend_state = generate_blend_state(pipeline_description.blend, &blend_attachments);
 
+                let vertex_input_state = pipeline_description.get_vertex_input_state();
+
                 let graphics_pipeline_info = vk::GraphicsPipelineCreateInfo::default()
                     .stages(&shader_stages)
                     .input_assembly_state(&vertex_input_assembly_state_info)
-                    .vertex_input_state(&pipeline_description.vertex_input)
+                    .vertex_input_state(&vertex_input_state)
                     .viewport_state(&viewport_state)
                     .rasterization_state(&rasterization_state)
                     .multisample_state(&multisample_state_create_info)
