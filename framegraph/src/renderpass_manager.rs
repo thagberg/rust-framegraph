@@ -74,22 +74,20 @@ impl<'device> VulkanRenderpassManager<'device> {
                     load_op = vk::AttachmentLoadOp::DONT_CARE;
                 }
 
-                attachment_descs.push(vk::AttachmentDescription::builder()
+                attachment_descs.push(vk::AttachmentDescription::default()
                     .format(depth_attachment.format)
                     .samples(depth_attachment.samples)
                     .load_op(load_op)
                     .store_op(vk::AttachmentStoreOp::STORE)
                     .initial_layout(depth_attachment.layout)
                     // TODO: add support for separateDepthStencilLayouts
-                    .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-                    .build());
+                    .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL));
 
-                depth_ref = Some(vk::AttachmentReference::builder()
+                depth_ref = Some(vk::AttachmentReference::default()
                     .attachment(attachment_index)
                     // TODO: add support for separateDepthStencilLayouts
                     // .layout(vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL)
-                    .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-                    .build());
+                    .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL));
                 attachment_index += 1;
             }
 
@@ -98,22 +96,20 @@ impl<'device> VulkanRenderpassManager<'device> {
                 if (color_attachment.layout == vk::ImageLayout::UNDEFINED) {
                     load_op = vk::AttachmentLoadOp::DONT_CARE;
                 }
-                attachment_descs.push(vk::AttachmentDescription::builder()
+                attachment_descs.push(vk::AttachmentDescription::default()
                     .format(color_attachment.format)
                     .samples(color_attachment.samples)
                     .load_op(load_op)
                     .store_op(vk::AttachmentStoreOp::STORE)
                     .initial_layout(color_attachment.layout)
-                    .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                    .build());
-                color_attachment_refs.push(vk::AttachmentReference::builder()
+                    .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL));
+                color_attachment_refs.push(vk::AttachmentReference::default()
                     .attachment(attachment_index)
-                    .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                    .build());
+                    .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL));
                 attachment_index += 1;
             }
 
-            let mut subpass = vk::SubpassDescription::builder()
+            let mut subpass = vk::SubpassDescription::default()
                 .color_attachments(&color_attachment_refs)
                 .flags(vk::SubpassDescriptionFlags::empty())
                 .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS);
@@ -121,7 +117,7 @@ impl<'device> VulkanRenderpassManager<'device> {
                 subpass = subpass.depth_stencil_attachment(depth_ref);
             }
 
-            let subpass_dependency = vk::SubpassDependency::builder()
+            let subpass_dependency = vk::SubpassDependency::default()
                 .src_subpass(0)
                 .dst_subpass(vk::SUBPASS_EXTERNAL)
                 .src_access_mask(vk::AccessFlags::NONE)
@@ -130,11 +126,11 @@ impl<'device> VulkanRenderpassManager<'device> {
                 .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
                 .dependency_flags(vk::DependencyFlags::empty());
 
-            let renderpass_create_info = vk::RenderPassCreateInfo::builder()
+            let renderpass_create_info = vk::RenderPassCreateInfo::default()
                 .flags(vk::RenderPassCreateFlags::empty())
                 .attachments(&attachment_descs)
                 .subpasses(std::slice::from_ref(&subpass))
-                .dependencies(std::slice::from_ref(&subpass_dependency)).build();
+                .dependencies(std::slice::from_ref(&subpass_dependency));
 
             Arc::new(Mutex::new(device.create_renderpass(&renderpass_create_info, pass_name)))
         }).clone();

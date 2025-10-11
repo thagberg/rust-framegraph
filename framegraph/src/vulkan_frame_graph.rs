@@ -177,11 +177,10 @@ fn get_descriptor_image_info(
         // None => {(vk::Sampler::null(), vk::DescriptorType::SAMPLED_IMAGE)}
         None => {(vk::Sampler::null(), vk::DescriptorType::STORAGE_IMAGE)}
     };
-    let image_info = vk::DescriptorImageInfo::builder()
+    let image_info = vk::DescriptorImageInfo::default()
         .image_view(image.view)
         .image_layout(binding_info.layout)
-        .sampler(sampler)
-        .build();
+        .sampler(sampler);
 
     (image_info, descriptor_type)
 }
@@ -190,11 +189,10 @@ fn get_descriptor_buffer_info(
     buffer: &BufferWrapper,
     binding: &BufferBindingInfo) -> (vk::DescriptorBufferInfo, vk::DescriptorType) {
 
-    let buffer_info = vk::DescriptorBufferInfo::builder()
+    let buffer_info = vk::DescriptorBufferInfo::default()
         .buffer(buffer.buffer)
         .offset(binding.offset)
-        .range(binding.range)
-        .build();
+        .range(binding.range);
     let descriptor_type = vk::DescriptorType::UNIFORM_BUFFER; // TODO: this could also be a storage buffer
 
     (buffer_info, descriptor_type)
@@ -233,7 +231,7 @@ fn resolve_descriptors<'a, 'b>(
         };
         let descriptor_set = descriptor_sets[binding.binding_info.set as usize];
 
-        let mut descriptor_write_builder = vk::WriteDescriptorSet::builder()
+        let mut descriptor_write_builder = vk::WriteDescriptorSet::default()
             .dst_set(descriptor_set)
             .dst_binding(binding.binding_info.slot)
             .dst_array_element(0); // TODO: parameterize
@@ -258,7 +256,7 @@ fn resolve_descriptors<'a, 'b>(
             }
         }
 
-        descriptor_updates.descriptor_writes.push(descriptor_write_builder.build());
+        descriptor_updates.descriptor_writes.push(descriptor_write_builder);
     }
 }
 
@@ -864,15 +862,14 @@ impl<'d> VulkanFrameGraph<'d> {
 
                 // begin render pass and bind pipeline
                 {
-                    let render_pass_begin = vk::RenderPassBeginInfo::builder()
+                    let render_pass_begin = vk::RenderPassBeginInfo::default()
                         .render_pass(renderpass_ref.renderpass.clone())
                         .framebuffer(framebuffer)
-                        .render_area(vk::Rect2D::builder()
+                        .render_area(vk::Rect2D::default()
                             .offset(vk::Offset2D{x: 0, y: 0})
                             .extent(vk::Extent2D{
                                 width: framebuffer_extent.width,
-                                height: framebuffer_extent.height})
-                            .build())
+                                height: framebuffer_extent.height}))
                         .clear_values(std::slice::from_ref(&clear_value));
 
                     unsafe {
@@ -973,12 +970,11 @@ impl<'d> FrameGraph<'d> for VulkanFrameGraph<'d> {
         // add a global memory barrier to ensure all CPU writes are accessible
         // prior to dispatching GPU work
         {
-            let host_barrier = vk::MemoryBarrier::builder()
+            let host_barrier = vk::MemoryBarrier::default()
                 .src_access_mask(vk::AccessFlags::HOST_WRITE)
                 .dst_access_mask(vk::AccessFlags::UNIFORM_READ
                     | vk::AccessFlags::INDEX_READ
-                    | vk::AccessFlags::VERTEX_ATTRIBUTE_READ)
-                .build();
+                    | vk::AccessFlags::VERTEX_ATTRIBUTE_READ);
 
             unsafe {
                 render_context.get_device().get().cmd_pipeline_barrier(
@@ -1029,7 +1025,7 @@ impl<'d> FrameGraph<'d> for VulkanFrameGraph<'d> {
                         let buffer = bb.resource.lock().unwrap();
                         let resolved = buffer.resource_type.as_ref().expect("Invalid buffer in BufferBarrier");
                         if let ResourceType::Buffer(resolved_buffer) = resolved {
-                            vk::BufferMemoryBarrier::builder()
+                            vk::BufferMemoryBarrier::default()
                                 .buffer(resolved_buffer.buffer)
                                 .src_access_mask(bb.source_access)
                                 .dst_access_mask(bb.dest_access)
@@ -1037,7 +1033,6 @@ impl<'d> FrameGraph<'d> for VulkanFrameGraph<'d> {
                                 .size(bb.size as DeviceSize)
                                 .src_queue_family_index(render_context.get_graphics_queue_index())
                                 .dst_queue_family_index(render_context.get_graphics_queue_index())
-                                .build()
                         } else {
                             panic!("Non buffer resource in BufferBarrier")
                         }
@@ -1051,14 +1046,13 @@ impl<'d> FrameGraph<'d> for VulkanFrameGraph<'d> {
                             let aspect_mask = util::image::get_aspect_mask_from_format(
                                 resolved_image.format);
                             // TODO: the range needs to be parameterized
-                            let range = vk::ImageSubresourceRange::builder()
+                            let range = vk::ImageSubresourceRange::default()
                                 .level_count(1)
                                 .base_mip_level(0)
                                 .layer_count(1)
                                 .base_array_layer(0)
-                                .aspect_mask(aspect_mask)
-                                .build();
-                            vk::ImageMemoryBarrier::builder()
+                                .aspect_mask(aspect_mask);
+                            vk::ImageMemoryBarrier::default()
                                 .image(resolved_image.image)
                                 .src_access_mask(ib.source_access)
                                 .dst_access_mask(ib.dest_access)
@@ -1067,7 +1061,6 @@ impl<'d> FrameGraph<'d> for VulkanFrameGraph<'d> {
                                 .src_queue_family_index(render_context.get_graphics_queue_index())
                                 .dst_queue_family_index(render_context.get_graphics_queue_index())
                                 .subresource_range(range)
-                                .build()
                         } else {
                             panic!("Non image resource in ImageBarrier")
                         }
