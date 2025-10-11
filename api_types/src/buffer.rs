@@ -19,19 +19,18 @@ impl<'m> BufferCreateInfo<'m> {
 }
 
 #[derive(Clone)]
-pub struct BufferWrapper<'m> {
-    pub buffer: vk::Buffer,
-    pub create_info: vk::BufferCreateInfo<'m>
+pub struct BufferWrapper {
+    pub buffer: vk::Buffer
+    // pub create_info: vk::BufferCreateInfo<'m>
 }
 
-unsafe impl Sync for BufferWrapper<'_> {}
-unsafe impl Send for BufferWrapper<'_> {}
+unsafe impl Sync for BufferWrapper {}
+unsafe impl Send for BufferWrapper {}
 
-impl<'m> BufferWrapper<'m> {
-    pub fn new(buffer: vk::Buffer, create_info: vk::BufferCreateInfo<'m>) -> Self {
+impl BufferWrapper {
+    pub fn new(buffer: vk::Buffer) -> Self {
         BufferWrapper {
-            buffer,
-            create_info
+            buffer
         }
     }
 

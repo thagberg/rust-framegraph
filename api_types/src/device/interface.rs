@@ -247,7 +247,7 @@ impl DeviceInterface {
         handle: u64,
         buffer_desc: &'m BufferCreateInfo<'m>,
         allocator: Arc<Mutex<ResourceAllocator>>,
-        memory_location: MemoryLocation) -> DeviceResource<'_, 'm> {
+        memory_location: MemoryLocation) -> DeviceResource<'_> {
 
         let device_buffer = {
             log::trace!(target: "resource", "Creating buffer: {} -- {}", handle, buffer_desc.get_name());
@@ -279,7 +279,7 @@ impl DeviceInterface {
                     .expect("Failed to bind buffer to memory");
             }
 
-            let buffer_wrapper = BufferWrapper::new(buffer, buffer_desc.get_create_info().clone());
+            let buffer_wrapper = BufferWrapper::new(buffer);
             self.set_buffer_name(&buffer_wrapper, buffer_desc.get_name());
             DeviceResource::new(
                 Some(allocation),

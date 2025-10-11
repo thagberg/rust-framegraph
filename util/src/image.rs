@@ -14,7 +14,7 @@ use api_types::device::resource::{DeviceResource, ResourceType};
 use api_types::image::{ImageCreateInfo, ImageType};
 use context::vulkan_render_context::VulkanRenderContext;
 
-pub fn create_from_bytes<'a, 'b, 'c>(
+pub fn create_from_bytes<'a, 'b>(
     image_handle: u64,
     device: &'a DeviceInterface,
     allocator: Arc<Mutex<ResourceAllocator>>,
@@ -23,7 +23,7 @@ pub fn create_from_bytes<'a, 'b, 'c>(
     graphics_queue: vk::Queue,
     image_info: vk::ImageCreateInfo,
     image_bytes: &'b [u8],
-    name: &str) -> DeviceResource<'a, 'c> {
+    name: &str) -> DeviceResource<'a> {
     // create CPU-to-GPU buffer
     let buffer_create = BufferCreateInfo::new(
         vk::BufferCreateInfo::default()
@@ -178,7 +178,7 @@ pub fn create_from_bytes<'a, 'b, 'c>(
         image
     }
 }
-pub fn create_from_uri<'a, 'b>(
+pub fn create_from_uri<'a>(
     image_handle: u64,
     device: &'a DeviceInterface,
     allocator: Arc<Mutex<ResourceAllocator>>,
@@ -187,7 +187,7 @@ pub fn create_from_uri<'a, 'b>(
     graphics_queue: vk::Queue,
     uri: &str,
     is_linear: bool
-) -> DeviceResource<'a, 'b> {
+) -> DeviceResource<'a> {
     let mut img = {
         let image = ImageReader::open(uri)
             .expect("Unable to load image");
