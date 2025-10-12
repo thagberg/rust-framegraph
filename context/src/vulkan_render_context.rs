@@ -4,6 +4,7 @@ use std::fmt::{Debug, Formatter};
 use std::os::raw::c_char;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::thread::Thread;
 use ash::{vk};
 use ash::vk::{ExtendsPhysicalDeviceFeatures2, PFN_vkGetPhysicalDeviceFeatures2, PhysicalDeviceFeatures2, PresentModeKHR};
@@ -600,26 +601,28 @@ fn create_swapchain<'a, 'b>(
     // TODO: using exclusive mode right now but might want to make this concurrent
     let image_sharing_mode = vk::SharingMode::EXCLUSIVE;
 
-    let old = match &old_swapchain {
-        Some(old) => {old.swapchain.get()}
-        None => {vk::SwapchainKHR::null()}
-    };
+    let create_info = {
+        let old = match &old_swapchain {
+            Some(old) => {old.swapchain.lock().unwrap().get()}
+            None => {vk::SwapchainKHR::null()}
+        };
 
-    let create_info = vk::SwapchainCreateInfoKHR::default()
-        .flags(vk::SwapchainCreateFlagsKHR::empty())
-        .surface(surface.get_surface())
-        .min_image_count(image_count)
-        .image_color_space(swapchain_format.color_space)
-        .image_format(swapchain_format.format)
-        .image_extent(swapchain_extent)
-        .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST)
-        .image_sharing_mode(image_sharing_mode)
-        .pre_transform(swapchain_capabilities.capabilities.current_transform)
-        .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
-        .present_mode(swapchain_present_mode)
-        .clipped(true)
-        .old_swapchain(old)
-        .image_array_layers(1);
+        vk::SwapchainCreateInfoKHR::default()
+            .flags(vk::SwapchainCreateFlagsKHR::empty())
+            .surface(surface.get_surface())
+            .min_image_count(image_count)
+            .image_color_space(swapchain_format.color_space)
+            .image_format(swapchain_format.format)
+            .image_extent(swapchain_extent)
+            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST)
+            .image_sharing_mode(image_sharing_mode)
+            .pre_transform(swapchain_capabilities.capabilities.current_transform)
+            .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
+            .present_mode(swapchain_present_mode)
+            .clipped(true)
+            .old_swapchain(old)
+            .image_array_layers(1)
+    };
 
     // ash::khr::swapchain::Device
     let swapchain_loader = ash::khr::swapchain::Device::new(
@@ -681,7 +684,7 @@ fn create_swapchain<'a, 'b>(
 
 #[derive(Debug)]
 pub struct OldSwapchain<'a> {
-    pub swapchain: SwapchainWrapper<'a>,
+    pub swapchain: Arc<Mutex<SwapchainWrapper<'a>>>,
     pub frame_index: u32
 
 }
@@ -702,15 +705,15 @@ pub struct VulkanFrameObjects<'a> {
 // Necessary for avoiding errors when specifying image indices in VkPresentInfoKHR
 pub struct VulkanRenderContext<'a> {
     handle_generator: HandleGenerator,
-    frame_index: u32,
-    swapchain_index: u32,
+    frame_index: AtomicU32,
+    swapchain_index: AtomicU32,
     graphics_queue: vk::Queue,
     present_queue: vk::Queue,
     compute_queue: vk::Queue,
     main_thread_objects: Vec<PerThread<'a>>,
     worker_thread_objects: Vec<PerThread<'a>>,
-    swapchain: Option<SwapchainWrapper<'a>>,
-    old_swapchain: Option<OldSwapchain<'a>>,
+    swapchain: Arc<Mutex<Option<SwapchainWrapper<'a>>>>,
+    old_swapchain: Arc<Mutex<Option<OldSwapchain<'a>>>>,
     swapchain_semaphores: Vec<vk::Semaphore>,
     device: DeviceInterface,
     physical_device: PhysicalDeviceWrapper,
@@ -722,6 +725,12 @@ pub struct VulkanRenderContext<'a> {
 impl<'a> Debug for VulkanRenderContext<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VulkanRenderContext")
+            .field("frame_index", &self.frame_index.load(Ordering::Relaxed))
+            .field("swapchain_index", &self.swapchain_index.load(Ordering::Relaxed))
+            .field("device", &self.device)
+            .field("physical_device", &self.physical_device)
+            .field("surface", &self.surface)
+            .field("instance", &self.instance)
             .finish()
     }
 }
@@ -864,12 +873,12 @@ impl<'a> VulkanRenderContext<'a> {
             compute_queue,
             surface: surface_wrapper,
             // swapchain,
-            swapchain: None,
-            old_swapchain: None,
+            swapchain: Arc::new(Mutex::new(None)),
+            old_swapchain: Arc::new(Mutex::new(None)),
             // swapchain_semaphores,
             swapchain_semaphores: vec![],
-            frame_index,
-            swapchain_index: 0,
+            frame_index: AtomicU32::new(frame_index),
+            swapchain_index: AtomicU32::new(0),
             main_thread_objects: vec![],
             worker_thread_objects: vec![]
         };
@@ -896,45 +905,40 @@ impl<'a> VulkanRenderContext<'a> {
             .descriptor_count(16);
         let descriptor_pool_sizes = [ubo_pool_size, image_pool_size, combined_sampler_pool_size];
 
-        self.swapchain = {
-            if window.is_some() && self.surface.is_some() {
-                Some(create_swapchain(
-                    &mut self.handle_generator,
-                    &self.instance,
-                    &self.device,
-                    &self.physical_device,
-                    &self.surface.as_ref().unwrap(),
-                    window.unwrap(),
-                    &None))
-            } else {
-                None
-            }
-        };
+        {
+            let mut swapchain = self.swapchain.lock().unwrap();
+            *swapchain = {
+                if window.is_some() && self.surface.is_some() {
+                    Some(create_swapchain(
+                        &mut self.handle_generator,
+                        &self.instance,
+                        &self.device,
+                        &self.physical_device,
+                        &self.surface.as_ref().unwrap(),
+                        window.unwrap(),
+                        &None))
+                } else {
+                    None
+                }
+            };
+        }
 
         self.swapchain_semaphores = {
             let mut semaphores: Vec<vk::Semaphore> = Vec::new();
-            if let Some(s) = &self.swapchain {
-                semaphores.reserve(s.get_images().len());
-                for i in 0..s.get_images().len() {
-                    let create_info = vk::SemaphoreCreateInfo::default();
+            let swapchain_length = self.get_max_frames_in_flight();
+            for i in 0..swapchain_length {
+                let create_info = vk::SemaphoreCreateInfo::default();
 
-                    semaphores.push(unsafe {
-                        self.device.get().create_semaphore(&create_info, None)
-                            .expect("Failed to create semaphore for swapchain image")
-                    });
-                }
+                semaphores.push(unsafe {
+                    self.device.get().create_semaphore(&create_info, None)
+                        .expect("Failed to create semaphore for swapchain image")
+                });
             }
 
             semaphores
         };
 
-        let max_frames_in_flight = {
-            if let Some(swapchain) = &self.swapchain {
-                swapchain.get_images().len() as u32
-            } else {
-                MAX_FRAMES_IN_FLIGHT
-            }
-        };
+        let max_frames_in_flight = self.get_max_frames_in_flight();
 
         let mut main_thread_objects: Vec<PerThread> = Vec::new();
         main_thread_objects.reserve(max_frames_in_flight as usize);
@@ -961,13 +965,7 @@ impl<'a> VulkanRenderContext<'a> {
         self.worker_thread_objects = worker_thread_objects;
 
         {
-            // let borrowed_device = logical_device.borrow();
-            let num_frames = match &self.swapchain {
-                None => { MAX_FRAMES_IN_FLIGHT }
-                Some(swapchain) => {
-                    swapchain.get_images().len() as u32
-                }
-            };
+            let num_frames = self.get_max_frames_in_flight();
 
             let device_properties = unsafe {
                 self.instance.get().get_physical_device_properties(
@@ -1006,7 +1004,8 @@ impl<'a> VulkanRenderContext<'a> {
     // pub fn get_swapchain(&self) -> &'a Option<SwapchainWrapper> { &self.swapchain }
 
     pub fn get_max_frames_in_flight(&self) -> u32 {
-        match &self.swapchain {
+        let swapchain = self.swapchain.lock().unwrap();
+        match &*swapchain {
             Some(swapchain) => {
                 swapchain.get_images_count() as u32
             }
@@ -1017,16 +1016,20 @@ impl<'a> VulkanRenderContext<'a> {
     }
 
     pub fn recreate_swapchain(
-        &'a mut self,
+        &self,
         window: &winit::window::Window
     ) {
         match &self.surface {
             Some(surface) => {
                 // Only rebuild the swapchain if we aren't already doing so
-                if let None = &self.old_swapchain {
-                    self.old_swapchain = Some(OldSwapchain {
-                        swapchain: self.swapchain.take().unwrap(),
-                        frame_index: self.frame_index
+                let mut old_swapchain = self.old_swapchain.lock().unwrap();
+                if old_swapchain.is_none() {
+                    let current_frame_index = self.frame_index.load(Ordering::Relaxed);
+                    let mut swapchain = self.swapchain.lock().unwrap();
+                    let taken_swapchain = swapchain.take().unwrap();
+                    *old_swapchain = Some(OldSwapchain {
+                        swapchain: Arc::new(Mutex::new(taken_swapchain)),
+                        frame_index: current_frame_index
                     });
                     let new_swapchain = create_swapchain(
                         &mut self.handle_generator,
@@ -1035,10 +1038,10 @@ impl<'a> VulkanRenderContext<'a> {
                         &self.physical_device,
                         surface,
                         window,
-                        &self.old_swapchain);
+                        &old_swapchain);
 
-                    self.swapchain = Some(new_swapchain);
-                    self.swapchain_index = 0;
+                    *swapchain = Some(new_swapchain);
+                    self.swapchain_index.store(0, Ordering::Relaxed);
                 }
             }
             None => {
@@ -1053,9 +1056,12 @@ impl<'a> VulkanRenderContext<'a> {
         semaphore: Option<vk::Semaphore>,
         fence: Option<vk::Fence>) -> Option<NextImage<'a>> {
 
-        match &mut self.swapchain {
+        let mut swapchain = self.swapchain.lock().unwrap();
+        match &mut *swapchain {
             Some(swapchain) => {
-                Some(swapchain.acquire_next_image(timeout, semaphore, fence))
+                let next_image = swapchain.acquire_next_image(timeout, semaphore, fence);
+                self.swapchain_index.store(next_image.index, Ordering::Relaxed);
+                Some(next_image)
             }
             None => {
                 None
@@ -1065,7 +1071,7 @@ impl<'a> VulkanRenderContext<'a> {
 
     #[tracing::instrument]
     pub fn get_next_frame_objects(&mut self) -> VulkanFrameObjects<'a> {
-        let old_index = self.frame_index;
+        let old_index = self.frame_index.load(Ordering::Relaxed);
 
         let semaphore = self.swapchain_semaphores[old_index as usize];
         let image = self.get_next_swapchain_image(
@@ -1076,9 +1082,13 @@ impl<'a> VulkanRenderContext<'a> {
         // successful swapchain image acquisition on the same frame index of when
         // we recreated the swapchain should indicate that the presentation engine
         // is no longer using the old swapchain
-        if let Some(old_swapchain) = &self.old_swapchain {
-            if old_swapchain.swapchain.can_destroy() {
-                self.old_swapchain = None;
+        {
+            let mut old_swapchain = self.old_swapchain.lock().unwrap();
+            if let Some(old_swap) = &*old_swapchain {
+                let old_swap_inner = old_swap.swapchain.lock().unwrap();
+                if old_swap_inner.can_destroy() {
+                    *old_swapchain = None;
+                }
             }
         }
 
@@ -1097,7 +1107,8 @@ impl<'a> VulkanRenderContext<'a> {
     }
 
     pub fn get_immediate_command_buffer(&self) -> vk::CommandBuffer {
-        let main_thread_objects = self.main_thread_objects.get(self.frame_index as usize)
+        let frame_index = self.frame_index.load(Ordering::Relaxed);
+        let main_thread_objects = self.main_thread_objects.get(frame_index as usize)
             .expect("No main_thread_objects exist at this frame index");
 
         main_thread_objects.immediate_graphics_buffer
@@ -1187,8 +1198,9 @@ impl<'a> VulkanRenderContext<'a> {
         &self,
         wait_semaphores: &[vk::Semaphore]) -> SwapchainStatus {
 
+        let swapchain_guard = self.swapchain.lock().unwrap();
         let swapchain = {
-            match &self.swapchain {
+            match &*swapchain_guard {
                 Some(swapchain) => {
                     swapchain
                 }
@@ -1200,14 +1212,14 @@ impl<'a> VulkanRenderContext<'a> {
 
 
         let raw_swapchain = swapchain.get();
-        let swapchain_index = self.swapchain_index;
+        let swapchain_index = self.swapchain_index.load(Ordering::Relaxed);
         let mut present_info = vk::PresentInfoKHR::default()
             .wait_semaphores(wait_semaphores)
             .swapchains(std::slice::from_ref(&raw_swapchain))
             .image_indices(std::slice::from_ref(&swapchain_index));
 
         // wait for and reset the presentation fence
-        let present_fence = swapchain.get_present_fence(self.swapchain_index);
+        let present_fence = swapchain.get_present_fence(swapchain_index);
         unsafe {
             enter_span!(tracing::Level::TRACE, "Waiting for Present fence");
             self.device.get().wait_for_fences(
@@ -1239,18 +1251,15 @@ impl<'a> VulkanRenderContext<'a> {
     }
 
     pub fn start_frame(&mut self, frame_index: u32) {
+        self.frame_index.store(frame_index, Ordering::Relaxed);
         reset_gpu_profiling!(&self.device);
     }
 
-    pub fn end_frame(&'a mut self) {
-        let max_frames_in_flight = {
-            if let Some(swapchain) = &self.swapchain {
-                swapchain.get_images().len() as u32
-            } else {
-                MAX_FRAMES_IN_FLIGHT
-            }
-        };
-        self.swapchain_index = (self.swapchain_index + 1) % max_frames_in_flight;
-        self.frame_index = (self.frame_index + 1) % max_frames_in_flight;
+    pub fn end_frame(&self) {
+        let max_frames_in_flight = self.get_max_frames_in_flight();
+        let current_swapchain_index = self.swapchain_index.load(Ordering::Relaxed);
+        self.swapchain_index.store((current_swapchain_index + 1) % max_frames_in_flight, Ordering::Relaxed);
+        let current_frame_index = self.frame_index.load(Ordering::Relaxed);
+        self.frame_index.store((current_frame_index + 1) % max_frames_in_flight, Ordering::Relaxed);
     }
 }

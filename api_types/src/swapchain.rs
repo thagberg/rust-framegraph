@@ -17,6 +17,7 @@ pub enum SwapchainStatus {
 
 pub struct NextImage<'a> {
     pub image: Option<Arc<Mutex<DeviceResource<'a>>>>,
+    pub index: u32,
     pub status: SwapchainStatus
 }
 
@@ -114,6 +115,7 @@ impl<'a> SwapchainWrapper<'a> {
                 };
                 NextImage {
                     image: Some(self.images[image_index as usize].clone()),
+                    index: image_index,
                     status,
                 }
             }
@@ -121,6 +123,7 @@ impl<'a> SwapchainWrapper<'a> {
                 log::trace!(target: "swapchain", "Error when obtaining next swapchain image: {}", e);
                 NextImage {
                     image: None,
+                    index: 0,
                     status: SwapchainStatus::Outdated
                 }
             }
