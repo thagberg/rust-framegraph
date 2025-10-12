@@ -1507,6 +1507,7 @@ dependencies = [
  "imgui",
  "log",
  "profiling 0.1.0",
+ "tracing",
  "util",
 ]
 

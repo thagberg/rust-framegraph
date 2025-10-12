@@ -8,6 +8,8 @@ use ash::vk::{DeviceSize, Handle};
 use gpu_allocator::MemoryLocation;
 use imgui::{DrawData, DrawVert, DrawIdx};
 use log::warn;
+
+use tracing;
 use api_types::buffer::BufferCreateInfo;
 use api_types::device::allocator::ResourceAllocator;
 use api_types::device::resource::{DeviceResource, ResourceType};
@@ -95,21 +97,19 @@ impl<'d> ImguiRender<'d> {
             shader::create_shader_module_from_bytes(device, "imgui-frag", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-frag.spv")))));
 
         let font_texture_create =
-            vk::ImageCreateInfo::builder()
+            vk::ImageCreateInfo::default()
                 .format(vk::Format::R8G8B8A8_UNORM)
                 .image_type(vk::ImageType::TYPE_2D)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE)
                 .initial_layout(vk::ImageLayout::UNDEFINED)
                 .samples(vk::SampleCountFlags::TYPE_1)
                 .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED)
-                .extent(vk::Extent3D::builder()
+                .extent(vk::Extent3D::default()
                     .height(font_atlas.height)
                     .width(font_atlas.width)
-                    .depth(1)
-                    .build())
+                    .depth(1))
                 .mip_levels(1)
-                .array_layers(1)
-                .build();
+                .array_layers(1);
 
         let mut font_texture = image::create_from_bytes(
             0 as u64,
@@ -124,19 +124,18 @@ impl<'d> ImguiRender<'d> {
         );
 
         let font_sampler = unsafe {
-            let sampler_create = vk::SamplerCreateInfo::builder()
+            let sampler_create = vk::SamplerCreateInfo::default()
                 .mag_filter(vk::Filter::LINEAR)
                 .min_filter(vk::Filter::LINEAR)
                 .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
                 .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_BORDER)
                 .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_BORDER)
                 .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_BORDER)
-                .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
-                .build();
+                .border_color(vk::BorderColor::INT_OPAQUE_BLACK);
 
             let sampler = device.get().create_sampler(&sampler_create, None)
                 .expect("Failed to create font texture sampler");
-            device.set_debug_name(vk::ObjectType::SAMPLER, sampler.as_raw(), "font_sampler");
+            device.set_debug_name(sampler, "font_sampler");
             sampler
         };
 
@@ -184,10 +183,9 @@ impl<'d> ImguiRender<'d> {
         // display data (scale and pos) is shared for all draw lists
         let display_buffer = {
             let display_create_info = BufferCreateInfo::new(
-                vk::BufferCreateInfo::builder()
+                vk::BufferCreateInfo::default()
                     .size(std::mem::size_of::<DisplayBuffer>() as vk::DeviceSize)
-                    .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
-                    .build(),
+                    .usage(vk::BufferUsageFlags::UNIFORM_BUFFER),
                 "Imgui_display_buffer".to_string());
             let display_buffer = device.create_buffer(
                 0, // TODO: need to generate a real handle value
@@ -222,11 +220,10 @@ impl<'d> ImguiRender<'d> {
 
 
         for draw_list in draw_data.draw_lists() {
-            let vtx_create = BufferCreateInfo::new(vk::BufferCreateInfo::builder()
+            let vtx_create = BufferCreateInfo::new(vk::BufferCreateInfo::default()
                                                        .size((draw_data.total_vtx_count as usize * std::mem::size_of::<DrawVert>()) as vk::DeviceSize)
                                                        .usage(vk::BufferUsageFlags::VERTEX_BUFFER)
-                                                       .sharing_mode(vk::SharingMode::EXCLUSIVE)
-                                                       .build(),
+                                                       .sharing_mode(vk::SharingMode::EXCLUSIVE),
                                                    "imgui_vtx_buffer".to_string());
 
             let vtx_buffer = Arc::new(Mutex::new(device.create_buffer(
@@ -245,11 +242,10 @@ impl<'d> ImguiRender<'d> {
                 }
             });
 
-            let idx_create = BufferCreateInfo::new(vk::BufferCreateInfo::builder()
+            let idx_create = BufferCreateInfo::new(vk::BufferCreateInfo::default()
                                                        .size((draw_data.total_idx_count as usize * std::mem::size_of::<DrawIdx>()) as vk::DeviceSize)
                                                        .usage(vk::BufferUsageFlags::INDEX_BUFFER)
-                                                       .sharing_mode(vk::SharingMode::EXCLUSIVE)
-                                                       .build(),
+                                                       .sharing_mode(vk::SharingMode::EXCLUSIVE),
                                                    "imgui_idx_buffer".to_string());
 
             let idx_buffer = Arc::new(Mutex::new(device.create_buffer(
@@ -284,15 +280,11 @@ impl<'d> ImguiRender<'d> {
                 }
             };
 
-            let vertex_input = vk::PipelineVertexInputStateCreateInfo::builder()
-                .vertex_binding_descriptions(std::slice::from_ref(&IMGUI_VERTEX_BINDING))
-                .vertex_attribute_descriptions(&IMGUI_VERTEX_ATTRIBUTES)
-                .build();
-
             let dynamic_states = vec!(vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR);
 
             let pipeline_description = Arc::new(PipelineDescription::new(
-                vertex_input,
+                vec![IMGUI_VERTEX_BINDING],
+                IMGUI_VERTEX_ATTRIBUTES.to_vec(),
                 dynamic_states,
                 RasterizationType::Standard,
                 DepthStencilType::Disable,
@@ -316,19 +308,17 @@ impl<'d> ImguiRender<'d> {
 
             let (viewport, scissor) = {
                 let extent = render_target.resource_image.lock().unwrap().get_image().extent;
-                let v = vk::Viewport::builder()
+                let v = vk::Viewport::default()
                     .x(0.0)
                     .y(0.0)
                     .width(extent.width as f32)
                     .height(extent.height as f32)
                     .min_depth(0.0)
-                    .max_depth(1.0)
-                    .build();
+                    .max_depth(1.0);
 
-                let s = vk::Rect2D::builder()
+                let s = vk::Rect2D::default()
                     .offset(vk::Offset2D{x: 0, y: 0})
-                    .extent(vk::Extent2D{width: extent.width, height: extent.height})
-                    .build();
+                    .extent(vk::Extent2D{width: extent.width, height: extent.height});
 
                 (v, s)
             };

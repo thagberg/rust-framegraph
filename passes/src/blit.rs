@@ -37,22 +37,22 @@ pub fn generate_pass<'d>(
                     let dest_image = resolved_dest.get_image();
 
                     let offsets = [
-                        vk::Offset3D::builder().x(offsets[0].x).y(offsets[0].y).z(0).build(),
-                        vk::Offset3D::builder().x(offsets[1].x).y(offsets[1].y).z(1).build()
+                        vk::Offset3D::default().x(offsets[0].x).y(offsets[0].y).z(0),
+                        vk::Offset3D::default().x(offsets[1].x).y(offsets[1].y).z(1)
                     ];
-                    let source_layer = vk::ImageSubresourceLayers::builder()
+                    let source_layer = vk::ImageSubresourceLayers::default()
                         .layer_count(1)
                         .base_array_layer(source_layer)
                         .mip_level(0)
                         .aspect_mask(vk::ImageAspectFlags::COLOR);
-                    let dest_layer = vk::ImageSubresourceLayers::builder()
+                    let dest_layer = vk::ImageSubresourceLayers::default()
                         .layer_count(1)
                         .base_array_layer(dest_layer)
                         .mip_level(0)
                         .aspect_mask(vk::ImageAspectFlags::COLOR);
-                    let blit_region = vk::ImageBlit::builder()
-                        .src_subresource(*source_layer)
-                        .dst_subresource(*dest_layer)
+                    let blit_region = vk::ImageBlit::default()
+                        .src_subresource(source_layer)
+                        .dst_subresource(dest_layer)
                         .src_offsets(offsets)
                         .dst_offsets(offsets);
                     device.get().cmd_blit_image(
