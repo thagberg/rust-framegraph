@@ -62,6 +62,8 @@ impl<'a> SwapchainWrapper<'a> {
 
     pub fn get_images(&self) -> &'a Vec<Arc<Mutex<DeviceResource>>> { &self.images }
 
+    pub fn get_images_count(&self) -> u32 { self.images.len() as u32 }
+
     pub fn get_format(&self) -> vk::Format { self.format }
 
     pub fn get_extent(&self) -> vk::Extent2D { self.extent }

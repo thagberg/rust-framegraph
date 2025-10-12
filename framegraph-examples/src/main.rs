@@ -126,16 +126,7 @@ impl<'d> WindowedVulkanApp<'d> {
 
         let frame_graph = VulkanFrameGraph::new();
 
-        let max_frames_in_flight = {
-            match render_context.get_swapchain() {
-                Some(swapchain) => {
-                    swapchain.get_images().len() as u32
-                }
-                None => {
-                    MAX_FRAMES_IN_FLIGHT
-                }
-            }
-        };
+        let max_frames_in_flight = render_context.get_max_frames_in_flight();
 
         let mut frame_fences: Vec<vk::Fence> = Vec::new();
         let mut render_semaphores: Vec<vk::Semaphore> = Vec::new();
@@ -179,7 +170,7 @@ impl<'d> WindowedVulkanApp<'d> {
             };
 
             ImguiRender::new(
-                render_context.get_device().clone(),
+                render_context.get_device(),
                 &render_context,
                 allocator.clone(),
                 &immediate_command_buffer,
@@ -197,10 +188,12 @@ impl<'d> WindowedVulkanApp<'d> {
                 &immediate_command_buffer))
         ];
 
+        let examples = vec![];
+
         let mut frames: Vec<Option<Box<Frame>>> = Vec::new();
         frames.resize_with(max_frames_in_flight as usize, Default::default);
 
-        WindowedVulkanApp {
+        let app = WindowedVulkanApp {
             window,
             platform,
             examples: Examples::new(examples),
@@ -214,7 +207,9 @@ impl<'d> WindowedVulkanApp<'d> {
             render_context,
             allocator,
             tracy
-        }
+        };
+
+        app
     }
 
     pub fn shutdown(&mut self) {
@@ -405,16 +400,7 @@ impl<'d> WindowedVulkanApp<'d> {
         }
         self.tracy.frame_mark();
 
-        let max_frames_in_flight = {
-            match self.render_context.get_swapchain() {
-                Some(swapchain) => {
-                    swapchain.get_images().len() as u32
-                }
-                None => {
-                    MAX_FRAMES_IN_FLIGHT
-                }
-            }
-        };
+        let max_frames_in_flight = self.render_context.get_max_frames_in_flight();
         self.frame_index = (self.frame_index + 1) % max_frames_in_flight;
 
     }

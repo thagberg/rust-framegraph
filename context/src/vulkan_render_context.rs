@@ -1003,7 +1003,18 @@ impl<'a> VulkanRenderContext<'a> {
         self.present_queue
     }
 
-    pub fn get_swapchain(&self) -> &'a Option<SwapchainWrapper> { &self.swapchain }
+    // pub fn get_swapchain(&self) -> &'a Option<SwapchainWrapper> { &self.swapchain }
+
+    pub fn get_max_frames_in_flight(&self) -> u32 {
+        match &self.swapchain {
+            Some(swapchain) => {
+                swapchain.get_images_count() as u32
+            }
+            None => {
+                MAX_FRAMES_IN_FLIGHT
+            }
+        }
+    }
 
     pub fn recreate_swapchain(
         &'a mut self,
