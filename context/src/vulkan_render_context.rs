@@ -525,7 +525,7 @@ fn create_debug_util(
     VulkanDebug::new(debug_utils_loader, messenger)
 }
 
-fn create_swapchain<'a, 'b>(
+fn create_swapchain<'a>(
     handle_generator: &mut HandleGenerator,
     instance: &InstanceWrapper,
     device: &'a DeviceInterface,
@@ -533,7 +533,7 @@ fn create_swapchain<'a, 'b>(
     surface: &SurfaceWrapper,
     window: &winit::window::Window,
     old_swapchain: &Option<OldSwapchain>
-) -> SwapchainWrapper<'b> where 'a : 'b {
+) -> SwapchainWrapper<'a> {
     let swapchain_capabilities = surface.get_surface_capabilities(physical_device);
 
     // TODO: may want to make format and color space customizable
@@ -704,7 +704,7 @@ pub struct VulkanFrameObjects<'a> {
 // whenever we recreate the swapchain
 // Necessary for avoiding errors when specifying image indices in VkPresentInfoKHR
 pub struct VulkanRenderContext<'a> {
-    handle_generator: HandleGenerator,
+    handle_generator: Mutex<HandleGenerator>,  // Wrap in Mutex for interior mutability
     frame_index: AtomicU32,
     swapchain_index: AtomicU32,
     graphics_queue: vk::Queue,
@@ -863,7 +863,7 @@ impl<'a> VulkanRenderContext<'a> {
         let frame_index = 0;
 
         let mut context = VulkanRenderContext {
-            handle_generator,
+            handle_generator: Mutex::new(handle_generator),
             entry,
             instance: instance_wrapper,
             device: logical_device,
@@ -910,7 +910,7 @@ impl<'a> VulkanRenderContext<'a> {
             *swapchain = {
                 if window.is_some() && self.surface.is_some() {
                     Some(create_swapchain(
-                        &mut self.handle_generator,
+                        &mut self.handle_generator.lock().unwrap(),
                         &self.instance,
                         &self.device,
                         &self.physical_device,
@@ -1016,7 +1016,7 @@ impl<'a> VulkanRenderContext<'a> {
     }
 
     pub fn recreate_swapchain(
-        &self,
+        &'a self,
         window: &winit::window::Window
     ) {
         match &self.surface {
@@ -1032,7 +1032,7 @@ impl<'a> VulkanRenderContext<'a> {
                         frame_index: current_frame_index
                     });
                     let new_swapchain = create_swapchain(
-                        &mut self.handle_generator,
+                        &mut self.handle_generator.lock().unwrap(),  // Lock the mutex here
                         &self.instance,
                         &self.device,
                         &self.physical_device,
@@ -1084,11 +1084,16 @@ impl<'a> VulkanRenderContext<'a> {
         // is no longer using the old swapchain
         {
             let mut old_swapchain = self.old_swapchain.lock().unwrap();
-            if let Some(old_swap) = &*old_swapchain {
-                let old_swap_inner = old_swap.swapchain.lock().unwrap();
-                if old_swap_inner.can_destroy() {
-                    *old_swapchain = None;
+            let should_destroy = {
+                if let Some(old_swap) = &*old_swapchain {
+                    let old_swap_inner = old_swap.swapchain.lock().unwrap();
+                    old_swap_inner.can_destroy()
+                } else {
+                    false
                 }
+            };
+            if should_destroy {
+                *old_swapchain = None;
             }
         }
 
