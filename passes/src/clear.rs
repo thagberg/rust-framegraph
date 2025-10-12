@@ -47,13 +47,12 @@ pub fn clear<'d>(
                 //let borrowed_device = device.borrow();
                 enter_gpu_span!(&pass_name, "misc", device.get(), &command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
 
-                let range = vk::ImageSubresourceRange::builder()
+                let range = vk::ImageSubresourceRange::default()
                     .aspect_mask(aspect_mask)
                     .level_count(1)
                     .base_mip_level(0)
                     .layer_count(1)
-                    .base_array_layer(0)
-                    .build();
+                    .base_array_layer(0);
 
                 unsafe {
                     let image = target_clone.lock().unwrap().get_image().image;
@@ -69,10 +68,9 @@ pub fn clear<'d>(
                             command_buffer,
                             image,
                             vk::ImageLayout::GENERAL,
-                            &vk::ClearDepthStencilValue::builder()
+                            &vk::ClearDepthStencilValue::default()
                                 .depth(1.0)
-                                .stencil(0)
-                                .build(),
+                                .stencil(0),
                             std::slice::from_ref(&range));
                     } else {
                         panic!("Invalid aspect mask for clear: {:?}", aspect_mask);
