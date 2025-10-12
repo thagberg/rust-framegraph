@@ -41,13 +41,14 @@ impl<'d> Example<'d> for UboExample<'d> {
         _imgui_ui: &mut Ui,
         back_buffer: AttachmentReference<'d>) -> Vec<PassType<'d>> {
 
-        let vertex_state_create = vk::PipelineVertexInputStateCreateInfo::builder()
+        let vertex_state_create = vk::PipelineVertexInputStateCreateInfo::default()
             .vertex_attribute_descriptions(&[])
             .vertex_binding_descriptions(&[]);
 
         let dynamic_states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
 
         let pipeline_description = Arc::new(PipelineDescription::new(
+            Default::default(),
             Default::default(),
             dynamic_states,
             RasterizationType::Standard,
@@ -81,19 +82,17 @@ impl<'d> Example<'d> for UboExample<'d> {
                     enter_span!(tracing::Level::TRACE, "Draw Triangle");
                     enter_gpu_span!("Draw Triangle GPU", "examples", device, &command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
 
-                    let viewport = vk::Viewport::builder()
+                    let viewport = vk::Viewport::default()
                         .x(0.0)
                         .y(0.0)
                         .width(800.0)
                         .height(600.0)
                         .min_depth(0.0)
-                        .max_depth(1.0)
-                        .build();
+                        .max_depth(1.0);
 
-                    let scissor = vk::Rect2D::builder()
+                    let scissor = vk::Rect2D::default()
                         .offset(vk::Offset2D{x: 0, y: 0})
-                        .extent(vk::Extent2D::builder().width(800).height(600).build())
-                        .build();
+                        .extent(vk::Extent2D::default().width(800).height(600));
 
                     unsafe {
                         device.get().cmd_set_viewport(
@@ -127,11 +126,10 @@ impl<'d> UboExample<'d> {
         device: &'d DeviceInterface,
         allocator: Arc<Mutex<ResourceAllocator>>) -> Self{
         let ubo_create = BufferCreateInfo::new(
-            vk::BufferCreateInfo::builder()
+            vk::BufferCreateInfo::default()
                 .size(std::mem::size_of::<UBO>() as vk::DeviceSize)
                 .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
-                .sharing_mode(vk::SharingMode::EXCLUSIVE)
-                .build(),
+                .sharing_mode(vk::SharingMode::EXCLUSIVE),
             "ubo_example_buffer".to_string()
         );
 
