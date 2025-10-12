@@ -331,7 +331,7 @@ impl<'d> Example<'d> for ModelExample<'d> {
         let depth_attachment = {
             let depth_image = {
                 let rt_extent = back_buffer.resource_image.lock().unwrap().get_image().extent.clone();
-                let depth_create = vk::ImageCreateInfo::builder()
+                let depth_create = vk::ImageCreateInfo::default()
                     .format(vk::Format::D32_SFLOAT)
                     .image_type(vk::ImageType::TYPE_2D)
                     .sharing_mode(vk::SharingMode::EXCLUSIVE)
@@ -343,8 +343,7 @@ impl<'d> Example<'d> for ModelExample<'d> {
                     .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST)
                     .extent(rt_extent)
                     .mip_levels(1)
-                    .array_layers(1)
-                    .build();
+                    .array_layers(1);
 
                 let image_create = ImageCreateInfo::new(
                     depth_create,
@@ -375,10 +374,9 @@ impl<'d> Example<'d> for ModelExample<'d> {
             // create UBO for MVP
             let mvp_buffer = {
                 let create_info = BufferCreateInfo::new(
-                    vk::BufferCreateInfo::builder()
+                    vk::BufferCreateInfo::default()
                         .size(std::mem::size_of::<MVP>() as vk::DeviceSize)
-                        .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
-                        .build(),
+                        .usage(vk::BufferUsageFlags::UNIFORM_BUFFER),
                     "MVP_buffer".to_string()
                 );
                 let buffer = device.create_buffer(
@@ -422,13 +420,13 @@ impl<'d> Example<'d> for ModelExample<'d> {
             };
 
             let dynamic_states = vec!(vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR);
-            let vertex_input = vk::PipelineVertexInputStateCreateInfo::builder()
+            let vertex_input = vk::PipelineVertexInputStateCreateInfo::default()
                 .vertex_binding_descriptions(std::slice::from_ref(&render_mesh.vertex_binding))
-                .vertex_attribute_descriptions(&render_mesh.vertex_attributes)
-                .build();
+                .vertex_attribute_descriptions(&render_mesh.vertex_attributes);
 
             let pipeline_description = Arc::new(PipelineDescription::new(
-                vertex_input,
+                vec![render_mesh.vertex_binding.clone()],
+                render_mesh.vertex_attributes.to_vec(),
                 dynamic_states,
                 RasterizationType::Standard,
                 DepthStencilType::Enable,
@@ -439,7 +437,7 @@ impl<'d> Example<'d> for ModelExample<'d> {
 
             let (viewport, scissor) = {
                 let extent = back_buffer.resource_image.lock().unwrap().get_image().extent;
-                let v = vk::Viewport::builder()
+                let v = vk::Viewport::default()
                     .x(0.0)
                     // .y(0.0)
                     .y(extent.height as f32)
@@ -447,13 +445,11 @@ impl<'d> Example<'d> for ModelExample<'d> {
                     // .height(extent.height as f32)
                     .height(-(extent.height as f32))
                     .min_depth(0.0)
-                    .max_depth(1.0)
-                    .build();
+                    .max_depth(1.0);
 
-                let s = vk::Rect2D::builder()
+                let s = vk::Rect2D::default()
                     .offset(vk::Offset2D{x: 0, y: 0})
-                    .extent(vk::Extent2D{width: extent.width, height: extent.height})
-                    .build();
+                    .extent(vk::Extent2D{width: extent.width, height: extent.height});
 
                 (v, s)
             };
@@ -654,11 +650,10 @@ impl<'d> ModelExample<'d> {
                                 indices_accessor.data_type();
                                 ibo = Some({
                                     let ibo_create = BufferCreateInfo::new(
-                                        vk::BufferCreateInfo::builder()
+                                        vk::BufferCreateInfo::default()
                                             .size(ibo_size as vk::DeviceSize)
                                             .usage(vk::BufferUsageFlags::INDEX_BUFFER)
-                                            .sharing_mode(vk::SharingMode::EXCLUSIVE)
-                                            .build(),
+                                            .sharing_mode(vk::SharingMode::EXCLUSIVE),
                                         primitive_name.clone()
                                     );
                                     Arc::new(Mutex::new(device.create_buffer(
@@ -698,28 +693,25 @@ impl<'d> ModelExample<'d> {
                             let vertex_attributes: [vk::VertexInputAttributeDescription; 3] = [
                                 // TODO: map the glTF componentTypes to the correct format (or alter the data)
                                 // positions
-                                vk::VertexInputAttributeDescription::builder()
+                                vk::VertexInputAttributeDescription::default()
                                     .binding(0)
                                     .location(0)
                                     .format(vk::Format::R32G32B32_SFLOAT)
-                                    .offset(0)
-                                    .build(),
+                                    .offset(0),
 
                                 // normals
-                                vk::VertexInputAttributeDescription::builder()
+                                vk::VertexInputAttributeDescription::default()
                                     .binding(0)
                                     .location(1)
                                     .format(vk::Format::R32G32B32_SFLOAT)
-                                    .offset(normals_offset)
-                                    .build(),
+                                    .offset(normals_offset),
 
                                 // UVs
-                                vk::VertexInputAttributeDescription::builder()
+                                vk::VertexInputAttributeDescription::default()
                                     .binding(0)
                                     .location(2)
                                     .format(vk::Format::R32G32_SFLOAT)
-                                    .offset(uvs_offset)
-                                    .build(),
+                                    .offset(uvs_offset),
                             ];
 
                             // need to do an initial pass over attributes to calculate total VBO size and vertex size
@@ -745,11 +737,10 @@ impl<'d> ModelExample<'d> {
                             // create vertex buffer
                             let vbo = {
                                 let vbo_create = BufferCreateInfo::new(
-                                    vk::BufferCreateInfo::builder()
+                                    vk::BufferCreateInfo::default()
                                         .size(vertex_data_size as vk::DeviceSize)
                                         .usage(vk::BufferUsageFlags::VERTEX_BUFFER)
-                                        .sharing_mode(vk::SharingMode::EXCLUSIVE)
-                                        .build(),
+                                        .sharing_mode(vk::SharingMode::EXCLUSIVE),
                                     primitive_name.clone()
                                 );
                                 device.create_buffer(
@@ -906,19 +897,18 @@ impl<'d> ModelExample<'d> {
                                                 );
                                                 // albedo_dev_tex = Some(Rc::new(RefCell::new(tex)));
                                                 unsafe {
-                                                    let create = vk::SamplerCreateInfo::builder()
+                                                    let create = vk::SamplerCreateInfo::default()
                                                         .mag_filter(vk::Filter::LINEAR)
                                                         .min_filter(vk::Filter::LINEAR)
                                                         .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
                                                         .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_BORDER)
                                                         .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_BORDER)
                                                         .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_BORDER)
-                                                        .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
-                                                        .build();
+                                                        .border_color(vk::BorderColor::INT_OPAQUE_BLACK);
 
                                                     let sampler = device.get().create_sampler(&create, None)
                                                         .expect("Failed to create sampler for albedo texture");
-                                                    device.set_debug_name(vk::ObjectType::SAMPLER, sampler.as_raw(), "albedo_sampler");
+                                                    device.set_debug_name(sampler, "albedo_sampler");
 
                                                     tex.get_image_mut().sampler = Some(sampler);
                                                 };
