@@ -198,22 +198,62 @@ fn get_descriptor_buffer_info(
     (buffer_info, descriptor_type)
 }
 
+struct DescriptorImageUpdate {
+    image_info: vk::DescriptorImageInfo,
+    descriptor_type: vk::DescriptorType,
+    binding_set: vk::DescriptorSet,
+    binding_slot: u32
+}
+
+struct DescriptorBufferUpdate {
+    buffer_info: vk::DescriptorBufferInfo,
+    descriptor_type: vk::DescriptorType,
+    binding_set: vk::DescriptorSet,
+    binding_slot: u32
+}
+
 /// Wrapper for all info required for vk::WriteDescriptorSet
 /// This ensures that the image / buffer info references held in WriteDescriptorSet
 /// will live long enough
-struct DescriptorUpdate<'i> {
-    descriptor_writes: Vec<vk::WriteDescriptorSet<'i>>,
-    image_infos: Vec<vk::DescriptorImageInfo>,
-    buffer_infos: Vec<vk::DescriptorBufferInfo>
+struct DescriptorUpdate {
+    image_infos: Vec<DescriptorImageUpdate>,
+    buffer_infos: Vec<DescriptorBufferUpdate>
 }
 
-impl<'i> DescriptorUpdate<'i> {
+impl DescriptorUpdate {
     pub fn new() -> Self {
         DescriptorUpdate {
-            descriptor_writes: vec![],
             image_infos: vec![],
             buffer_infos: vec![]
         }
+    }
+
+    pub fn create_descriptor_writes(&self) -> Vec<vk::WriteDescriptorSet>{
+        let mut descriptor_writes = vec![];
+
+        for image_info in &self.image_infos {
+            let descriptor_write = vk::WriteDescriptorSet::default()
+                .dst_set(image_info.binding_set)
+                .dst_binding(image_info.binding_slot)
+                .dst_array_element(0) // TODO: parameterize
+                .descriptor_type(image_info.descriptor_type)
+                .image_info(std::slice::from_ref(&image_info.image_info));
+
+            descriptor_writes.push(descriptor_write);
+        }
+
+        for buffer_info in &self.buffer_infos {
+            let descriptor_write = vk::WriteDescriptorSet::default()
+                .dst_set(buffer_info.binding_set)
+                .dst_binding(buffer_info.binding_slot)
+                .dst_array_element(0) // TODO: parameterize
+                .descriptor_type(buffer_info.descriptor_type)
+                .buffer_info(std::slice::from_ref(&buffer_info.buffer_info));
+
+            descriptor_writes.push(descriptor_write);
+        }
+
+        descriptor_writes
     }
 }
 
@@ -231,32 +271,29 @@ fn resolve_descriptors<'a, 'b>(
         };
         let descriptor_set = descriptor_sets[binding.binding_info.set as usize];
 
-        let mut descriptor_write_builder = vk::WriteDescriptorSet::default()
-            .dst_set(descriptor_set)
-            .dst_binding(binding.binding_info.slot)
-            .dst_array_element(0); // TODO: parameterize
-
         match (&resolved_binding, &binding.binding_info.binding_type) {
             (ResourceType::Image(resolved_image), BindingType::Image(image_binding)) => {
                 let (image_info, descriptor_type) = get_descriptor_image_info(resolved_image, image_binding);
-                descriptor_updates.image_infos.push(image_info);
-                descriptor_write_builder = descriptor_write_builder
-                    .descriptor_type(descriptor_type)
-                    .image_info(std::slice::from_ref(descriptor_updates.image_infos.last().unwrap()));
+                descriptor_updates.image_infos.push(DescriptorImageUpdate{
+                    image_info,
+                    descriptor_type,
+                    binding_set: descriptor_set,
+                    binding_slot: binding.binding_info.slot
+                });
             },
             (ResourceType::Buffer(resolved_buffer), BindingType::Buffer(buffer_binding)) => {
                 let (buffer_info, descriptor_type) = get_descriptor_buffer_info(resolved_buffer, buffer_binding);
-                descriptor_updates.buffer_infos.push(buffer_info);
-                descriptor_write_builder = descriptor_write_builder
-                    .descriptor_type(descriptor_type)
-                    .buffer_info(std::slice::from_ref(descriptor_updates.buffer_infos.last().unwrap()));
+                descriptor_updates.buffer_infos.push(DescriptorBufferUpdate{
+                    buffer_info,
+                    descriptor_type,
+                    binding_set: descriptor_set,
+                    binding_slot: binding.binding_info.slot
+                });
             },
             _ => {
                 panic!("Invalid type being resolved");
             }
         }
-
-        descriptor_updates.descriptor_writes.push(descriptor_write_builder);
     }
 }
 
@@ -710,16 +747,19 @@ impl<'d> VulkanFrameGraph<'d> {
                     pipeline_ref.deref(),
                     &[],
                     &mut descriptor_updates);
+
                 resolve_descriptors(
                     outputs,
                     pipeline_ref.deref(),
                     &[],
                     &mut descriptor_updates);
 
+                let descriptor_writes = descriptor_updates.create_descriptor_writes();
+
                 unsafe {
                     // TODO: support descriptor copies?
                     device.get().update_descriptor_sets(
-                        &descriptor_updates.descriptor_writes,
+                        &descriptor_writes,
                         &[]);
                     // bind descriptorsets
                     // TODO: COMPUTE SUPPORT
@@ -841,12 +881,14 @@ impl<'d> VulkanFrameGraph<'d> {
                         &new_descriptor_sets,
                         &mut descriptor_updates);
 
+                    let descriptor_writes = descriptor_updates.create_descriptor_writes();
+
                     unsafe {
                         enter_span!(tracing::Level::TRACE, "Update and bind descriptor sets");
                         let device = render_context.get_device();
                         // TODO: support descriptor copies?
                         device.get().update_descriptor_sets(
-                            &descriptor_updates.descriptor_writes,
+                            &descriptor_writes,
                             &[]);
                         // bind descriptorsets
                         // TODO: COMPUTE SUPPORT
