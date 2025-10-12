@@ -25,7 +25,7 @@ pub fn generate_pass<'d>(
     let image_extent = source.lock().unwrap().get_image().extent.clone();
 
     let blur_target_create_info: ImageCreateInfo = ImageCreateInfo::new(
-        vk::ImageCreateInfo::builder()
+        vk::ImageCreateInfo::default()
             .image_type(vk::ImageType::TYPE_2D)
             .format(vk::Format::R8G8B8A8_UNORM)
             .initial_layout(vk::ImageLayout::UNDEFINED)
@@ -33,8 +33,7 @@ pub fn generate_pass<'d>(
             .samples(vk::SampleCountFlags::TYPE_1)
             .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::TRANSFER_SRC)
             .mip_levels(1)
-            .array_layers(1)
-            .build(),
+            .array_layers(1),
         String::from("blur_target"),
         ImageType::Color);
 
