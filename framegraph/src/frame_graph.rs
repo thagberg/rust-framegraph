@@ -21,6 +21,7 @@ pub trait FrameGraph<'a>
     fn end(
         &mut self,
         frame: &mut Frame<'a>,
-        render_context: &'a mut Self::RC,
+        // render_context: &'a mut Self::RC,
+        render_context: &'a Self::RC,
         command_buffer: &Self::CB);
 }

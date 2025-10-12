@@ -993,7 +993,8 @@ impl<'d> FrameGraph<'d> for VulkanFrameGraph<'d> {
     fn end(
         &mut self,
         frame: &mut Frame<'d>,
-        render_context: &'d mut Self::RC,
+        // render_context: &'d mut Self::RC,
+        render_context: &'d Self::RC,
         command_buffer: &Self::CB) {
 
         let span = span!(Level::TRACE, "Framegraph End");

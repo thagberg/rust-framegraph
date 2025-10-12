@@ -72,7 +72,7 @@ struct WindowedVulkanApp<'d> {
     // examples: Vec<Box<dyn Example>>,
     examples: Examples<'d>,
 
-    imgui_renderer: ImguiRender<'d>,
+    imgui_renderer: Option<ImguiRender<'d>>,
     frame_graph: VulkanFrameGraph<'d>,
 
     render_context: VulkanRenderContext<'d>,
@@ -163,43 +163,43 @@ impl<'d> WindowedVulkanApp<'d> {
 
         let immediate_command_buffer = render_context.get_immediate_command_buffer();
 
-        let imgui_renderer = {
-            let font_texture = {
-                let fonts = imgui.fonts();
-                fonts.build_rgba32_texture()
-            };
+        // let imgui_renderer = {
+        //     let font_texture = {
+        //         let fonts = imgui.fonts();
+        //         fonts.build_rgba32_texture()
+        //     };
+        //
+        //     ImguiRender::new(
+        //         render_context.get_device(),
+        //         &render_context,
+        //         allocator.clone(),
+        //         &immediate_command_buffer,
+        //         font_texture)
+        // };
 
-            ImguiRender::new(
-                render_context.get_device(),
-                &render_context,
-                allocator.clone(),
-                &immediate_command_buffer,
-                font_texture)
-        };
-
-        let examples: Vec<Box<dyn Example>> = vec![
-            Box::new(UboExample::new(
-                render_context.get_device(),
-                allocator.clone())),
-            Box::new(ModelExample::new(
-                render_context.get_device(),
-                &render_context,
-                allocator.clone(),
-                &immediate_command_buffer))
-        ];
-
-        let examples = vec![];
+        // let examples: Vec<Box<dyn Example>> = vec![
+        //     Box::new(UboExample::new(
+        //         render_context.get_device(),
+        //         allocator.clone())),
+        //     Box::new(ModelExample::new(
+        //         render_context.get_device(),
+        //         &render_context,
+        //         allocator.clone(),
+        //         &immediate_command_buffer))
+        // ];
 
         let mut frames: Vec<Option<Box<Frame>>> = Vec::new();
         frames.resize_with(max_frames_in_flight as usize, Default::default);
 
-        let app = WindowedVulkanApp {
+        let mut app = WindowedVulkanApp {
             window,
             platform,
-            examples: Examples::new(examples),
+            // examples: Examples::new(examples),
+            examples: Examples::new(vec![]),
             imgui,
             frame_graph,
-            imgui_renderer,
+            // imgui_renderer,
+            imgui_renderer: None,
             render_semaphores,
             frames,
             frame_fences,
@@ -208,6 +208,20 @@ impl<'d> WindowedVulkanApp<'d> {
             allocator,
             tracy
         };
+
+        // app.imgui_renderer = {
+        //         let font_texture = {
+        //             let fonts = app.imgui.fonts();
+        //             fonts.build_rgba32_texture()
+        //         };
+        //
+        //         Some(ImguiRender::new(
+        //             app.render_context.get_device(),
+        //             &app.render_context,
+        //             app.allocator.clone(),
+        //             &immediate_command_buffer,
+        //             font_texture))
+        // };
 
         app
     }
@@ -303,7 +317,8 @@ impl<'d> WindowedVulkanApp<'d> {
 
         // prepare framegraph
         log::trace!(target: "frame", "Creating new frame: {}", self.frame_index);
-        self.frames[self.frame_index as usize] = Some(self.frame_graph.start(self.render_context.get_device(), descriptor_pool));
+        let device = self.render_context.get_device();
+        self.frames[self.frame_index as usize] = Some(self.frame_graph.start(device, descriptor_pool));
         let current_frame = self.frames[self.frame_index as usize].as_mut().unwrap();
 
         {
@@ -329,8 +344,9 @@ impl<'d> WindowedVulkanApp<'d> {
 
                 if let Some(index) = self.examples.active_example_index {
                     if let Some(active_example) = self.examples.examples.get(index) {
+                        let device = self.render_context.get_device();
                         let nodes = active_example.execute(
-                            self.render_context.get_device(),
+                            device,
                             self.allocator.clone(),
                             ui,
                             rt_ref.clone());
@@ -342,21 +358,24 @@ impl<'d> WindowedVulkanApp<'d> {
 
                 let imgui_draw_data = self.imgui.render();
 
-                let imgui_nodes = self.imgui_renderer.generate_passes(
-                    self.allocator.clone(),
-                    imgui_draw_data,
-                    rt_ref.clone(),
-                    self.render_context.get_device());
+                if let Some(imgui_renderer) = &self.imgui_renderer {
+                    let device = self.render_context.get_device();
+                    let imgui_nodes = imgui_renderer.generate_passes(
+                        self.allocator.clone(),
+                        imgui_draw_data,
+                        rt_ref.clone(),
+                        device);
 
-                for imgui_node in imgui_nodes {
-                    current_frame.add_node(imgui_node);
+                    for imgui_node in imgui_nodes {
+                        current_frame.add_node(imgui_node);
+                    }
                 }
             }
         }
 
         self.frame_graph.end(
             current_frame,
-            &mut self.render_context,
+            &self.render_context,
             &command_buffer);
 
         // end command buffer
