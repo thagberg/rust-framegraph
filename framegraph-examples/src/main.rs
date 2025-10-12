@@ -113,7 +113,7 @@ impl<'d> WindowedVulkanApp<'d> {
 
         let mut render_context = {
             let c_title = CString::new(title).unwrap();
-            let application_info = vk::ApplicationInfo::builder()
+            let application_info = vk::ApplicationInfo::default()
                 .application_name(&c_title)
                 .api_version(vk::API_VERSION_1_2);
 
@@ -142,12 +142,10 @@ impl<'d> WindowedVulkanApp<'d> {
         {
             // frame fences start as signaled so we don't wait the first time
             // we execute that frame
-            let fence_create = vk::FenceCreateInfo::builder()
-                .flags(vk::FenceCreateFlags::SIGNALED)
-                .build();
+            let fence_create = vk::FenceCreateInfo::default()
+                .flags(vk::FenceCreateFlags::SIGNALED);
 
-            let semaphore_create = vk::SemaphoreCreateInfo::builder()
-                .build();
+            let semaphore_create = vk::SemaphoreCreateInfo::default();
 
             unsafe {
                 for _ in 0..max_frames_in_flight {
@@ -286,9 +284,8 @@ impl<'d> WindowedVulkanApp<'d> {
                 command_buffer,
                 vk::CommandBufferResetFlags::empty())
                 .expect("Failed to reset command buffer");
-            let begin_info = vk::CommandBufferBeginInfo::builder()
-                .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)
-                .build();
+            let begin_info = vk::CommandBufferBeginInfo::default()
+                .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE);
             self.render_context.get_device().get().begin_command_buffer(command_buffer, &begin_info)
                 .expect("Failed to begin recording command buffer");
         }
