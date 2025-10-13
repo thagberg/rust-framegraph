@@ -81,15 +81,15 @@ const VERTEX_BINDING:  vk::VertexInputBindingDescription = vk::VertexInputBindin
     input_rate: vk::VertexInputRate::VERTEX,
 };
 
-pub struct RenderMesh<'d> {
+pub struct RenderMesh {
     // TODO: add primitive topology (also need to support this in pipeline.rs)
     vertex_buffer: Arc<Mutex<DeviceResource>>,
-    index_buffer: Option<Arc<Mutex<DeviceResource<'d>>>>,
+    index_buffer: Option<Arc<Mutex<DeviceResource>>>,
     num_indices: usize,
     vertex_binding: vk::VertexInputBindingDescription,
     vertex_attributes: [vk::VertexInputAttributeDescription; 3],
     transform: glm::TMat4<f32>,
-    albedo_tex: Option<Arc<Mutex<DeviceResource<'d>>>>
+    albedo_tex: Option<Arc<Mutex<DeviceResource>>>
 }
 
 #[derive(Eq, PartialEq, Hash)]
@@ -297,25 +297,25 @@ fn get_glm_format(data_type: DataType, dimensions: Dimensions, data_pointer: *co
     }
 }
 
-pub struct ModelExample<'d> {
-    vertex_shader: Arc<Mutex<Shader<'d>>>,
-    fragment_shader: Arc<Mutex<Shader<'d>>>,
+pub struct ModelExample {
+    vertex_shader: Arc<Mutex<Shader>>,
+    fragment_shader: Arc<Mutex<Shader>>,
     camera: Camera,
     duck_model: GltfModel,
-    render_meshes: Vec<RenderMesh<'d>>
+    render_meshes: Vec<RenderMesh>
 }
 
-impl<'d> Example<'d> for ModelExample<'d> {
+impl Example for ModelExample {
     fn get_name(&self) -> &'static str {
         "Model Render"
     }
 
     fn execute(
         &self,
-        device: &'d DeviceInterface,
+        device: DeviceInterface,
         allocator: Arc<Mutex<ResourceAllocator>>,
         imgui_ui: &mut Ui,
-        back_buffer: AttachmentReference<'d>) -> Vec<PassType<'d>> {
+        back_buffer: AttachmentReference) -> Vec<PassType> {
 
         enter_span!(tracing::Level::TRACE, "Generating Model Pass");
 
@@ -481,7 +481,7 @@ impl<'d> Example<'d> for ModelExample<'d> {
                     .viewport(viewport)
                     .scissor(scissor)
                     .fill_commands(Box::new(
-                        move | device: &DeviceInterface,
+                        move | device: DeviceInterface,
                                command_buffer: vk::CommandBuffer | {
 
                             enter_span!(tracing::Level::TRACE, "Draw RenderMesh");
@@ -563,9 +563,9 @@ fn gltf_to_decomposed_matrix(t: gltf::scene::Transform) -> DecomposedMatrix {
         glm::Vec3::new(scale[0], scale[1], scale[2]))
 }
 
-impl<'d> ModelExample<'d> {
+impl ModelExample {
     pub fn new(
-        device: &'d DeviceInterface,
+        device: DeviceInterface,
         render_context: &VulkanRenderContext,
         allocator: Arc<Mutex<ResourceAllocator>>,
         immediate_command_buffer: &vk::CommandBuffer) -> Self {
@@ -887,7 +887,7 @@ impl<'d> ModelExample<'d> {
                                             Source::Uri{ uri, mime_type } => {
                                                 let mut tex = util::image::create_from_uri(
                                                     0, // TODO: create image handle
-                                                    device,
+                                                    device.clone(),
                                                     allocator.clone(),
                                                     immediate_command_buffer,
                                                     render_context.get_graphics_queue_index(),
