@@ -15,10 +15,43 @@ use crate::pipeline::DevicePipeline;
 use crate::renderpass::DeviceRenderpass;
 use crate::shader::DeviceShader;
 
+#[derive(Clone)]
 pub struct DeviceInterface {
+    inner: Arc<DeviceInterfaceInner>,
+}
+
+struct DeviceInterfaceInner {
     device: ash::Device,
     queue_families: QueueFamilies,
-    debug: Option<VulkanDebug>
+    debug: Option<VulkanDebug>,
+}
+
+impl DeviceInterface {
+    pub fn new(
+        device: ash::Device,
+        queue_families: QueueFamilies,
+        debug: Option<VulkanDebug>
+    ) -> Self {
+        DeviceInterface {
+            inner: Arc::new(DeviceInterfaceInner {
+                device,
+                queue_families,
+                debug,
+            })
+        }
+    }
+
+    pub fn get(&self) -> &ash::Device {
+        &self.inner.device
+    }
+
+    pub fn get_queue_families(&self) -> &QueueFamilies {
+        &self.inner.queue_families
+    }
+
+    pub fn get_debug(&self) -> &Option<VulkanDebug> {
+        &self.inner.debug
+    }
 }
 
 impl Debug for DeviceInterface {
@@ -28,7 +61,7 @@ impl Debug for DeviceInterface {
     }
 }
 
-impl Drop for DeviceInterface {
+impl Drop for DeviceInterfaceInner {
     fn drop(&mut self) {
         unsafe {
             self.device.destroy_device(None);
@@ -45,20 +78,6 @@ impl Deref for DeviceInterface {
 }
 
 impl DeviceInterface {
-    pub fn new(
-        device: ash::Device,
-        queue_families: QueueFamilies,
-        debug: Option<VulkanDebug>) -> Self {
-        DeviceInterface {
-            device,
-            queue_families,
-            debug
-        }
-    }
-
-    pub fn get(&self) -> &ash::Device { &self.device }
-
-    pub fn get_queue_families(&self) -> &QueueFamilies { &self.queue_families }
 
     pub fn set_debug_name<T: ash::vk::Handle>(&self, handle: T, name: &str)
     {
@@ -67,7 +86,7 @@ impl DeviceInterface {
         let debug_info = DebugUtilsObjectNameInfoEXT::default()
             .object_handle(handle)
             .object_name(&c_name);
-        if let Some(debug) = &self.debug {
+        if let Some(debug) = &self.inner.debug {
             debug.set_object_name(&debug_info);
         }
     }
@@ -105,7 +124,7 @@ impl DeviceInterface {
             .image(image);
 
         unsafe {
-            self.device.create_image_view(&create_info, None)
+            self.inner.device.create_image_view(&create_info, None)
                 .expect("Failed to create image view.")
         }
     }
@@ -119,12 +138,12 @@ impl DeviceInterface {
         let device_image = {
             let create_info = image_desc.get_create_info();
             let image = unsafe {
-                self.device.create_image(create_info, None)
+                self.inner.device.create_image(create_info, None)
                     .expect("Failed to create image")
             };
 
             let memory_requirements = unsafe {
-                self.device.get_image_memory_requirements(image)
+                self.inner.device.get_image_memory_requirements(image)
             };
 
             let allocation = {
@@ -137,7 +156,7 @@ impl DeviceInterface {
             };
 
             unsafe {
-                self.device.bind_image_memory(
+                self.inner.device.bind_image_memory(
                     image,
                     allocation.memory(),
                     allocation.offset())
@@ -181,7 +200,7 @@ impl DeviceInterface {
                 Some(allocation),
                 Some(ResourceType::Image(image_wrapper)),
                 handle,
-                &self,
+                self.clone(),
                 Some(allocator.clone())
             )
         };
@@ -192,12 +211,12 @@ impl DeviceInterface {
     pub fn destroy_image(&self, image: &ImageWrapper) {
         unsafe {
             if let Some(sampler) = image.sampler {
-                self.device.destroy_sampler(sampler, None);
+                self.inner.device.destroy_sampler(sampler, None);
             }
-            self.device.destroy_image_view(image.view, None);
+            self.inner.device.destroy_image_view(image.view, None);
             // We're not responsible for cleaning up the swapchain images
             if !image.is_swapchain_image {
-                self.device.destroy_image(image.image, None);
+                self.inner.device.destroy_image(image.image, None);
             }
         }
     }
@@ -232,7 +251,7 @@ impl DeviceInterface {
             None,
             Some(ResourceType::Image(image_wrapper)),
             handle,
-            &self,
+            self.clone(),
             None
         )
     }
@@ -247,19 +266,19 @@ impl DeviceInterface {
         handle: u64,
         buffer_desc: &'m BufferCreateInfo<'m>,
         allocator: Arc<Mutex<ResourceAllocator>>,
-        memory_location: MemoryLocation) -> DeviceResource<'_> {
+        memory_location: MemoryLocation) -> DeviceResource {
 
         let device_buffer = {
             log::trace!(target: "resource", "Creating buffer: {} -- {}", handle, buffer_desc.get_name());
 
             let create_info = buffer_desc.get_create_info();
             let buffer = unsafe {
-                self.device.create_buffer(create_info, None)
+                self.inner.device.create_buffer(create_info, None)
                     .expect("Failed to create buffer")
             };
 
             let memory_requirements = unsafe {
-                self.device.get_buffer_memory_requirements(buffer)
+                self.inner.device.get_buffer_memory_requirements(buffer)
             };
 
             let allocation = {
@@ -272,7 +291,7 @@ impl DeviceInterface {
             };
 
             unsafe {
-                self.device.bind_buffer_memory(
+                self.inner.device.bind_buffer_memory(
                     buffer,
                     allocation.memory(),
                     allocation.offset())
@@ -285,7 +304,7 @@ impl DeviceInterface {
                 Some(allocation),
                 Some(ResourceType::Buffer(buffer_wrapper)),
                 handle,
-                &self,
+                self.clone(),
                 Some(allocator.clone())
             )
         };
@@ -315,14 +334,14 @@ impl DeviceInterface {
                     fill_callback(mapped.as_ptr(), allocation.size());
                 } else {
                     unsafe {
-                        let mapped_memory = self.device.map_memory(
+                        let mapped_memory = self.inner.device.map_memory(
                             allocation.memory(),
                             allocation.offset(),
                             allocation.size(),
                             vk::MemoryMapFlags::empty())
                             .expect("Failed to map buffer");
                         fill_callback(mapped_memory, allocation.size());
-                        self.device.unmap_memory(allocation.memory());
+                        self.inner.device.unmap_memory(allocation.memory());
                     }
                 }
                 // If this buffer was not allocated in host-coherent memory then we need
@@ -332,7 +351,7 @@ impl DeviceInterface {
                 // which is required for vkFlushMappedMemoryRanges
                 if !allocation.memory_properties().contains(vk::MemoryPropertyFlags::HOST_COHERENT) {
                     unsafe {
-                        self.device.flush_mapped_memory_ranges(std::slice::from_ref(&mapped_range))
+                        self.inner.device.flush_mapped_memory_ranges(std::slice::from_ref(&mapped_range))
                             .expect("Failed to flush mapped memory");
                     }
                 }
@@ -346,7 +365,7 @@ impl DeviceInterface {
 
     pub fn destroy_buffer(&self, buffer: &BufferWrapper) {
         unsafe {
-            self.device.destroy_buffer(buffer.buffer, None);
+            self.inner.device.destroy_buffer(buffer.buffer, None);
         }
     }
 
@@ -356,13 +375,13 @@ impl DeviceInterface {
         shader_create: &vk::ShaderModuleCreateInfo) -> DeviceShader {
 
         let shader = unsafe {
-            self.device.create_shader_module(&shader_create, None)
+            self.inner.device.create_shader_module(&shader_create, None)
                 .expect("Failed to create shader module")
         };
 
         self.set_debug_name(shader, name);
 
-        DeviceShader::new(shader, &self)
+        DeviceShader::new(shader, self.clone())
     }
 
     pub fn create_pipeline(
@@ -373,7 +392,7 @@ impl DeviceInterface {
         name: &str
     ) -> DevicePipeline {
         let pipeline = unsafe {
-            self.device.create_graphics_pipelines(
+            self.inner.device.create_graphics_pipelines(
                 vk::PipelineCache::null(),
                 std::slice::from_ref(create_info),
                 None)
@@ -387,7 +406,7 @@ impl DeviceInterface {
             pipeline,
             pipeline_layout,
             descriptor_set_layouts,
-            &self)
+            self.clone())
     }
 
     pub fn create_compute_pipeline(
@@ -398,7 +417,7 @@ impl DeviceInterface {
         name: &str
     ) -> DevicePipeline {
         let pipeline = unsafe {
-            self.device.create_compute_pipelines(
+            self.inner.device.create_compute_pipelines(
                 vk::PipelineCache::null(),
                 std::slice::from_ref(create_info),
                 None)
@@ -412,7 +431,7 @@ impl DeviceInterface {
             pipeline,
             pipeline_layout,
             descriptor_set_layouts,
-            &self)
+            self.clone())
     }
 
     pub fn create_renderpass(
@@ -421,14 +440,14 @@ impl DeviceInterface {
         name: &str
     ) -> DeviceRenderpass {
         let renderpass = unsafe {
-            self.device.create_render_pass(create_info, None)
+            self.inner.device.create_render_pass(create_info, None)
                 .expect("Failed to create renderpass")
         };
         self.set_debug_name(renderpass, name);
 
         DeviceRenderpass::new(
             renderpass,
-            &self
+            self.clone()
         )
     }
 
@@ -436,7 +455,7 @@ impl DeviceInterface {
         &self,
         command_buffer: vk::CommandBuffer,
         label: &str) {
-        if let Some(debug) = &self.debug {
+        if let Some(debug) = &self.inner.debug {
             debug.begin_label(label, command_buffer);
         }
     }
@@ -444,7 +463,7 @@ impl DeviceInterface {
     pub fn pop_debug_label(
         &self,
         command_buffer: vk::CommandBuffer) {
-        if let Some(debug) = &self.debug {
+        if let Some(debug) = &self.inner.debug {
             debug.end_label(command_buffer);
         }
     }

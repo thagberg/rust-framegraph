@@ -63,7 +63,7 @@ fn is_write(access: vk::AccessFlags, stage: vk::PipelineStageFlags) -> bool {
     (write_access & access != vk::AccessFlags::NONE) || (pipeline_write & stage != vk::PipelineStageFlags::NONE)
 }
 
-fn link_inputs<'d>(inputs: &[ResourceBinding<'d>], node_barrier: &mut NodeBarriers<'d>, usage_cache: &mut HashMap<u64, ResourceUsage>) {
+fn link_inputs(inputs: &[ResourceBinding], node_barrier: &mut NodeBarriers, usage_cache: &mut HashMap<u64, ResourceUsage>) {
     for input in inputs {
         let mut input_ref = input.resource.lock().unwrap();
         let (handle, resolved_resource) = {
@@ -297,12 +297,12 @@ fn resolve_descriptors<'a, 'b>(
     }
 }
 
-pub struct NodeBarriers<'device> {
-    image_barriers: Vec<ImageBarrier<'device>>,
-    buffer_barriers: Vec<BufferBarrier<'device>>
+pub struct NodeBarriers {
+    image_barriers: Vec<ImageBarrier>,
+    buffer_barriers: Vec<BufferBarrier>
 }
 
-impl Debug for NodeBarriers<'_> {
+impl Debug for NodeBarriers {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("NodeBarriers")
             .field("image barriers", &self.image_barriers.len())
@@ -311,7 +311,7 @@ impl Debug for NodeBarriers<'_> {
     }
 }
 
-fn link_graphics_node<'d, 'a>(node: &'a mut GraphicsPassNode<'d>, usage_cache: &'a mut HashMap<u64, ResourceUsage>) -> NodeBarriers<'d> {
+fn link_graphics_node<'a>(node: &'a mut GraphicsPassNode, usage_cache: &'a mut HashMap<u64, ResourceUsage>) -> NodeBarriers {
     let mut node_barrier = NodeBarriers {
         image_barriers: vec![],
         buffer_barriers: vec![]
@@ -385,7 +385,7 @@ fn link_graphics_node<'d, 'a>(node: &'a mut GraphicsPassNode<'d>, usage_cache: &
     node_barrier
 }
 
-fn link_copy_node<'d, 'a>(node: &'a mut CopyPassNode<'d>, usage_cache: &'a mut HashMap<u64, ResourceUsage>) -> NodeBarriers<'d> {
+fn link_copy_node<'a>(node: &'a mut CopyPassNode, usage_cache: &'a mut HashMap<u64, ResourceUsage>) -> NodeBarriers {
     let mut node_barrier = NodeBarriers {
         image_barriers: vec![],
         buffer_barriers: vec![]
@@ -468,7 +468,7 @@ fn link_copy_node<'d, 'a>(node: &'a mut CopyPassNode<'d>, usage_cache: &'a mut H
     node_barrier
 }
 
-fn link_compute_node<'d, 'a>(node: &'a mut ComputePassNode<'d>, usage_cache: &'a mut HashMap<u64, ResourceUsage>) -> NodeBarriers<'d> {
+fn link_compute_node<'a>(node: &'a mut ComputePassNode, usage_cache: &'a mut HashMap<u64, ResourceUsage>) -> NodeBarriers {
     let mut node_barrier = NodeBarriers {
         image_barriers: vec![],
         buffer_barriers: vec![]
@@ -481,7 +481,7 @@ fn link_compute_node<'d, 'a>(node: &'a mut ComputePassNode<'d>, usage_cache: &'a
     node_barrier
 }
 
-fn link_present_node<'d, 'a>(node: &'a mut PresentPassNode<'d>, usage_cache: &'a mut HashMap<u64, ResourceUsage>) -> NodeBarriers<'d> {
+fn link_present_node<'a>(node: &'a mut PresentPassNode, usage_cache: &'a mut HashMap<u64, ResourceUsage>) -> NodeBarriers {
     let mut node_barrier = NodeBarriers {
         image_barriers: vec![],
         buffer_barriers: vec![]
@@ -536,20 +536,20 @@ fn link_present_node<'d, 'a>(node: &'a mut PresentPassNode<'d>, usage_cache: &'a
 }
 
 #[derive(Debug)]
-pub struct VulkanFrameGraph<'d> {
-    pipeline_manager: Mutex<VulkanPipelineManager<'d>>,
-    renderpass_manager: VulkanRenderpassManager<'d>,
-    node_barriers: HashMap<NodeIndex, NodeBarriers<'d>>
+pub struct VulkanFrameGraph {
+    pipeline_manager: Mutex<VulkanPipelineManager>,
+    renderpass_manager: VulkanRenderpassManager,
+    node_barriers: HashMap<NodeIndex, NodeBarriers>
 }
 
-impl Drop for VulkanFrameGraph<'_> {
+impl Drop for VulkanFrameGraph {
     fn drop(&mut self) {
         println!("Dropping VulkanFrameGraph");
     }
 }
 
-impl<'d> VulkanFrameGraph<'d> {
-    pub fn new() -> VulkanFrameGraph<'d> {
+impl VulkanFrameGraph {
+    pub fn new() -> VulkanFrameGraph {
 
         VulkanFrameGraph {
             pipeline_manager: Mutex::new(VulkanPipelineManager::new()),
@@ -566,7 +566,7 @@ impl<'d> VulkanFrameGraph<'d> {
     /// to elide any node which does not contribute to the root
     /// node (which is identified by the root_index)
     #[tracing::instrument]
-    fn compile(&mut self, nodes: &mut StableDiGraph<RwLock<PassType>, u32>, root_index: NodeIndex) -> Vec<NodeIndex>{
+    fn compile(&mut self, nodes: &mut StableDiGraph<RwLock<PassType>, u32>, root_index: NodeIndex) -> Vec<NodeIndex> {
         // create input/output maps to detect graph edges
         let mut input_map = MultiMap::new();
         let mut output_map = MultiMap::new();
@@ -714,13 +714,13 @@ impl<'d> VulkanFrameGraph<'d> {
         &self,
         descriptor_sets: Arc<RwLock<Vec<vk::DescriptorSet>>>,
         descriptor_pool: vk::DescriptorPool,
-        device: &'d DeviceInterface,
+        device: DeviceInterface,
         command_buffer: vk::CommandBuffer,
         node: &mut ComputePassNode) {
 
         // get compute pipeline from node's pipeline description
         let pipeline = self.pipeline_manager.lock().unwrap().create_compute_pipeline(
-            device,
+            device.clone(),
             &node.pipeline_description);
 
         // bind pipeline
@@ -781,13 +781,13 @@ impl<'d> VulkanFrameGraph<'d> {
     }
 
     #[tracing::instrument]
-    fn execute_graphics_node<'a>(
+    fn execute_graphics_node(
         &self,
         descriptor_sets: Arc<RwLock<Vec<vk::DescriptorSet>>>,
         descriptor_pool: vk::DescriptorPool,
-        render_context: &'a VulkanRenderContext<'d>,
+        render_context: &VulkanRenderContext,
         command_buffer: &vk::CommandBuffer,
-        node: &mut GraphicsPassNode<'d>) where 'a : 'd {
+        node: &mut GraphicsPassNode) {
 
         let active_pipeline = &node.pipeline_description;
         if let Some(pipeline_description) = active_pipeline {
@@ -972,18 +972,18 @@ impl<'d> VulkanFrameGraph<'d> {
 
 }
 
-impl<'d> FrameGraph<'d> for VulkanFrameGraph<'d> {
-    type PN = GraphicsPassNode<'d>;
-    type RPM = VulkanRenderpassManager<'d>;
-    type PM = VulkanPipelineManager<'d>;
+impl FrameGraph for VulkanFrameGraph {
+    type PN = GraphicsPassNode;
+    type RPM = VulkanRenderpassManager;
+    type PM = VulkanPipelineManager;
     type CB = vk::CommandBuffer;
-    type RC = VulkanRenderContext<'d>;
+    type RC = VulkanRenderContext;
     type Index = NodeIndex;
 
     fn start(
         &mut self,
-        device: &'d DeviceInterface,
-        descriptor_pool: vk::DescriptorPool) -> Box<Frame<'d>> {
+        device: DeviceInterface,
+        descriptor_pool: vk::DescriptorPool) -> Box<Frame> {
         // let span = span!(Level::TRACE, "Framegraph Start");
         // let _enter = span.enter();
 
@@ -992,9 +992,9 @@ impl<'d> FrameGraph<'d> for VulkanFrameGraph<'d> {
 
     fn end(
         &mut self,
-        frame: &mut Frame<'d>,
+        frame: &mut Frame,
         // render_context: &'d mut Self::RC,
-        render_context: &'d Self::RC,
+        render_context: &Self::RC,
         command_buffer: &Self::CB) {
 
         let span = span!(Level::TRACE, "Framegraph End");

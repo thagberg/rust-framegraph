@@ -5,19 +5,19 @@ use api_types::device::resource::DeviceResource;
 use crate::pass_node::PassNode;
 
 #[derive(Debug)]
-pub struct PresentPassNode<'a> {
-    pub swapchain_image: Arc<Mutex<DeviceResource<'a>>>,
+pub struct PresentPassNode {
+    pub swapchain_image: Arc<Mutex<DeviceResource>>,
     name: String
 }
 
 #[derive(Default)]
-pub struct PresentPassNodeBuilder<'a> {
+pub struct PresentPassNodeBuilder {
     name: String,
-    swapchain_image: Option<Arc<Mutex<DeviceResource<'a>>>>
+    swapchain_image: Option<Arc<Mutex<DeviceResource>>>
 }
 
-impl<'a> PresentPassNode<'a> {
-    pub fn builder(name: String) -> PresentPassNodeBuilder<'a> {
+impl PresentPassNode {
+    pub fn builder(name: String) -> PresentPassNodeBuilder {
         PresentPassNodeBuilder {
             name,
             ..Default::default()
@@ -25,13 +25,13 @@ impl<'a> PresentPassNode<'a> {
     }
 }
 
-impl<'a> PresentPassNodeBuilder<'a> {
-    pub fn swapchain_image(mut self, swapchain_image: Arc<Mutex<DeviceResource<'a>>>) -> Self {
+impl PresentPassNodeBuilder {
+    pub fn swapchain_image(mut self, swapchain_image: Arc<Mutex<DeviceResource>>) -> Self {
         self.swapchain_image = Some(swapchain_image);
         self
     }
 
-    pub fn build(mut self) -> Result<PresentPassNode<'a>, &'static str> {
+    pub fn build(mut self) -> Result<PresentPassNode, &'static str> {
         if let Some(swapchain_image) = self.swapchain_image {
             Ok(PresentPassNode {
                 swapchain_image,
@@ -43,7 +43,7 @@ impl<'a> PresentPassNodeBuilder<'a> {
     }
 }
 
-impl<'d> PassNode<'d> for PresentPassNode<'d> {
+impl PassNode for PresentPassNode {
     fn get_name(&self) -> &str {
         &self.name
     }

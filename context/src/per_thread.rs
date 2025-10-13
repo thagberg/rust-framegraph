@@ -7,8 +7,8 @@ pub enum ThreadType {
     Worker
 }
 
-pub struct PerThread<'a> {
-    device: &'a DeviceInterface,
+pub struct PerThread {
+    device: DeviceInterface,
     // TODO: how do I make this member private?
     thread_type: ThreadType,
     graphics_pool: vk::CommandPool,
@@ -35,7 +35,7 @@ fn create_command_buffers(
     }
 }
 
-impl<'a> Drop for PerThread<'a> {
+impl Drop for PerThread {
     fn drop(&mut self) {
         unsafe {
             self.device.get().free_command_buffers(self.graphics_pool, std::slice::from_ref(&self.immediate_graphics_buffer));
@@ -50,9 +50,9 @@ impl<'a> Drop for PerThread<'a> {
     }
 }
 
-impl<'a> PerThread<'a> {
+impl PerThread {
     pub fn new(
-        device: &'a DeviceInterface,
+        device: &DeviceInterface,
         thread_type: ThreadType,
         graphics_pool: vk::CommandPool,
         compute_pool: vk::CommandPool,
@@ -87,7 +87,7 @@ impl<'a> PerThread<'a> {
         );
 
         PerThread {
-            device,
+            device: device.clone(),
             thread_type,
             graphics_pool,
             compute_pool,

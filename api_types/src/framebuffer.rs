@@ -2,12 +2,12 @@ use std::sync::{Arc, Mutex};
 use ash::vk;
 use crate::device::interface::DeviceInterface;
 
-pub struct DeviceFramebuffer<'a> {
+pub struct DeviceFramebuffer {
     framebuffer: vk::Framebuffer,
-    device: &'a DeviceInterface
+    device: DeviceInterface
 }
 
-impl Drop for DeviceFramebuffer<'_> {
+impl Drop for DeviceFramebuffer {
     fn drop(&mut self) {
         unsafe {
             self.device.get().destroy_framebuffer(self.framebuffer, None);
@@ -15,8 +15,8 @@ impl Drop for DeviceFramebuffer<'_> {
     }
 }
 
-impl<'a> DeviceFramebuffer<'a> {
-    pub fn new(framebuffer: vk::Framebuffer, device: &'a DeviceInterface) -> Self {
+impl DeviceFramebuffer {
+    pub fn new(framebuffer: vk::Framebuffer, device: DeviceInterface) -> Self {
         DeviceFramebuffer {
             framebuffer: framebuffer,
             device: device

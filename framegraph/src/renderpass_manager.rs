@@ -25,11 +25,11 @@ pub struct AttachmentInfo {
     pub stencil_attachment: Option<StencilAttachmentInfo>
 }
 
-pub struct VulkanRenderpassManager<'device> {
-    renderpass_map: Mutex<HashMap<String, Arc<Mutex<DeviceRenderpass<'device>>>>>
+pub struct VulkanRenderpassManager {
+    renderpass_map: Mutex<HashMap<String, Arc<Mutex<DeviceRenderpass>>>>
 }
 
-impl Debug for VulkanRenderpassManager<'_> {
+impl Debug for VulkanRenderpassManager {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VulkanRenderpassManager")
             .field("num renderpasses", &self.renderpass_map.lock().unwrap().len())
@@ -37,7 +37,7 @@ impl Debug for VulkanRenderpassManager<'_> {
     }
 }
 
-impl<'device> VulkanRenderpassManager<'device> {
+impl VulkanRenderpassManager {
 
     pub fn new() -> Self {
         VulkanRenderpassManager {
@@ -48,9 +48,9 @@ impl<'device> VulkanRenderpassManager<'device> {
     pub fn create_or_fetch_renderpass(
         &self,
         pass_name: &str,
-        color_attachments: &[AttachmentReference<'device>],
-        depth_attachment: &Option<AttachmentReference<'device>>,
-        device: &'device DeviceInterface) -> Arc<Mutex<DeviceRenderpass<'device>>> {
+        color_attachments: &[AttachmentReference],
+        depth_attachment: &Option<AttachmentReference>,
+        device: DeviceInterface) -> Arc<Mutex<DeviceRenderpass>> {
         enter_span!(tracing::Level::TRACE, "Create or Fetch Renderpass");
 
         // TODO PERF: I don't think we need to wrap DeviceRenderpass with a Mutex

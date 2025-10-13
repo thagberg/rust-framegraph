@@ -55,7 +55,7 @@ impl Debug for BindingInfo {
 }
 
 #[derive(Clone, Debug)]
-pub struct ResourceBinding<'a> {
-    pub resource: Arc<Mutex<DeviceResource<'a>>>,
+pub struct ResourceBinding {
+    pub resource: Arc<Mutex<DeviceResource>>,
     pub binding_info: BindingInfo
 }

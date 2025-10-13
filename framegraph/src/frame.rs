@@ -15,17 +15,17 @@ enum FrameState {
     Ended
 }
 
-pub struct Frame<'a> {
-    pub nodes: StableDiGraph<RwLock<PassType<'a>>, u32>,
+pub struct Frame {
+    pub nodes: StableDiGraph<RwLock<PassType>, u32>,
     root_index: Option<NodeIndex>,
     state: FrameState,
     pub sorted_nodes: Vec<NodeIndex>,
-    device: &'a DeviceInterface,
+    device: DeviceInterface,
     pub(crate) descriptor_pool: vk::DescriptorPool,
     pub descriptor_sets: Arc<RwLock<Vec<vk::DescriptorSet>>>
 }
 
-impl Debug for Frame<'_> {
+impl Debug for Frame {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Frame")
             .field("state", &self.state)
@@ -33,7 +33,7 @@ impl Debug for Frame<'_> {
     }
 }
 
-impl Drop for Frame<'_> {
+impl Drop for Frame {
     fn drop(&mut self) {
         log::trace!(target: "frame", "Dropping frame");
         unsafe {
@@ -46,9 +46,9 @@ impl Drop for Frame<'_> {
     }
 }
 
-impl<'a> Frame<'a> {
+impl Frame {
     pub fn new(
-        device: &'a DeviceInterface,
+        device: DeviceInterface,
         descriptor_pool: vk::DescriptorPool) -> Self {
         Frame {
             nodes: StableDiGraph::new(),
@@ -61,12 +61,12 @@ impl<'a> Frame<'a> {
         }
     }
 
-    pub fn add_node(&mut self, node: PassType<'a>) -> NodeIndex {
+    pub fn add_node(&mut self, node: PassType) -> NodeIndex {
         assert!(self.state == FrameState::Started, "Frame must be started before adding nodes");
         self.nodes.add_node(RwLock::new(node))
     }
 
-    pub fn start(&mut self, root_node: PassType<'a>) {
+    pub fn start(&mut self, root_node: PassType) {
         assert!(self.state == FrameState::New, "Frame has already been started");
         self.state = FrameState::Started;
         self.root_index = Some(self.add_node(root_node));

@@ -15,35 +15,35 @@ pub enum SwapchainStatus {
     Outdated
 }
 
-pub struct NextImage<'a> {
-    pub image: Option<Arc<Mutex<DeviceResource<'a>>>>,
+pub struct NextImage {
+    pub image: Option<Arc<Mutex<DeviceResource>>>,
     pub index: u32,
     pub status: SwapchainStatus
 }
 
-pub struct SwapchainWrapper<'a> {
+pub struct SwapchainWrapper {
     loader: ash_swapchain::Device,
     swapchain: vk::SwapchainKHR,
-    images: Vec<Arc<Mutex<DeviceResource<'a>>>>,
+    images: Vec<Arc<Mutex<DeviceResource>>>,
     format: vk::Format,
     extent: vk::Extent2D
 }
 
-impl Debug for SwapchainWrapper<'_> {
+impl Debug for SwapchainWrapper {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SwapchainWrapper")
             .finish()
     }
 }
 
-impl<'a> SwapchainWrapper<'a> {
+impl SwapchainWrapper {
     pub fn new(
         loader: ash_swapchain::Device,
         swapchain: vk::SwapchainKHR,
-        images: Vec<Arc<Mutex<DeviceResource<'a>>>>,
+        images: Vec<Arc<Mutex<DeviceResource>>>,
         format: vk::Format,
         extent: vk::Extent2D,
-    ) -> SwapchainWrapper<'a> {
+    ) -> SwapchainWrapper {
         SwapchainWrapper {
             loader,
             swapchain,
@@ -55,7 +55,7 @@ impl<'a> SwapchainWrapper<'a> {
 
     pub fn get(&self) -> vk::SwapchainKHR { self.swapchain }
 
-    pub fn get_images(&self) -> &'a Vec<Arc<Mutex<DeviceResource>>> { &self.images }
+    pub fn get_images(&self) -> &Vec<Arc<Mutex<DeviceResource>>> { &self.images }
 
     pub fn get_images_count(&self) -> u32 { self.images.len() as u32 }
 
@@ -70,7 +70,7 @@ impl<'a> SwapchainWrapper<'a> {
         timeout: u64,
         semaphore: vk::Semaphore,
         fence: vk::Fence
-    ) -> NextImage<'a>
+    ) -> NextImage
     {
         let acquire_image = unsafe {
             self.loader.acquire_next_image(
@@ -107,7 +107,7 @@ impl<'a> SwapchainWrapper<'a> {
         &self,
         timeout: Option<u64>,
         semaphore: Option<vk::Semaphore>,
-        fence: Option<vk::Fence>) -> NextImage<'a>
+        fence: Option<vk::Fence>) -> NextImage
     {
         let t = match timeout
         {
@@ -128,7 +128,7 @@ impl<'a> SwapchainWrapper<'a> {
     }
 }
 
-impl Drop for SwapchainWrapper<'_> {
+impl Drop for SwapchainWrapper {
     fn drop(&mut self) {
         unsafe {
             self.loader.destroy_swapchain(self.swapchain, None);

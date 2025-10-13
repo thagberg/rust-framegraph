@@ -37,7 +37,7 @@ pub enum RasterizationType
     Standard
 }
 
-pub struct PipelineDescription<'a>
+pub struct PipelineDescription
 {
     vertex_binding_descriptions: Vec<vk::VertexInputBindingDescription>,
     vertex_attribute_descriptions: Vec<vk::VertexInputAttributeDescription>,
@@ -46,19 +46,19 @@ pub struct PipelineDescription<'a>
     depth_stencil: DepthStencilType,
     blend: BlendType,
     name: String,
-    vertex_shader: Arc<Mutex<Shader<'a>>>,
-    fragment_shader: Arc<Mutex<Shader<'a>>>
+    vertex_shader: Arc<Mutex<Shader>>,
+    fragment_shader: Arc<Mutex<Shader>>
 }
 
 /// Must impl Sync to allow vk::PipelineVertexInputStateCreateInfo to be shared between threads
 /// due to *const c_void member
-unsafe impl Sync for PipelineDescription<'_> {}
+unsafe impl Sync for PipelineDescription {}
 
 /// Must impl Send to allow vk::PipelineVertexInputStateCreateInfo to be shared between threads
 /// due to *const c_void member
-unsafe impl Send for PipelineDescription<'_> {}
+unsafe impl Send for PipelineDescription {}
 
-impl Hash for PipelineDescription<'_>
+impl Hash for PipelineDescription
 {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // TODO: this is an inadequate hash
@@ -67,7 +67,7 @@ impl Hash for PipelineDescription<'_>
     }
 }
 
-impl<'a> PipelineDescription<'a>
+impl PipelineDescription
 {
     pub fn new(
         vertex_binding_descriptions: Vec<vk::VertexInputBindingDescription>,
@@ -77,8 +77,8 @@ impl<'a> PipelineDescription<'a>
         depth_stencil: DepthStencilType,
         blend: BlendType,
         name: &str,
-        vertex_shader: Arc<Mutex<Shader<'a>>>,
-        fragment_shader: Arc<Mutex<Shader<'a>>>) -> Self
+        vertex_shader: Arc<Mutex<Shader>>,
+        fragment_shader: Arc<Mutex<Shader>>) -> Self
     {
         let vertex_input = vk::PipelineVertexInputStateCreateInfo::default()
             .vertex_binding_descriptions(&vertex_binding_descriptions)
@@ -131,12 +131,12 @@ impl ComputePipelineDescription {
 }
 
 #[derive(Clone)]
-pub struct Pipeline<'d>
+pub struct Pipeline
 {
-    pub device_pipeline: DevicePipeline<'d>
+    pub device_pipeline: DevicePipeline
 }
 
-impl Debug for Pipeline<'_> {
+impl Debug for Pipeline {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Pipeline")
             .field("device pipeline", &self.device_pipeline.pipeline.as_raw())
@@ -144,8 +144,8 @@ impl Debug for Pipeline<'_> {
     }
 }
 
-impl<'d> Pipeline<'d> {
-    pub fn new(device_pipeline: DevicePipeline<'d>) -> Pipeline
+impl Pipeline {
+    pub fn new(device_pipeline: DevicePipeline) -> Pipeline
     {
         Pipeline {
             device_pipeline
@@ -162,10 +162,10 @@ impl<'d> Pipeline<'d> {
 }
 
 #[derive(Debug)]
-pub struct VulkanPipelineManager<'d>
+pub struct VulkanPipelineManager
 {
-    pipeline_cache: HashMap<u64, Arc<Mutex<Pipeline<'d>>>>,
-    shader_manager: ShaderManager<'d>
+    pipeline_cache: HashMap<u64, Arc<Mutex<Pipeline>>>,
+    shader_manager: ShaderManager
 }
 
 const STENCIL_STATE_KEEP: vk::StencilOpState = vk::StencilOpState {
@@ -304,7 +304,7 @@ fn generate_blend_state(blend_type: BlendType, attachments: &[vk::PipelineColorB
     }
 }
 
-fn create_descriptor_set_layouts(device: &DeviceInterface, full_bindings: &HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>>) -> Vec<vk::DescriptorSetLayout> {
+fn create_descriptor_set_layouts(device: DeviceInterface, full_bindings: &HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>>) -> Vec<vk::DescriptorSetLayout> {
 
     let mut descriptor_set_layouts: Vec<vk::DescriptorSetLayout> = Vec::new();
 
@@ -344,8 +344,8 @@ fn create_descriptor_set_layouts(device: &DeviceInterface, full_bindings: &HashM
 }
 
 
-impl<'device> VulkanPipelineManager<'device> {
-    pub fn new() -> VulkanPipelineManager<'device>
+impl VulkanPipelineManager {
+    pub fn new() -> VulkanPipelineManager
     {
         VulkanPipelineManager {
             pipeline_cache: HashMap::new(),
@@ -355,8 +355,8 @@ impl<'device> VulkanPipelineManager<'device> {
 
     pub fn create_compute_pipeline(
         &mut self,
-        device: &'device DeviceInterface,
-        pipeline_description: &ComputePipelineDescription) -> Arc<Mutex<Pipeline<'device>>> {
+        device: DeviceInterface,
+        pipeline_description: &ComputePipelineDescription) -> Arc<Mutex<Pipeline>> {
 
         let mut pipeline_hasher = DefaultHasher::new();
         pipeline_description.hash(&mut pipeline_hasher);
@@ -366,7 +366,7 @@ impl<'device> VulkanPipelineManager<'device> {
             Some(pipeline) => { pipeline.clone() },
             None => {
                 let mut compute_shader_module = self.shader_manager.load_shader(
-                    device,
+                    device.clone(),
                     &pipeline_description.compute_name);
                 let mut compute_shader_ref = compute_shader_module.lock().unwrap();
 
@@ -379,7 +379,7 @@ impl<'device> VulkanPipelineManager<'device> {
                     }
                 }
 
-                let descriptor_set_layouts = create_descriptor_set_layouts(device, &full_bindings);
+                let descriptor_set_layouts = create_descriptor_set_layouts(device.clone(), &full_bindings);
 
                 // let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
 
@@ -421,9 +421,9 @@ impl<'device> VulkanPipelineManager<'device> {
 
     pub fn create_pipeline(
         &mut self,
-        device: &'device DeviceInterface,
+        device: DeviceInterface,
         render_pass: vk::RenderPass,
-        pipeline_description: &PipelineDescription) -> Arc<Mutex<Pipeline<'device>>> {
+        pipeline_description: &PipelineDescription) -> Arc<Mutex<Pipeline>> {
         enter_span!(tracing::Level::TRACE, "Create or fetch Pipeline");
 
         // TODO: define a PipelineKey type and require the consumer to provide it here
@@ -466,7 +466,7 @@ impl<'device> VulkanPipelineManager<'device> {
                     }
                 }
 
-                let descriptor_set_layouts = create_descriptor_set_layouts(device, &full_bindings);
+                let descriptor_set_layouts = create_descriptor_set_layouts(device.clone(), &full_bindings);
 
                 // let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
 

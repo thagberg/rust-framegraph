@@ -3,17 +3,17 @@ use ash::vk;
 use api_types::device::resource::{DeviceResource, ResourceType};
 
 #[derive(Clone)]
-pub struct AttachmentReference<'a> {
-    pub resource_image: Arc<Mutex<DeviceResource<'a>>>,
+pub struct AttachmentReference {
+    pub resource_image: Arc<Mutex<DeviceResource>>,
     pub format: vk::Format,
     pub samples: vk::SampleCountFlags,
     pub layout: vk::ImageLayout
 }
 
-impl<'a> AttachmentReference<'a> {
+impl AttachmentReference {
     pub fn new(
-        resource_image: Arc<Mutex<DeviceResource<'a>>>,
-        samples: vk::SampleCountFlags) -> AttachmentReference<'a> {
+        resource_image: Arc<Mutex<DeviceResource>>,
+        samples: vk::SampleCountFlags) -> AttachmentReference {
 
         assert!(resource_image.lock().unwrap().resource_type.is_some(), "AttachmentResource: resource_image must be valid DeviceResource");
         let resource_ref = resource_image.lock().unwrap();

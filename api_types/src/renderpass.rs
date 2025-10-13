@@ -3,12 +3,12 @@ use ash::vk;
 use crate::device::interface::DeviceInterface;
 
 #[derive(Clone)]
-pub struct DeviceRenderpass<'a> {
+pub struct DeviceRenderpass {
     pub renderpass: vk::RenderPass,
-    pub device: &'a DeviceInterface
+    pub device: DeviceInterface
 }
 
-impl Drop for DeviceRenderpass<'_> {
+impl Drop for DeviceRenderpass {
     fn drop(&mut self) {
         unsafe {
             self.device.get().destroy_render_pass(self.renderpass, None);
@@ -16,10 +16,10 @@ impl Drop for DeviceRenderpass<'_> {
     }
 }
 
-impl<'a> DeviceRenderpass<'a> {
+impl DeviceRenderpass {
     pub fn new(
         renderpass: vk::RenderPass,
-        device: &'a DeviceInterface) -> Self {
+        device: DeviceInterface) -> Self {
 
         DeviceRenderpass {
             renderpass,

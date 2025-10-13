@@ -3,12 +3,12 @@ use ash::vk;
 use crate::device::interface::DeviceInterface;
 
 #[derive(Clone)]
-pub struct DeviceShader<'a> {
+pub struct DeviceShader {
     pub shader_module: vk::ShaderModule,
-    pub device: &'a DeviceInterface
+    pub device: DeviceInterface
 }
 
-impl Drop for DeviceShader<'_> {
+impl Drop for DeviceShader {
     fn drop(&mut self) {
         unsafe {
             self.device.destroy_shader_module(self.shader_module, None)
@@ -16,10 +16,10 @@ impl Drop for DeviceShader<'_> {
     }
 }
 
-impl<'a> DeviceShader<'a> {
+impl DeviceShader {
     pub fn new(
         shader_module: vk::ShaderModule,
-        device: &'a DeviceInterface) -> Self {
+        device: DeviceInterface) -> Self {
         DeviceShader {
             shader_module,
             device

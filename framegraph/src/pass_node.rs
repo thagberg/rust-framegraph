@@ -3,14 +3,14 @@ use std::sync::{Arc, Mutex};
 use api_types::device::interface::DeviceInterface;
 use ash::vk;
 
-pub type FillCallback<'a> = dyn (
+pub type FillCallback = dyn (
 Fn(
-    &DeviceInterface,
+    DeviceInterface,
     vk::CommandBuffer
 )
-) + Sync + Send + 'a;
+) + Sync + Send;
 
-pub trait PassNode<'d> {
+pub trait PassNode {
     fn get_name(&self) -> &str;
 
     fn get_reads(&self) -> Vec<u64>;

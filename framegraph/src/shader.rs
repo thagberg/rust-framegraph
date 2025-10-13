@@ -11,7 +11,7 @@ use rspirv_reflect::BindingCount;
 use api_types::device::interface::DeviceInterface;
 use api_types::shader::DeviceShader;
 
-fn create_shader_module<'a>(device: &'a DeviceInterface, file_name: &str) -> Shader<'a>
+fn create_shader_module(device: DeviceInterface, file_name: &str) -> Shader
 {
     let (reflection_module, shader) = {
         let bytes = fs::read(file_name)
@@ -65,7 +65,7 @@ fn create_shader_module<'a>(device: &'a DeviceInterface, file_name: &str) -> Sha
     Shader::new(shader, binding_map)
 }
 
-pub fn create_shader_module_from_bytes<'a>(device: &'a DeviceInterface, name: &str, bytes: &[u8]) -> Shader<'a>
+pub fn create_shader_module_from_bytes(device: DeviceInterface, name: &str, bytes: &[u8]) -> Shader
 {
     let (reflection_module, shader) = {
         let reflection_module = rspirv_reflect::Reflection::new_from_spirv(bytes)
@@ -117,25 +117,25 @@ pub fn create_shader_module_from_bytes<'a>(device: &'a DeviceInterface, name: &s
 }
 
 #[derive(Clone)]
-pub struct Shader<'a>
+pub struct Shader
 {
-    pub shader: DeviceShader<'a>,
+    pub shader: DeviceShader,
     pub descriptor_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding<'static>>>
 }
 
 /// Must impl Sync to allow vk::DescriptorSetLayoutBinding to be shared between threads
 /// due to *const c_void member
-unsafe impl Sync for Shader<'_> {}
+unsafe impl Sync for Shader {}
 
 /// Must impl Sync to allow vk::DescriptorSetLayoutBinding to be shared between threads
 /// due to *const c_void member
-unsafe impl Send for Shader<'_> {}
+unsafe impl Send for Shader {}
 
-impl Shader<'_>
+impl Shader
 {
-    pub fn new<'a>(
-        shader: DeviceShader<'a>,
-        descriptor_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding<'static>>>) -> Shader<'a>
+    pub fn new(
+        shader: DeviceShader,
+        descriptor_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding<'static>>>) -> Shader
     {
         Shader {
             shader,
@@ -144,12 +144,12 @@ impl Shader<'_>
     }
 }
 
-pub struct ShaderManager<'a>
+pub struct ShaderManager
 {
-    shader_cache: HashMap<String, Arc<Mutex<Shader<'a>>>>
+    shader_cache: HashMap<String, Arc<Mutex<Shader>>>
 }
 
-impl Debug for ShaderManager<'_> {
+impl Debug for ShaderManager {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ShaderManager")
             .field("cached shaders", &self.shader_cache.keys().len())
@@ -157,16 +157,16 @@ impl Debug for ShaderManager<'_> {
     }
 }
 
-impl<'device> ShaderManager<'device>
+impl ShaderManager
 {
-    pub fn new() -> ShaderManager<'device>
+    pub fn new() -> ShaderManager
     {
         ShaderManager {
            shader_cache: HashMap::new()
         }
     }
 
-    pub fn load_shader(&mut self, device: &'device DeviceInterface, file_name: &str) -> Arc<Mutex<Shader<'device>>>
+    pub fn load_shader(&mut self, device: DeviceInterface, file_name: &str) -> Arc<Mutex<Shader>>
     {
         // TODO: can this return a &ShaderModule without a double mutable borrow error in PipelineManager::create_pipeline?
         //let full_path = concat!(concat!(env!("OUT_DIR"), "/shaders/"), file_name);

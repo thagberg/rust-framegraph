@@ -467,11 +467,11 @@ fn create_command_pool(
 }
 
 
-fn create_per_thread_objects<'a>(
-    device: &'a DeviceInterface,
+fn create_per_thread_objects(
+    device: &DeviceInterface,
     descriptor_pool_sizes: &[vk::DescriptorPoolSize],
     max_descriptor_sets: u32,
-    thread_type: ThreadType) -> PerThread<'a> {
+    thread_type: ThreadType) -> PerThread {
 
     let graphics_command_pool = create_command_pool(
         device,
@@ -525,15 +525,15 @@ fn create_debug_util(
     VulkanDebug::new(debug_utils_loader, messenger)
 }
 
-fn create_swapchain<'a>(
+fn create_swapchain(
     handle_generator: &mut HandleGenerator,
     instance: &InstanceWrapper,
     device: &DeviceInterface,
     physical_device: &PhysicalDeviceWrapper,
     surface: &SurfaceWrapper,
     window: &winit::window::Window,
-    old_swapchain: &Option<OldSwapchain<'a>>
-) -> (SwapchainWrapper<'a>, Vec<vk::Fence>) {
+    old_swapchain: &Option<OldSwapchain>
+) -> (SwapchainWrapper, Vec<vk::Fence>) {
     let swapchain_capabilities = surface.get_surface_capabilities(physical_device);
 
     // TODO: may want to make format and color space customizable
@@ -681,18 +681,17 @@ fn create_swapchain<'a>(
 }
 
 #[derive(Debug)]
-pub struct OldSwapchain<'a> {
-    pub swapchain: Arc<Mutex<SwapchainWrapper<'a>>>,
+pub struct OldSwapchain {
+    pub swapchain: Arc<Mutex<SwapchainWrapper>>,
     pub present_fences: Vec<vk::Fence>,
     pub frame_index: u32
-
 }
 
-pub struct VulkanFrameObjects<'a> {
+pub struct VulkanFrameObjects {
     pub graphics_command_buffer: vk::CommandBuffer,
     pub immediate_command_buffer: vk::CommandBuffer,
     pub compute_command_buffer: vk::CommandBuffer,
-    pub swapchain_image: Option<NextImage<'a>>,
+    pub swapchain_image: Option<NextImage>,
     pub swapchain_semaphore: vk::Semaphore,
     pub descriptor_pool: vk::DescriptorPool,
     pub frame_index: u32
@@ -702,17 +701,17 @@ pub struct VulkanFrameObjects<'a> {
 // swapchain_index must be independent from frame_index since it will "reset"
 // whenever we recreate the swapchain
 // Necessary for avoiding errors when specifying image indices in VkPresentInfoKHR
-pub struct VulkanRenderContext<'a> {
-    handle_generator: Mutex<HandleGenerator>,  // Wrap in Mutex for interior mutability
+pub struct VulkanRenderContext {
+    handle_generator: Mutex<HandleGenerator>,
     frame_index: AtomicU32,
     swapchain_index: AtomicU32,
     graphics_queue: vk::Queue,
     present_queue: vk::Queue,
     compute_queue: vk::Queue,
-    main_thread_objects: Vec<PerThread<'a>>,
-    worker_thread_objects: Vec<PerThread<'a>>,
-    swapchain: Arc<Mutex<Option<SwapchainWrapper<'a>>>>,
-    old_swapchain: Arc<Mutex<Option<OldSwapchain<'a>>>>,
+    main_thread_objects: Vec<PerThread>,
+    worker_thread_objects: Vec<PerThread>,
+    swapchain: Arc<Mutex<Option<SwapchainWrapper>>>,
+    old_swapchain: Arc<Mutex<Option<OldSwapchain>>>,
     swapchain_semaphores: Vec<vk::Semaphore>,
     present_fences: Mutex<Vec<vk::Fence>>,
     device: DeviceInterface,
@@ -722,7 +721,7 @@ pub struct VulkanRenderContext<'a> {
     entry: ash::Entry
 }
 
-impl<'a> Debug for VulkanRenderContext<'a> {
+impl Debug for VulkanRenderContext {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VulkanRenderContext")
             .field("frame_index", &self.frame_index.load(Ordering::Relaxed))
@@ -735,7 +734,7 @@ impl<'a> Debug for VulkanRenderContext<'a> {
     }
 }
 
-impl<'a> Drop for VulkanRenderContext<'a> {
+impl Drop for VulkanRenderContext {
     fn drop(&mut self) {
         unsafe {
             // let device = self.device.borrow();
@@ -746,21 +745,20 @@ impl<'a> Drop for VulkanRenderContext<'a> {
     }
 }
 
-impl<'a> RenderContext for VulkanRenderContext<'a> {
-    type Create = vk::RenderPassCreateInfo<'a>; // TODO: this is probably the wrong scope (scope is for subpass refs)
+impl RenderContext for VulkanRenderContext {
+    type Create = vk::RenderPassCreateInfo<'static>;
     type RP = vk::RenderPass;
 
-    fn get_device(&self) -> &DeviceInterface { &self.device }
-
+    fn get_device(&self) -> DeviceInterface { self.device.clone() }
 }
 
-impl<'a> VulkanRenderContext<'a> {
+impl VulkanRenderContext {
     pub fn new(
         application_info: &vk::ApplicationInfo,
         debug_enabled: bool,
         max_threads: usize,
         window: Option<&winit::window::Window>
-    ) -> VulkanRenderContext<'a> {
+    ) -> VulkanRenderContext {
         let layers = [
             unsafe { ::std::ffi::CStr::from_bytes_with_nul_unchecked(b"VK_LAYER_KHRONOS_validation\0") }
         ];
@@ -889,7 +887,7 @@ impl<'a> VulkanRenderContext<'a> {
     }
 
     pub fn init(
-        &'a mut self,
+        &mut self,
         max_threads: usize,
         window: Option<&winit::window::Window>
     ) {
@@ -1060,7 +1058,7 @@ impl<'a> VulkanRenderContext<'a> {
         &mut self,
         timeout: Option<u64>,
         semaphore: Option<vk::Semaphore>,
-        fence: Option<vk::Fence>) -> Option<NextImage<'a>> {
+        fence: Option<vk::Fence>) -> Option<NextImage> {
 
         let mut swapchain = self.swapchain.lock().unwrap();
         match &mut *swapchain {
@@ -1076,7 +1074,7 @@ impl<'a> VulkanRenderContext<'a> {
     }
 
     #[tracing::instrument]
-    pub fn get_next_frame_objects(&mut self) -> VulkanFrameObjects<'a> {
+    pub fn get_next_frame_objects(&mut self) -> VulkanFrameObjects {
         let old_index = self.frame_index.load(Ordering::Relaxed);
 
         let semaphore = self.swapchain_semaphores[old_index as usize];
@@ -1158,11 +1156,11 @@ impl<'a> VulkanRenderContext<'a> {
     }
 
     pub fn create_framebuffer(
-        &'a self,
+        &self,
         render_pass: vk::RenderPass,
         extent: &vk::Extent3D,
         images: &[ImageWrapper],
-        depth: &Option<ImageWrapper>) -> DeviceFramebuffer<'a> {
+        depth: &Option<ImageWrapper>) -> DeviceFramebuffer {
         enter_span!(tracing::Level::TRACE, "Create framebuffer");
 
         let mut image_views: Vec<vk::ImageView> = Vec::new();
@@ -1186,7 +1184,7 @@ impl<'a> VulkanRenderContext<'a> {
         unsafe {
             let framebuffer = self.device.get().create_framebuffer(&create_info, None)
                 .expect("Failed to create framebuffer");
-            DeviceFramebuffer::new(framebuffer, &self.device)
+            DeviceFramebuffer::new(framebuffer, self.device.clone())
         }
     }
 

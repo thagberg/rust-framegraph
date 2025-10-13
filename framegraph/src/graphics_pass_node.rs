@@ -10,35 +10,35 @@ use crate::binding::{ResourceBinding};
 use crate::attachment::AttachmentReference;
 use crate::pipeline::{PipelineDescription};
 
-pub struct GraphicsPassNode<'device> {
-    pub pipeline_description: Option<Arc<PipelineDescription<'device>>>,
-    pub render_targets: Vec<AttachmentReference<'device>>,
-    pub depth_target: Option<AttachmentReference<'device>>,
-    pub inputs: Vec<ResourceBinding<'device>>,
-    pub outputs: Vec<ResourceBinding<'device>>,
-    pub tagged_resources: Vec<Arc<Mutex<DeviceResource<'device>>>>,
-    pub framebuffer: Option<DeviceFramebuffer<'device>>,
+pub struct GraphicsPassNode {
+    pub pipeline_description: Option<Arc<PipelineDescription>>,
+    pub render_targets: Vec<AttachmentReference>,
+    pub depth_target: Option<AttachmentReference>,
+    pub inputs: Vec<ResourceBinding>,
+    pub outputs: Vec<ResourceBinding>,
+    pub tagged_resources: Vec<Arc<Mutex<DeviceResource>>>,
+    pub framebuffer: Option<DeviceFramebuffer>,
     pub viewport: Option<vk::Viewport>,
     pub scissor: Option<vk::Rect2D>,
-    pub fill_callback: Box<FillCallback<'device>>,
+    pub fill_callback: Box<FillCallback>,
     name: String
 }
 
 #[derive(Default)]
-pub struct PassNodeBuilder<'device> {
-    pipeline_description: Option<Arc<PipelineDescription<'device>>>,
-    render_targets: Vec<AttachmentReference<'device>>,
-    depth_target: Option<AttachmentReference<'device>>,
-    inputs: Vec<ResourceBinding<'device>>,
-    outputs: Vec<ResourceBinding<'device>>,
-    tagged_resources: Vec<Arc<Mutex<DeviceResource<'device>>>>,
-    fill_callback: Option<Box<FillCallback<'device>>>,
+pub struct PassNodeBuilder {
+    pipeline_description: Option<Arc<PipelineDescription>>,
+    render_targets: Vec<AttachmentReference>,
+    depth_target: Option<AttachmentReference>,
+    inputs: Vec<ResourceBinding>,
+    outputs: Vec<ResourceBinding>,
+    tagged_resources: Vec<Arc<Mutex<DeviceResource>>>,
+    fill_callback: Option<Box<FillCallback>>,
     viewport: Option<vk::Viewport>,
     scissor: Option<vk::Rect2D>,
     name: String
 }
 
-impl<'d> PassNode<'d> for GraphicsPassNode<'d>  {
+impl PassNode for GraphicsPassNode  {
 
     fn get_name(&self) -> &str {
         &self.name
@@ -78,7 +78,7 @@ impl<'d> PassNode<'d> for GraphicsPassNode<'d>  {
 
 }
 
-impl Debug for GraphicsPassNode<'_>  {
+impl Debug for GraphicsPassNode  {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PassNode")
             .field("Name", &self.name)
@@ -86,18 +86,18 @@ impl Debug for GraphicsPassNode<'_>  {
     }
 }
 
-impl<'device> GraphicsPassNode<'device>  {
-    pub fn builder(name: String) -> PassNodeBuilder<'device> {
+impl GraphicsPassNode  {
+    pub fn builder(name: String) -> PassNodeBuilder {
         PassNodeBuilder {
             name,
             ..Default::default()
         }
     }
 
-    pub fn get_pipeline_description(&self) -> &Option<Arc<PipelineDescription<'device>>> { &self.pipeline_description }
+    pub fn get_pipeline_description(&self) -> &Option<Arc<PipelineDescription>> { &self.pipeline_description }
 
     // pub fn set_framebuffer(&mut self, framebuffer: DeviceFramebuffer) {
-    pub fn set_framebuffer(passnode: &mut Self, framebuffer: DeviceFramebuffer<'device>) {
+    pub fn set_framebuffer(passnode: &mut Self, framebuffer: DeviceFramebuffer) {
         passnode.framebuffer = Some(framebuffer);
     }
 
@@ -109,33 +109,33 @@ impl<'device> GraphicsPassNode<'device>  {
         }
     }
 
-    pub fn get_inputs(&self) -> &[ResourceBinding<'device>] {
+    pub fn get_inputs(&self) -> &[ResourceBinding] {
         &self.inputs
     }
 
-    pub fn get_inputs_mut(&mut self) -> &mut [ResourceBinding<'device>] {
+    pub fn get_inputs_mut(&mut self) -> &mut [ResourceBinding] {
         &mut self.inputs
     }
 
-    pub fn get_outputs(&self) -> &[ResourceBinding<'device>] {
+    pub fn get_outputs(&self) -> &[ResourceBinding] {
         &self.outputs
     }
 
-    pub fn get_outputs_mut(&mut self) -> &mut [ResourceBinding<'device>] {
+    pub fn get_outputs_mut(&mut self) -> &mut [ResourceBinding] {
         &mut self.outputs
     }
 
-    pub fn get_rendertargets_mut(&mut self) -> &mut [AttachmentReference<'device>] {
+    pub fn get_rendertargets_mut(&mut self) -> &mut [AttachmentReference] {
         &mut self.render_targets
     }
 
-    pub fn get_depth_mut(&mut self) -> &mut Option<AttachmentReference<'device>> {
+    pub fn get_depth_mut(&mut self) -> &mut Option<AttachmentReference> {
         &mut self.depth_target
     }
 
     pub fn execute(
         &self,
-        device: &DeviceInterface,
+        device: DeviceInterface,
         command_buffer: vk::CommandBuffer)
     {
         (self.fill_callback)(
@@ -145,38 +145,38 @@ impl<'device> GraphicsPassNode<'device>  {
 
 }
 
-impl<'device> PassNodeBuilder<'device> {
-    pub fn pipeline_description(mut self, pipeline_description: Arc<PipelineDescription<'device>>) -> Self {
+impl PassNodeBuilder {
+    pub fn pipeline_description(mut self, pipeline_description: Arc<PipelineDescription>) -> Self {
         self.pipeline_description = Some(pipeline_description);
         self
     }
 
-    pub fn tag(mut self, tagged_resource: Arc<Mutex<DeviceResource<'device>>>) -> Self {
+    pub fn tag(mut self, tagged_resource: Arc<Mutex<DeviceResource>>) -> Self {
         self.tagged_resources.push(tagged_resource);
         self
     }
 
-    pub fn read(mut self, input: ResourceBinding<'device>) -> Self {
+    pub fn read(mut self, input: ResourceBinding) -> Self {
         self.inputs.push(input);
         self
     }
 
-    pub fn write(mut self, output: ResourceBinding<'device>) -> Self {
+    pub fn write(mut self, output: ResourceBinding) -> Self {
         self.outputs.push(output);
         self
     }
 
-    pub fn render_target(mut self, render_target: AttachmentReference<'device>) -> Self {
+    pub fn render_target(mut self, render_target: AttachmentReference) -> Self {
         self.render_targets.push(render_target);
         self
     }
 
-    pub fn depth_target(mut self, depth_target: AttachmentReference<'device>) -> Self {
+    pub fn depth_target(mut self, depth_target: AttachmentReference) -> Self {
         self.depth_target = Some(depth_target);
         self
     }
 
-    pub fn fill_commands(mut self, fill_callback: Box<FillCallback<'device>>) -> Self
+    pub fn fill_commands(mut self, fill_callback: Box<FillCallback>) -> Self
     {
         self.fill_callback = Some(fill_callback);
         self
@@ -194,7 +194,7 @@ impl<'device> PassNodeBuilder<'device> {
         self
     }
 
-    pub fn build(mut self) -> Result<GraphicsPassNode<'device>, &'static str> {
+    pub fn build(mut self) -> Result<GraphicsPassNode, &'static str> {
         assert!(self.fill_callback.is_some(), "No fill callback set");
 
         if self.fill_callback.is_some() {

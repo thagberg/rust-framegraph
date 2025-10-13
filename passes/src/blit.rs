@@ -13,7 +13,7 @@ use framegraph::pass_type::PassType;
 use profiling::{enter_gpu_span, enter_span};
 
 pub fn generate_pass<'d>(
-    source: Arc<Mutex<DeviceResource<'d>>>,
+    source: Arc<Mutex<DeviceResource>>,
     source_layer: u32,
     dest: Arc<Mutex<DeviceResource<'d>>>,
     dest_layer: u32,

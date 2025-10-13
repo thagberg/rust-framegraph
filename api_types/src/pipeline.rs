@@ -3,14 +3,14 @@ use ash::vk;
 use crate::device::interface::DeviceInterface;
 
 #[derive(Clone)]
-pub struct DevicePipeline<'a> {
+pub struct DevicePipeline {
     pub pipeline: vk::Pipeline,
     pub pipeline_layout: vk::PipelineLayout,
     pub descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
-    pub device: &'a DeviceInterface
+    pub device: DeviceInterface
 }
 
-impl Drop for DevicePipeline<'_> {
+impl Drop for DevicePipeline {
     fn drop(&mut self) {
         unsafe {
             self.device.get().destroy_pipeline_layout(self.pipeline_layout, None);
@@ -22,12 +22,12 @@ impl Drop for DevicePipeline<'_> {
     }
 }
 
-impl<'a> DevicePipeline<'a> {
+impl DevicePipeline {
     pub fn new(
         pipeline: vk::Pipeline,
         pipeline_layout: vk::PipelineLayout,
         descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
-        device: &'a DeviceInterface) -> Self {
+        device: DeviceInterface) -> Self {
 
         DevicePipeline {
             pipeline,

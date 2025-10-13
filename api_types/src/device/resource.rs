@@ -12,16 +12,16 @@ pub enum ResourceType {
     Image(ImageWrapper)
 }
 
-pub struct DeviceResource<'a> {
+pub struct DeviceResource {
     pub allocation: Option<Allocation>,
     pub resource_type: Option<ResourceType>,
 
     handle: u64,
-    device: &'a DeviceInterface,
+    device: DeviceInterface,
     allocator: Option<Arc<Mutex<ResourceAllocator>>>
 }
 
-impl Debug for DeviceResource<'_> {
+impl Debug for DeviceResource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DeviceResource")
             .field("handle", &self.handle)
@@ -29,7 +29,7 @@ impl Debug for DeviceResource<'_> {
     }
 }
 
-impl Drop for DeviceResource<'_> {
+impl Drop for DeviceResource {
     fn drop(&mut self) {
         if let Some(resource_type) = &mut self.resource_type {
             match resource_type {
@@ -53,20 +53,20 @@ impl Drop for DeviceResource<'_> {
     }
 }
 
-impl PartialEq<Self> for DeviceResource<'_> {
+impl PartialEq<Self> for DeviceResource {
     fn eq(&self, other: &Self) -> bool {
         self.handle == other.handle
     }
 }
-impl Eq for DeviceResource<'_> {}
+impl Eq for DeviceResource {}
 
-impl<'a> DeviceResource<'a> {
+impl DeviceResource {
 
     pub(crate) fn new(
         allocation: Option<Allocation>,
         resource_type: Option<ResourceType>,
         handle: u64,
-        device: &'a DeviceInterface,
+        device: DeviceInterface,
         allocator: Option<Arc<Mutex<ResourceAllocator>>>
     ) -> Self {
         DeviceResource {

@@ -83,7 +83,7 @@ const VERTEX_BINDING:  vk::VertexInputBindingDescription = vk::VertexInputBindin
 
 pub struct RenderMesh<'d> {
     // TODO: add primitive topology (also need to support this in pipeline.rs)
-    vertex_buffer: Arc<Mutex<DeviceResource<'d>>>,
+    vertex_buffer: Arc<Mutex<DeviceResource>>,
     index_buffer: Option<Arc<Mutex<DeviceResource<'d>>>>,
     num_indices: usize,
     vertex_binding: vk::VertexInputBindingDescription,

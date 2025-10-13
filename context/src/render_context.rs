@@ -5,5 +5,5 @@ pub trait RenderContext  {
     type Create;
     type RP;
 
-    fn get_device(&self) -> &DeviceInterface;
+    fn get_device(&self) -> DeviceInterface;
 }

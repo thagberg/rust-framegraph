@@ -23,7 +23,7 @@ pub fn create_from_bytes<'a, 'b>(
     graphics_queue: vk::Queue,
     image_info: vk::ImageCreateInfo,
     image_bytes: &'b [u8],
-    name: &str) -> DeviceResource<'a> {
+    name: &str) -> DeviceResource {
     // create CPU-to-GPU buffer
     let buffer_create = BufferCreateInfo::new(
         vk::BufferCreateInfo::default()
@@ -187,7 +187,7 @@ pub fn create_from_uri<'a>(
     graphics_queue: vk::Queue,
     uri: &str,
     is_linear: bool
-) -> DeviceResource<'a> {
+) -> DeviceResource {
     let mut img = {
         let image = ImageReader::open(uri)
             .expect("Unable to load image");
