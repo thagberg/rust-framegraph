@@ -22,13 +22,11 @@ pub struct NextImage<'a> {
 }
 
 pub struct SwapchainWrapper<'a> {
-    device: &'a DeviceInterface,
     loader: ash_swapchain::Device,
     swapchain: vk::SwapchainKHR,
     images: Vec<Arc<Mutex<DeviceResource<'a>>>>,
     format: vk::Format,
-    extent: vk::Extent2D,
-    present_fences: Vec<vk::Fence>
+    extent: vk::Extent2D
 }
 
 impl Debug for SwapchainWrapper<'_> {
@@ -40,22 +38,18 @@ impl Debug for SwapchainWrapper<'_> {
 
 impl<'a> SwapchainWrapper<'a> {
     pub fn new(
-        device: &'a DeviceInterface,
         loader: ash_swapchain::Device,
         swapchain: vk::SwapchainKHR,
         images: Vec<Arc<Mutex<DeviceResource<'a>>>>,
         format: vk::Format,
         extent: vk::Extent2D,
-        present_fences: Vec<vk::Fence>
     ) -> SwapchainWrapper<'a> {
         SwapchainWrapper {
-            device,
             loader,
             swapchain,
             images,
             format,
-            extent,
-            present_fences
+            extent
         }
     }
 
@@ -70,27 +64,6 @@ impl<'a> SwapchainWrapper<'a> {
     pub fn get_extent(&self) -> vk::Extent2D { self.extent }
 
     pub fn get_loader(&self) -> &ash_swapchain::Device { &self.loader }
-
-    pub fn get_present_fence(&self, index: u32) -> vk::Fence {
-        self.present_fences[index as usize].clone()
-    }
-
-    pub fn can_destroy(&self) -> bool {
-        let mut can_destroy = true;
-
-        unsafe {
-            for fence in &self.present_fences {
-                let fence_status = self.device.get_fence_status(*fence)
-                    .expect("Failed to get Present fence status");
-                match fence_status {
-                    true => {}
-                    false => {can_destroy = false}
-                }
-            }
-        }
-
-        can_destroy
-    }
 
     fn _acquire_next_image_impl(
         &self,
@@ -158,9 +131,6 @@ impl<'a> SwapchainWrapper<'a> {
 impl Drop for SwapchainWrapper<'_> {
     fn drop(&mut self) {
         unsafe {
-            for fence in &self.present_fences {
-                self.device.destroy_fence(*fence, None);
-            }
             self.loader.destroy_swapchain(self.swapchain, None);
         }
     }

@@ -528,12 +528,12 @@ fn create_debug_util(
 fn create_swapchain<'a>(
     handle_generator: &mut HandleGenerator,
     instance: &InstanceWrapper,
-    device: &'a DeviceInterface,
+    device: &DeviceInterface,
     physical_device: &PhysicalDeviceWrapper,
     surface: &SurfaceWrapper,
     window: &winit::window::Window,
-    old_swapchain: &Option<OldSwapchain>
-) -> SwapchainWrapper<'a> {
+    old_swapchain: &Option<OldSwapchain<'a>>
+) -> (SwapchainWrapper<'a>, Vec<vk::Fence>) {
     let swapchain_capabilities = surface.get_surface_capabilities(physical_device);
 
     // TODO: may want to make format and color space customizable
@@ -672,19 +672,18 @@ fn create_swapchain<'a>(
         }
     }
 
-    SwapchainWrapper::new(
-        device,
+    (SwapchainWrapper::new(
         swapchain_loader,
         swapchain,
         swapchain_images,
         swapchain_format.format,
-        swapchain_extent,
-        present_fences)
+        swapchain_extent), present_fences)
 }
 
 #[derive(Debug)]
 pub struct OldSwapchain<'a> {
     pub swapchain: Arc<Mutex<SwapchainWrapper<'a>>>,
+    pub present_fences: Vec<vk::Fence>,
     pub frame_index: u32
 
 }
@@ -715,6 +714,7 @@ pub struct VulkanRenderContext<'a> {
     swapchain: Arc<Mutex<Option<SwapchainWrapper<'a>>>>,
     old_swapchain: Arc<Mutex<Option<OldSwapchain<'a>>>>,
     swapchain_semaphores: Vec<vk::Semaphore>,
+    present_fences: Mutex<Vec<vk::Fence>>,
     device: DeviceInterface,
     physical_device: PhysicalDeviceWrapper,
     surface: Option<SurfaceWrapper>,
@@ -877,6 +877,7 @@ impl<'a> VulkanRenderContext<'a> {
             old_swapchain: Arc::new(Mutex::new(None)),
             // swapchain_semaphores,
             swapchain_semaphores: vec![],
+            present_fences: Mutex::new(vec![]),
             frame_index: AtomicU32::new(frame_index),
             swapchain_index: AtomicU32::new(0),
             main_thread_objects: vec![],
@@ -907,20 +908,22 @@ impl<'a> VulkanRenderContext<'a> {
 
         {
             let mut swapchain = self.swapchain.lock().unwrap();
-            *swapchain = {
-                if window.is_some() && self.surface.is_some() {
-                    Some(create_swapchain(
-                        &mut self.handle_generator.lock().unwrap(),
-                        &self.instance,
-                        &self.device,
-                        &self.physical_device,
-                        &self.surface.as_ref().unwrap(),
-                        window.unwrap(),
-                        &None))
-                } else {
-                    None
-                }
-            };
+            let mut present_fences = self.present_fences.lock().unwrap();
+            if window.is_some() && self.surface.is_some() {
+                let (new_swapchain, new_present_fences) = create_swapchain(
+                    &mut self.handle_generator.lock().unwrap(),
+                    &self.instance,
+                    &self.device,
+                    &self.physical_device,
+                    &self.surface.as_ref().unwrap(),
+                    window.unwrap(),
+                    &None);
+                *swapchain = Some(new_swapchain);
+                *present_fences = new_present_fences;
+            } else {
+                *swapchain = None;
+                *present_fences = vec![];
+            }
         }
 
         self.swapchain_semaphores = {
@@ -1016,7 +1019,7 @@ impl<'a> VulkanRenderContext<'a> {
     }
 
     pub fn recreate_swapchain(
-        &'a self,
+        &self,
         window: &winit::window::Window
     ) {
         match &self.surface {
@@ -1029,9 +1032,10 @@ impl<'a> VulkanRenderContext<'a> {
                     let taken_swapchain = swapchain.take().unwrap();
                     *old_swapchain = Some(OldSwapchain {
                         swapchain: Arc::new(Mutex::new(taken_swapchain)),
-                        frame_index: current_frame_index
+                        frame_index: current_frame_index,
+                        present_fences: self.present_fences.lock().unwrap().clone()
                     });
-                    let new_swapchain = create_swapchain(
+                    let (new_swapchain, new_present_fences) = create_swapchain(
                         &mut self.handle_generator.lock().unwrap(),  // Lock the mutex here
                         &self.instance,
                         &self.device,
@@ -1042,6 +1046,8 @@ impl<'a> VulkanRenderContext<'a> {
 
                     *swapchain = Some(new_swapchain);
                     self.swapchain_index.store(0, Ordering::Relaxed);
+                    let mut present_fences = self.present_fences.lock().unwrap();
+                    *present_fences = new_present_fences;
                 }
             }
             None => {
@@ -1086,8 +1092,18 @@ impl<'a> VulkanRenderContext<'a> {
             let mut old_swapchain = self.old_swapchain.lock().unwrap();
             let should_destroy = {
                 if let Some(old_swap) = &*old_swapchain {
-                    let old_swap_inner = old_swap.swapchain.lock().unwrap();
-                    old_swap_inner.can_destroy()
+                    let mut can_destroy = true;
+                    for fence in &old_swap.present_fences {
+                        unsafe {
+                            let fence_status = self.device.get_fence_status(*fence)
+                                .expect("Failed to get Present fence status");
+                            match fence_status {
+                                true => {}
+                                false => { can_destroy = false }
+                            }
+                        }
+                    }
+                    can_destroy
                 } else {
                     false
                 }
@@ -1224,7 +1240,7 @@ impl<'a> VulkanRenderContext<'a> {
             .image_indices(std::slice::from_ref(&swapchain_index));
 
         // wait for and reset the presentation fence
-        let present_fence = swapchain.get_present_fence(swapchain_index);
+        let present_fence = self.present_fences.lock().unwrap()[swapchain_index as usize];
         unsafe {
             enter_span!(tracing::Level::TRACE, "Waiting for Present fence");
             self.device.get().wait_for_fences(
