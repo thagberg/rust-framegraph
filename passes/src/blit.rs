@@ -12,18 +12,18 @@ use framegraph::copy_pass_node::CopyPassNode;
 use framegraph::pass_type::PassType;
 use profiling::{enter_gpu_span, enter_span};
 
-pub fn generate_pass<'d>(
+pub fn generate_pass(
     source: Arc<Mutex<DeviceResource>>,
     source_layer: u32,
-    dest: Arc<Mutex<DeviceResource<'d>>>,
+    dest: Arc<Mutex<DeviceResource>>,
     dest_layer: u32,
-    offsets: [IVec2; 2]) -> PassType<'d> {
+    offsets: [IVec2; 2]) -> PassType {
 
     let pass_node = CopyPassNode::builder("blit".to_string())
         .copy_src(source.clone())
         .copy_dst(dest.clone())
         .fill_commands(Box::new(
-            move |device: &DeviceInterface,
+            move |device: DeviceInterface,
                     command_buffer: vk::CommandBuffer| {
 
                 enter_span!(tracing::Level::TRACE, "Blit");

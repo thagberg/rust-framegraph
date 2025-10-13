@@ -64,37 +64,37 @@ pub struct DisplayBuffer {
     pos: [f32; 2]
 }
 
-pub struct ImguiRender<'d> {
-    vertex_shader: Arc<Mutex<Shader<'d>>>,
-    fragment_shader: Arc<Mutex<Shader<'d>>>,
-    font_texture: Arc<Mutex<DeviceResource<'d>>>
+pub struct ImguiRender {
+    vertex_shader: Arc<Mutex<Shader>>,
+    fragment_shader: Arc<Mutex<Shader>>,
+    font_texture: Arc<Mutex<DeviceResource>>
 }
 
-impl<'d> Debug for ImguiRender<'d> {
+impl<'d> Debug for ImguiRender {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ImguiRender")
             .finish()
     }
 }
 
-impl<'d> Drop for ImguiRender<'d> {
+impl Drop for ImguiRender {
     fn drop(&mut self) {
         println!("Dropping ImguiRender");
     }
 }
 
-impl<'d> ImguiRender<'d> {
+impl ImguiRender {
     pub fn new(
-        device: &'d DeviceInterface,
+        device: DeviceInterface,
         render_context: &VulkanRenderContext,
         allocator: Arc<Mutex<ResourceAllocator>>,
         immediate_command_buffer: &vk::CommandBuffer,
-        font_atlas: imgui::FontAtlasTexture) -> ImguiRender<'d> {
+        font_atlas: imgui::FontAtlasTexture) -> ImguiRender {
 
         let vert_shader = Arc::new(Mutex::new(
-            shader::create_shader_module_from_bytes(device, "imgui-vert", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-vert.spv")))));
+            shader::create_shader_module_from_bytes(device.clone(), "imgui-vert", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-vert.spv")))));
         let frag_shader = Arc::new(Mutex::new(
-            shader::create_shader_module_from_bytes(device, "imgui-frag", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-frag.spv")))));
+            shader::create_shader_module_from_bytes(device.clone(), "imgui-frag", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-frag.spv")))));
 
         let font_texture_create =
             vk::ImageCreateInfo::default()
@@ -113,7 +113,7 @@ impl<'d> ImguiRender<'d> {
 
         let mut font_texture = image::create_from_bytes(
             0 as u64,
-            device,
+            device.clone(),
             allocator,
             immediate_command_buffer,
             render_context.get_graphics_queue_index(),
@@ -171,8 +171,8 @@ impl<'d> ImguiRender<'d> {
         &self,
         allocator: Arc<Mutex<ResourceAllocator>>,
         draw_data: &DrawData,
-        render_target: AttachmentReference<'d>,
-        device: &'d DeviceInterface) -> Vec<PassType<'d>> {
+        render_target: AttachmentReference,
+        device: DeviceInterface) -> Vec<PassType> {
 
         enter_span!(tracing::Level::TRACE, "Generate Imgui Passes");
 
@@ -333,7 +333,7 @@ impl<'d> ImguiRender<'d> {
                 .viewport(viewport)
                 .scissor(scissor)
                 .fill_commands(Box::new(
-                    move |device: &DeviceInterface,
+                    move |device: DeviceInterface,
                           command_buffer: vk::CommandBuffer | {
                         unsafe {
                             enter_span!(tracing::Level::TRACE, "Imgui Draw");

@@ -16,11 +16,11 @@ use framegraph::pass_type::PassType;
 use framegraph::pipeline::ComputePipelineDescription;
 use profiling::{enter_gpu_span, enter_span};
 
-pub fn generate_pass<'d>(
-    device: &'d DeviceInterface,
+pub fn generate_pass(
+    device: DeviceInterface,
     allocator: Arc<Mutex<ResourceAllocator>>,
-    source: Arc<Mutex<DeviceResource<'d>>>
-) -> (PassType<'d>, Arc<Mutex<DeviceResource<'d>>>) {
+    source: Arc<Mutex<DeviceResource>>
+) -> (PassType, Arc<Mutex<DeviceResource>>) {
 
     let image_extent = source.lock().unwrap().get_image().extent.clone();
 
@@ -76,11 +76,11 @@ pub fn generate_pass<'d>(
         .input(source_binding)
         .output(target_binding)
         .fill_commands(Box::new(
-            move |device: &DeviceInterface,
+            move |device: DeviceInterface,
                   command_buffer: vk::CommandBuffer | {
 
                 enter_span!(tracing::Level::TRACE, "Blur");
-                enter_gpu_span!("Blur GPU", "Passes", device, &command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
+                enter_gpu_span!("Blur GPU", "Passes", &device.get(), &command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
 
                 unsafe {
                     device.get().cmd_dispatch(

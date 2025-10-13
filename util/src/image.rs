@@ -14,9 +14,9 @@ use api_types::device::resource::{DeviceResource, ResourceType};
 use api_types::image::{ImageCreateInfo, ImageType};
 use context::vulkan_render_context::VulkanRenderContext;
 
-pub fn create_from_bytes<'a, 'b>(
+pub fn create_from_bytes<'b>(
     image_handle: u64,
-    device: &'a DeviceInterface,
+    device: DeviceInterface,
     allocator: Arc<Mutex<ResourceAllocator>>,
     immediate_command_buffer: &vk::CommandBuffer,
     graphics_queue_index: u32,

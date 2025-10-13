@@ -11,9 +11,9 @@ use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::pass_type::PassType;
 use profiling::{enter_gpu_span, enter_span};
 
-pub fn clear<'d>(
-    target: Arc<Mutex<DeviceResource<'d>>>,
-    aspect_mask: vk::ImageAspectFlags) -> PassType<'d>{
+pub fn clear(
+    target: Arc<Mutex<DeviceResource>>,
+    aspect_mask: vk::ImageAspectFlags) -> PassType{
 
     let target_binding = ResourceBinding {
         resource: target.clone(),
@@ -40,7 +40,7 @@ pub fn clear<'d>(
     let pass_node = GraphicsPassNode::builder(pass_name.clone())
         .write(target_binding)
         .fill_commands(Box::new(
-            move |device: &DeviceInterface,
+            move |device: DeviceInterface,
                   command_buffer: vk::CommandBuffer | {
 
                 enter_span!(tracing::Level::TRACE, "clear");
