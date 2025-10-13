@@ -180,7 +180,7 @@ pub fn create_from_bytes<'b>(
 }
 pub fn create_from_uri<'a>(
     image_handle: u64,
-    device: &'a DeviceInterface,
+    device: DeviceInterface,
     allocator: Arc<Mutex<ResourceAllocator>>,
     immediate_command_buffer: &vk::CommandBuffer,
     graphics_queue_index: u32,
@@ -237,7 +237,7 @@ pub fn create_from_uri<'a>(
 
     create_from_bytes(
         image_handle,
-        device,
+        device.clone(),
         allocator,
         immediate_command_buffer,
         graphics_queue_index,
