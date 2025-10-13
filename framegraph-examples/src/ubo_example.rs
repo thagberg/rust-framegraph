@@ -23,23 +23,23 @@ use crate::example::Example;
 pub struct UBO {
     pub color: [f32; 3]
 }
-pub struct UboExample<'d> {
-    uniform_buffer: Arc<Mutex<DeviceResource<'d>>>,
-    vert_shader: Arc<Mutex<shader::Shader<'d>>>,
-    frag_shader: Arc<Mutex<shader::Shader<'d>>>
+pub struct UboExample {
+    uniform_buffer: Arc<Mutex<DeviceResource>>,
+    vert_shader: Arc<Mutex<shader::Shader>>,
+    frag_shader: Arc<Mutex<shader::Shader>>
 }
 
-impl<'d> Example<'d> for UboExample<'d> {
+impl Example for UboExample {
     fn get_name(&self) -> &'static str {
         "UBO"
     }
 
     fn execute(
         &self,
-        _device: &'d DeviceInterface,
+        _device: DeviceInterface,
         _allocator: Arc<Mutex<ResourceAllocator>>,
         _imgui_ui: &mut Ui,
-        back_buffer: AttachmentReference<'d>) -> Vec<PassType<'d>> {
+        back_buffer: AttachmentReference) -> Vec<PassType> {
 
         let vertex_state_create = vk::PipelineVertexInputStateCreateInfo::default()
             .vertex_attribute_descriptions(&[])
@@ -76,11 +76,11 @@ impl<'d> Example<'d> for UboExample<'d> {
             .read(ubo_binding)
             .render_target(back_buffer)
             .fill_commands(Box::new(
-                move |device: &DeviceInterface,
+                move |device: DeviceInterface,
                      command_buffer: vk::CommandBuffer | {
 
                     enter_span!(tracing::Level::TRACE, "Draw Triangle");
-                    enter_gpu_span!("Draw Triangle GPU", "examples", device, &command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
+                    enter_gpu_span!("Draw Triangle GPU", "examples", &device.get(), &command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);
 
                     let viewport = vk::Viewport::default()
                         .x(0.0)
@@ -121,9 +121,9 @@ impl<'d> Example<'d> for UboExample<'d> {
     }
 }
 
-impl<'d> UboExample<'d> {
+impl UboExample {
     pub fn new(
-        device: &'d DeviceInterface,
+        device: DeviceInterface,
         allocator: Arc<Mutex<ResourceAllocator>>) -> Self{
         let ubo_create = BufferCreateInfo::new(
             vk::BufferCreateInfo::default()
@@ -153,9 +153,9 @@ impl<'d> UboExample<'d> {
         });
 
         let vert_shader = Arc::new(Mutex::new(
-            shader::create_shader_module_from_bytes(device, "ubo-vert", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/ubo-vert.spv")))));
+            shader::create_shader_module_from_bytes(device.clone(), "ubo-vert", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/ubo-vert.spv")))));
         let frag_shader = Arc::new(Mutex::new(
-            shader::create_shader_module_from_bytes(device, "ubo-frag", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/ubo-frag.spv")))));
+            shader::create_shader_module_from_bytes(device.clone(), "ubo-frag", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/ubo-frag.spv")))));
 
         UboExample {
             uniform_buffer: Arc::new(Mutex::new(ubo)),
