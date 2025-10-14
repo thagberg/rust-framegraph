@@ -20,12 +20,12 @@ fn create_shader_module(device: DeviceInterface, file_name: &str) -> Shader
         let reflection_module = rspirv_reflect::Reflection::new_from_spirv(&bytes)
             .expect(&format!("Failed to parse shader for reflection data at {}", file_name));
 
-        let code_bytes: &[u32] = unsafe {
-            std::slice::from_raw_parts(bytes.as_ptr() as *const u32, bytes.len() / 4)
-        };
+        let mut code_cursor = std::io::Cursor::new(bytes);
+        let code_bytes = ash::util::read_spv(&mut code_cursor)
+            .expect("Failed to read SPIR-V code");
 
         let create_info = vk::ShaderModuleCreateInfo::default()
-            .code(code_bytes);
+            .code(&code_bytes);
 
         let shader = device.create_shader(file_name, &create_info);
 
@@ -71,12 +71,12 @@ pub fn create_shader_module_from_bytes(device: DeviceInterface, name: &str, byte
         let reflection_module = rspirv_reflect::Reflection::new_from_spirv(bytes)
             .expect(&format!("Failed to parse shader for reflection data for {}", name));
 
-        let code_bytes: &[u32] = unsafe {
-            std::slice::from_raw_parts(bytes.as_ptr() as *const u32, bytes.len() / 4)
-        };
+        let mut code_cursor = std::io::Cursor::new(bytes);
+        let code_bytes = ash::util::read_spv(&mut code_cursor)
+            .expect("Failed to read SPIR-V code");
 
         let create_info = vk::ShaderModuleCreateInfo::default()
-            .code(code_bytes);
+            .code(&code_bytes);
 
         let shader = device.create_shader(name, &create_info);
 

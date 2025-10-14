@@ -72,7 +72,7 @@ struct WindowedVulkanApp {
     // examples: Vec<Box<dyn Example>>,
     examples: Examples,
 
-    imgui_renderer: Option<ImguiRender>,
+    imgui_renderer: ImguiRender,
     frame_graph: VulkanFrameGraph,
 
     render_context: VulkanRenderContext,
@@ -123,6 +123,7 @@ impl WindowedVulkanApp {
                 8,
                 Some(&window))
         };
+        render_context.init(4, Some(&window));
 
         let frame_graph = VulkanFrameGraph::new();
 
@@ -163,30 +164,30 @@ impl WindowedVulkanApp {
 
         let immediate_command_buffer = render_context.get_immediate_command_buffer();
 
-        // let imgui_renderer = {
-        //     let font_texture = {
-        //         let fonts = imgui.fonts();
-        //         fonts.build_rgba32_texture()
-        //     };
-        //
-        //     ImguiRender::new(
-        //         render_context.get_device(),
-        //         &render_context,
-        //         allocator.clone(),
-        //         &immediate_command_buffer,
-        //         font_texture)
-        // };
+        let imgui_renderer = {
+            let font_texture = {
+                let fonts = imgui.fonts();
+                fonts.build_rgba32_texture()
+            };
 
-        // let examples: Vec<Box<dyn Example>> = vec![
-        //     Box::new(UboExample::new(
-        //         render_context.get_device(),
-        //         allocator.clone())),
-        //     Box::new(ModelExample::new(
-        //         render_context.get_device(),
-        //         &render_context,
-        //         allocator.clone(),
-        //         &immediate_command_buffer))
-        // ];
+            ImguiRender::new(
+                render_context.get_device(),
+                &render_context,
+                allocator.clone(),
+                &immediate_command_buffer,
+                font_texture)
+        };
+
+        let examples: Vec<Box<dyn Example>> = vec![
+            Box::new(UboExample::new(
+                render_context.get_device(),
+                allocator.clone())),
+            Box::new(ModelExample::new(
+                render_context.get_device(),
+                &render_context,
+                allocator.clone(),
+                &immediate_command_buffer))
+        ];
 
         let mut frames: Vec<Option<Box<Frame>>> = Vec::new();
         frames.resize_with(max_frames_in_flight as usize, Default::default);
@@ -194,12 +195,10 @@ impl WindowedVulkanApp {
         let mut app = WindowedVulkanApp {
             window,
             platform,
-            // examples: Examples::new(examples),
-            examples: Examples::new(vec![]),
+            examples: Examples::new(examples),
             imgui,
             frame_graph,
-            // imgui_renderer,
-            imgui_renderer: None,
+            imgui_renderer,
             render_semaphores,
             frames,
             frame_fences,
@@ -358,17 +357,15 @@ impl WindowedVulkanApp {
 
                 let imgui_draw_data = self.imgui.render();
 
-                if let Some(imgui_renderer) = &self.imgui_renderer {
-                    let device = self.render_context.get_device();
-                    let imgui_nodes = imgui_renderer.generate_passes(
-                        self.allocator.clone(),
-                        imgui_draw_data,
-                        rt_ref.clone(),
-                        device);
+                let device = self.render_context.get_device();
+                let imgui_nodes = self.imgui_renderer.generate_passes(
+                    self.allocator.clone(),
+                    imgui_draw_data,
+                    rt_ref.clone(),
+                    device);
 
-                    for imgui_node in imgui_nodes {
-                        current_frame.add_node(imgui_node);
-                    }
+                for imgui_node in imgui_nodes {
+                    current_frame.add_node(imgui_node);
                 }
             }
         }

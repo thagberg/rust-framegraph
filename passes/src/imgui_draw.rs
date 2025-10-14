@@ -92,9 +92,9 @@ impl ImguiRender {
         font_atlas: imgui::FontAtlasTexture) -> ImguiRender {
 
         let vert_shader = Arc::new(Mutex::new(
-            shader::create_shader_module_from_bytes(device.clone(), "imgui-vert", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-vert.spv")))));
+            shader::create_shader_module_from_bytes(device.clone(), "imgui-vert", include_bytes!(concat!(env!("SHADER_DIR"), "/imgui-vert.spv")))));
         let frag_shader = Arc::new(Mutex::new(
-            shader::create_shader_module_from_bytes(device.clone(), "imgui-frag", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/imgui-frag.spv")))));
+            shader::create_shader_module_from_bytes(device.clone(), "imgui-frag", include_bytes!(concat!(env!("SHADER_DIR"), "/imgui-frag.spv")))));
 
         let font_texture_create =
             vk::ImageCreateInfo::default()
