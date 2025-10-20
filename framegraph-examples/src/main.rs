@@ -1,6 +1,7 @@
 mod ubo_example;
 mod example;
 mod model_example;
+mod phong_example;
 
 extern crate alloc;
 extern crate nalgebra_glm as glm;
@@ -42,6 +43,7 @@ use passes::clear;
 use crate::example::Example;
 use crate::model_example::ModelExample;
 use crate::ubo_example::UboExample;
+use crate::phong_example::PhongExample;
 
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 
@@ -180,13 +182,17 @@ impl WindowedVulkanApp {
 
         let examples: Vec<Box<dyn Example>> = vec![
             Box::new(UboExample::new(
-                render_context.get_device(),
+                render_context.get_device().clone(),
                 allocator.clone())),
             Box::new(ModelExample::new(
-                render_context.get_device(),
+                render_context.get_device().clone(),
                 &render_context,
                 allocator.clone(),
-                &immediate_command_buffer))
+                &immediate_command_buffer)),
+            Box::new(PhongExample::new(
+                render_context.get_device().clone(),
+                &render_context,
+                allocator.clone()))
         ];
 
         let mut frames: Vec<Option<Box<Frame>>> = Vec::new();

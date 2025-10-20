@@ -998,12 +998,12 @@ impl ModelExample {
             shader::create_shader_module_from_bytes(
                 device.clone(),
                 "model-vert",
-                include_bytes!(concat!(env!("OUT_DIR"), "/shaders/model-vert.spv")))));
+                include_bytes!(concat!(env!("SHADER_DIR"), "/model-vert.spv")))));
         let frag_shader = Arc::new(Mutex::new(
             shader::create_shader_module_from_bytes(
                 device.clone(),
                 "model-frag",
-                include_bytes!(concat!(env!("OUT_DIR"), "/shaders/model-frag.spv")))));
+                include_bytes!(concat!(env!("SHADER_DIR"), "/model-frag.spv")))));
 
         ModelExample{
             vertex_shader: vert_shader,
