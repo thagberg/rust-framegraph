@@ -96,6 +96,7 @@ impl ImguiRender {
         let frag_shader = Arc::new(Mutex::new(
             shader::create_shader_module_from_bytes(device.clone(), "imgui-frag", include_bytes!(concat!(env!("SHADER_DIR"), "/imgui-frag.spv")))));
 
+        let usage_flags = vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED;
         let font_texture_create =
             vk::ImageCreateInfo::default()
                 .format(vk::Format::R8G8B8A8_UNORM)
@@ -103,7 +104,7 @@ impl ImguiRender {
                 .sharing_mode(vk::SharingMode::EXCLUSIVE)
                 .initial_layout(vk::ImageLayout::UNDEFINED)
                 .samples(vk::SampleCountFlags::TYPE_1)
-                .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED)
+                .usage(usage_flags)
                 .extent(vk::Extent3D::default()
                     .height(font_atlas.height)
                     .width(font_atlas.width)

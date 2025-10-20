@@ -37,14 +37,14 @@ unsafe extern "system" fn debug_utils_callback(
     p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
     p_user_data: *mut c_void
 ) -> vk::Bool32 {
-    let severity = match severity {
+    let severity_str = match severity {
         vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => "[Verbose]",
         vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => "[Warning]",
         vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => "[Error]",
         vk::DebugUtilsMessageSeverityFlagsEXT::INFO => "[Info]",
         _ => "[Unknown]",
     };
-    let types = match message_type {
+    let types_str = match message_type {
         vk::DebugUtilsMessageTypeFlagsEXT::GENERAL => "[General]",
         vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE => "[Performance]",
         vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION => "[Validation]",
@@ -52,7 +52,9 @@ unsafe extern "system" fn debug_utils_callback(
     };
 
     let message = CStr::from_ptr((*p_callback_data).p_message);
-    println!("[Debug]{}{}{:?}", severity, types, message);
+    println!("[Debug]{}{}{:?}", severity_str, types_str, message);
+
+    assert!(severity != vk::DebugUtilsMessageSeverityFlagsEXT::ERROR);
 
     vk::FALSE
 }
@@ -64,7 +66,7 @@ fn get_instance_extensions() -> Vec<&'static CStr> {
         ash::khr::portability_enumeration::NAME,
         ash::khr::get_physical_device_properties2::NAME,
         ash::khr::get_surface_capabilities2::NAME,
-        ash::ext::surface_maintenance1::NAME,
+        ash::ext::surface_maintenance1::NAME
     ]
 }
 
@@ -73,7 +75,8 @@ fn get_instance_extensions() -> Vec<&'static CStr> {
     vec![
         vk::KhrGetPhysicalDeviceProperties2Fn::name(),
         vk::KhrGetSurfaceCapabilities2Fn::name(), // dependency of EXTSurfaceMaintenance1
-        vk::ExtSurfaceMaintenance1Fn::name() // dependency of device extension EXTSwapchainMaintenance1
+        vk::ExtSurfaceMaintenance1Fn::name(), // dependency of device extension EXTSwapchainMaintenance1
+        ash::ext::debug_utils::NAME
         // use winit::platform::macos::WindowBuilderExtMacOS;
 
     ]
@@ -387,7 +390,7 @@ fn pick_physical_device(
 fn create_logical_device(
     instance: &InstanceWrapper,
     physical_device_properties: vk::PhysicalDeviceProperties,
-    debug: Option<VulkanDebug>,
+    mut debug: Option<VulkanDebug>,
     physical_device: &PhysicalDeviceWrapper,
     surface: &Option<SurfaceWrapper>,
     layers: &[&CStr],
@@ -445,6 +448,10 @@ fn create_logical_device(
         instance.get().create_device(physical_device.get(), &device_create_info, None)
             .expect("Failed to create logical device.")
     };
+
+    if let Some(debug) = &mut debug {
+        debug.create_device_utils(instance.get(), &device);
+    }
 
     DeviceInterface::new(
         device,
@@ -614,7 +621,8 @@ fn create_swapchain(
             .image_color_space(swapchain_format.color_space)
             .image_format(swapchain_format.format)
             .image_extent(swapchain_extent)
-            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST)
+            // .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST)
+            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED)
             .image_sharing_mode(image_sharing_mode)
             .pre_transform(swapchain_capabilities.capabilities.current_transform)
             .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
@@ -635,12 +643,17 @@ fn create_swapchain(
     };
 
     let swapchain_images : Vec<Arc<Mutex<DeviceResource>>> = unsafe {
+        let mut index = 0;
         swapchain_loader
             .get_swapchain_images(swapchain)
             .expect("Failed to get swapchain images.")
             .iter()
             .map(|image| {
                 let handle = handle_generator.generate_handle();
+
+                device.set_debug_name(*image, &format!("Swapchain image {}", index));
+                index += 1;
+
                 Arc::new(Mutex::new(device.wrap_image(
                     handle,
                     image.clone(),

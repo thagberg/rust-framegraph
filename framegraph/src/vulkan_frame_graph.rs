@@ -683,10 +683,10 @@ impl VulkanFrameGraph {
                         link_present_node(pn, &mut usage_cache)
                     }
                 };
-            //
-            //     current_list.nodes.push(*node_index);
-            //
-            //     self.node_barriers.insert(*node_index, node_barrier);
+
+                current_list.nodes.push(*node_index);
+
+                self.node_barriers.insert(*node_index, node_barrier);
             }
         }
 
@@ -1007,6 +1007,7 @@ impl FrameGraph for VulkanFrameGraph {
         // compile and link frame
         let command_lists = {
             let sorted_nodes = self.compile(&mut frame.nodes, root_index);
+            // let dot = petgraph::dot::Dot::with_config(&frame.nodes, &[petgraph::dot::Config::EdgeIndexLabel]);
             self.link(&mut frame.nodes, &sorted_nodes)
         };
 

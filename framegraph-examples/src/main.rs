@@ -120,10 +120,10 @@ impl WindowedVulkanApp {
             VulkanRenderContext::new(
                 &application_info,
                 true,
-                8,
+                1,
                 Some(&window))
         };
-        render_context.init(4, Some(&window));
+        render_context.init(1, Some(&window));
 
         let frame_graph = VulkanFrameGraph::new();
 
