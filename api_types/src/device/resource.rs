@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Mutex};
+use ash::vk::Handle;
 use gpu_allocator::vulkan::{Allocation, Allocator};
 use crate::buffer::BufferWrapper;
 use crate::device::allocator::ResourceAllocator;
@@ -16,7 +17,7 @@ pub struct DeviceResource {
     pub allocation: Option<Allocation>,
     pub resource_type: Option<ResourceType>,
 
-    handle: u64,
+    handle: u64, // just get rid of this and use the resolved resourc handle instead?
     device: DeviceInterface,
     allocator: Option<Arc<Mutex<ResourceAllocator>>>
 }
@@ -133,7 +134,23 @@ impl DeviceResource {
     }
 
     pub fn get_handle(&self) -> u64 {
-        self.handle
+        let handle = match &self.resource_type {
+            Some(resolved_resource) => {
+                match &resolved_resource {
+                    ResourceType::Buffer(buffer) => {
+                        buffer.get().as_raw()
+                    }
+                    ResourceType::Image(image) => {
+                        image.get().as_raw()
+                    }
+                }
+            },
+            None => {
+                panic!("Attempting to get handle of unresolved resource")
+            }
+        };
+
+        handle
     }
 }
 

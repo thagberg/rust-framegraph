@@ -246,6 +246,7 @@ impl WindowedVulkanApp {
 
     #[tracing::instrument]
     pub fn draw_frame(&mut self) {
+        println!("Frame number: {}", self.frame_index);
         // wait for fence if necessary (can we avoid this using just semaphores?)
         let frame_fence = self.frame_fences[self.frame_index as usize];
         let wait_fences = [frame_fence];
