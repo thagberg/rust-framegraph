@@ -81,14 +81,14 @@ struct FrameSpans {
 
 impl FrameSpans {
     pub fn reset(&mut self, device: &ash::Device) {
-        self.query_index = 0;
         unsafe {
             device.reset_query_pool(
                 self.query_pool,
                 0,
-                self.max_queries-1
+                self.query_index+1
             );
         }
+        self.query_index = 0;
         self.active_spans.clear();
         self.ready = true;
     }
@@ -100,7 +100,7 @@ impl FrameSpans {
                 device.get_query_pool_results(
                     self.query_pool,
                     0, // should this be query_index?
-                    &mut self.data,
+                    &mut self.data[0..self.query_index as usize],
                     vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT)
                     .expect("Failed to retrieve query results");
             }
@@ -236,14 +236,20 @@ impl GpuSpanManager {
                 })
             }
 
+            // query pools must be reset before they can be used
+            for frame in &frames {
+                unsafe {
+                    device.reset_query_pool(
+                        frame.query_pool,
+                        0,
+                       frame.max_queries
+                    );
+                }
+            }
+
             // initial timestamp query
             let mut timestamp_value: i64 = 0;
             unsafe {
-                device.reset_query_pool(
-                    frames[0].query_pool,
-                    0,
-                    1
-                );
 
                 let begin_info = vk::CommandBufferBeginInfo::default()
                     .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
