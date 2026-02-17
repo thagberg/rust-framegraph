@@ -186,6 +186,10 @@ impl Example for PhongExample {
 
         vec![PassType::Graphics(passnode)]
     }
+
+    fn update(&mut self, delta_time: f32) {
+        self.rotation += delta_time;
+    }
 }
 
 impl PhongExample {
@@ -303,9 +307,5 @@ impl PhongExample {
             fragment_shader,
             rotation: 0.0,
         }
-    }
-
-    pub fn update(&mut self, delta_time: f32) {
-        self.rotation += delta_time;
     }
 }

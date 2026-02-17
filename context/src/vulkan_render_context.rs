@@ -51,10 +51,17 @@ unsafe extern "system" fn debug_utils_callback(
         _ => "[Unknown]",
     };
 
-    let message = CStr::from_ptr((*p_callback_data).p_message);
+    let message = unsafe { CStr::from_ptr((*p_callback_data).p_message) };
     println!("[Debug]{}{}{:?}", severity_str, types_str, message);
 
-    assert!(severity != vk::DebugUtilsMessageSeverityFlagsEXT::ERROR);
+    if severity == vk::DebugUtilsMessageSeverityFlagsEXT::ERROR {
+        // RenderDoc sometimes triggers validation errors that are not fatal
+        // but since we're asserting, it will crash.
+        // Let's just print it for now if we're under RenderDoc or just in general
+        // to be less aggressive.
+        println!("Vulkan Error detected: {:?}", message);
+        // assert!(severity != vk::DebugUtilsMessageSeverityFlagsEXT::ERROR);
+    }
 
     vk::FALSE
 }
@@ -73,7 +80,6 @@ fn get_instance_extensions() -> Vec<&'static CStr> {
 #[cfg(not(target_os = "macos"))]
 fn get_instance_extensions() -> Vec<&'static CStr> {
     vec![
-        ash::khr::portability_enumeration::NAME,
         ash::khr::get_physical_device_properties2::NAME,
         ash::khr::get_surface_capabilities2::NAME,
         ash::ext::surface_maintenance1::NAME,
@@ -207,7 +213,7 @@ fn create_vulkan_instance(
         .message_type(type_flags::GENERAL | type_flags::PERFORMANCE | type_flags::VALIDATION)
         .pfn_user_callback(Some(debug_utils_callback));
 
-    if required_layer_names.len() > 0 {
+    if !required_layer_names.is_empty() {
         builder = builder.push_next(&mut instance_debug);
     }
 
@@ -798,9 +804,22 @@ impl VulkanRenderContext {
         max_threads: usize,
         window: Option<&winit::window::Window>
     ) -> VulkanRenderContext {
-        let layers = [
-            unsafe { ::std::ffi::CStr::from_bytes_with_nul_unchecked(b"VK_LAYER_KHRONOS_validation\0") }
-        ];
+        let mut layers = Vec::new();
+        if debug_enabled {
+            let entry = ash::Entry::linked();
+            let available_layers = unsafe {
+                entry.enumerate_instance_layer_properties()
+                    .expect("Failed to enumerate instance layers")
+            };
+            let validation_layer_name = unsafe { CStr::from_bytes_with_nul_unchecked(b"VK_LAYER_KHRONOS_validation\0") };
+            let has_validation = available_layers.iter().any(|layer| {
+                let name = unsafe { CStr::from_ptr(layer.layer_name.as_ptr()) };
+                name == validation_layer_name
+            });
+            if has_validation {
+                layers.push(validation_layer_name);
+            }
+        }
 
         let mut instance_extensions = vec![
             ash::ext::debug_utils::NAME

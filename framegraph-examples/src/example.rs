@@ -16,4 +16,6 @@ pub trait Example {
         allocator: Arc<Mutex<ResourceAllocator>>,
         imgui_ui: &mut Ui,
         back_buffer: AttachmentReference) -> Vec<PassType>;
+
+    fn update(&mut self, _delta_time: f32) {}
 }

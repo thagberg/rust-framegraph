@@ -252,6 +252,13 @@ impl WindowedVulkanApp {
 
     #[tracing::instrument]
     pub fn draw_frame(&mut self) {
+        let delta_time = self.imgui.io().delta_time;
+        if let Some(index) = self.examples.active_example_index {
+            if let Some(active_example) = self.examples.examples.get_mut(index) {
+                active_example.update(delta_time);
+            }
+        }
+
         println!("Frame number: {}", self.frame_index);
         // wait for fence if necessary (can we avoid this using just semaphores?)
         let frame_fence = self.frame_fences[self.frame_index as usize];
