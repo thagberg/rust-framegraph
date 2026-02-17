@@ -122,7 +122,7 @@ impl WindowedVulkanApp {
             VulkanRenderContext::new(
                 &application_info,
                 true,
-                1,
+                2,
                 Some(&window))
         };
         render_context.init(1, Some(&window));
