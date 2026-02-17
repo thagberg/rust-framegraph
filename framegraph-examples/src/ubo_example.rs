@@ -153,9 +153,9 @@ impl UboExample {
         });
 
         let vert_shader = Arc::new(Mutex::new(
-            shader::create_shader_module_from_bytes(device.clone(), "ubo-vert", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/ubo-vert.spv")))));
+            shader::create_shader_module_from_bytes(device.clone(), "ubo-vert", include_bytes!(concat!(env!("SHADER_DIR"), "/ubo-vert.spv")))));
         let frag_shader = Arc::new(Mutex::new(
-            shader::create_shader_module_from_bytes(device.clone(), "ubo-frag", include_bytes!(concat!(env!("OUT_DIR"), "/shaders/ubo-frag.spv")))));
+            shader::create_shader_module_from_bytes(device.clone(), "ubo-frag", include_bytes!(concat!(env!("SHADER_DIR"), "/ubo-frag.spv")))));
 
         UboExample {
             uniform_buffer: Arc::new(Mutex::new(ubo)),

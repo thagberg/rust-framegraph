@@ -73,11 +73,11 @@ fn get_instance_extensions() -> Vec<&'static CStr> {
 #[cfg(not(target_os = "macos"))]
 fn get_instance_extensions() -> Vec<&'static CStr> {
     vec![
-        vk::KhrGetPhysicalDeviceProperties2Fn::name(),
-        vk::KhrGetSurfaceCapabilities2Fn::name(), // dependency of EXTSurfaceMaintenance1
-        vk::ExtSurfaceMaintenance1Fn::name(), // dependency of device extension EXTSwapchainMaintenance1
+        ash::khr::portability_enumeration::NAME,
+        ash::khr::get_physical_device_properties2::NAME,
+        ash::khr::get_surface_capabilities2::NAME,
+        ash::ext::surface_maintenance1::NAME,
         ash::ext::debug_utils::NAME
-        // use winit::platform::macos::WindowBuilderExtMacOS;
 
     ]
     // instance_extensions.push(vk::KhrPortabilityEnumerationFn::name());
@@ -96,7 +96,7 @@ fn get_logical_device_extensions() -> Vec<&'static CStr> {
 #[cfg(not(target_os = "macos"))]
 fn get_logical_device_extensions() -> Vec<&'static CStr> {
     vec![
-        ash::extensions::khr::Swapchain::name()
+        ash::khr::swapchain::NAME
     ]
 }
 
