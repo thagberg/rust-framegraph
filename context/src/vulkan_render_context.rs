@@ -96,7 +96,8 @@ fn get_logical_device_extensions() -> Vec<&'static CStr> {
 #[cfg(not(target_os = "macos"))]
 fn get_logical_device_extensions() -> Vec<&'static CStr> {
     vec![
-        ash::khr::swapchain::NAME
+        ash::khr::swapchain::NAME,
+        ash::ext::swapchain_maintenance1::NAME
     ]
 }
 
@@ -148,9 +149,34 @@ impl<'a> PhysicalDeviceFeatureChecker for HostQueryResetPhysicalDeviceFeature<'a
     }
 }
 
+struct SwapchainMaintenance1PhysicalDeviceFeature<'a> {
+    feature: vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT<'a>
+}
+
+impl<'a> SwapchainMaintenance1PhysicalDeviceFeature<'a> {
+    pub fn new() -> Self {
+        let feature = vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT::default()
+            .swapchain_maintenance1(true);
+        SwapchainMaintenance1PhysicalDeviceFeature {
+            feature: feature
+        }
+    }
+}
+
+impl<'a> PhysicalDeviceFeatureChecker for SwapchainMaintenance1PhysicalDeviceFeature<'a> {
+    fn add_feature<'b>(&'b mut self, device_features: PhysicalDeviceFeatures2<'b>) -> vk::PhysicalDeviceFeatures2<'b> {
+        device_features.push_next(&mut self.feature)
+    }
+
+    fn check_feature(&self) -> bool {
+        self.feature.swapchain_maintenance1 > 0
+    }
+}
+
 fn get_required_physical_device_features() -> Vec<Box<dyn PhysicalDeviceFeatureChecker>> {
     vec![
-        Box::new(HostQueryResetPhysicalDeviceFeature::new()) // required for GPU time querying for instrumentation
+        Box::new(HostQueryResetPhysicalDeviceFeature::new()), // required for GPU time querying for instrumentation
+        Box::new(SwapchainMaintenance1PhysicalDeviceFeature::new())
     ]
 }
 
