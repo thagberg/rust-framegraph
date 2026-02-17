@@ -34,7 +34,8 @@ pub enum DepthStencilType
 #[derive(Copy, Clone)]
 pub enum RasterizationType
 {
-    Standard
+    Standard,
+    CullBack
 }
 
 pub struct PipelineDescription
@@ -187,6 +188,20 @@ fn generate_rasteration_state<'n>(rasterization_type: RasterizationType) -> vk::
                 .flags(vk::PipelineRasterizationStateCreateFlags::empty())
                 .depth_clamp_enable(false)
                 .cull_mode(vk::CullModeFlags::NONE)
+                .front_face(vk::FrontFace::CLOCKWISE)
+                .line_width(1.0)
+                .polygon_mode(vk::PolygonMode::FILL)
+                .rasterizer_discard_enable(false)
+                .depth_bias_clamp(0.0)
+                .depth_bias_constant_factor(0.0)
+                .depth_bias_enable(false)
+                .depth_bias_slope_factor(0.0)
+        },
+        RasterizationType::CullBack => {
+            vk::PipelineRasterizationStateCreateInfo::default()
+                .flags(vk::PipelineRasterizationStateCreateFlags::empty())
+                .depth_clamp_enable(false)
+                .cull_mode(vk::CullModeFlags::BACK)
                 .front_face(vk::FrontFace::CLOCKWISE)
                 .line_width(1.0)
                 .polygon_mode(vk::PolygonMode::FILL)

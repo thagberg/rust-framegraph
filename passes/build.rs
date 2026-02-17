@@ -62,4 +62,6 @@ fn main() {
     compile_shaders(pass_vert_shaders, &out_dir);
     compile_shaders(pass_frag_shaders, &out_dir);
     compile_shaders(pass_compute_shaders, &out_dir);
+
+    println!("cargo:rustc-env=SHADER_DIR={}/shaders", out_dir);
 }

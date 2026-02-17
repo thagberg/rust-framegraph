@@ -108,7 +108,7 @@ impl Example for PhongExample {
             vec![vertex_binding],
             vertex_attributes,
             dynamic_states,
-            RasterizationType::Standard,
+            RasterizationType::CullBack,
             DepthStencilType::Disable,
             BlendType::None,
             "phong",
