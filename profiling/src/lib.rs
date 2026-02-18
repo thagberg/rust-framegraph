@@ -1,5 +1,3 @@
-use std::ops::DerefMut;
-use tracy_client;
 use std::sync::{Mutex};
 use ash::vk;
 use tracy_client::{GpuContext, GpuContextType, GpuSpan};
@@ -95,7 +93,7 @@ impl FrameSpans {
 
     pub fn flush(&mut self, device: &ash::Device) {
         // if query_index is still 0, we haven't written a query yet
-        if (self.query_index > 0) {
+        if self.query_index > 0 {
             unsafe {
                 device.get_query_pool_results(
                     self.query_pool,
@@ -238,51 +236,49 @@ impl GpuSpanManager {
 
             // query pools must be reset before they can be used
             for frame in &frames {
-                unsafe {
-                    device.reset_query_pool(
-                        frame.query_pool,
-                        0,
-                       frame.max_queries
-                    );
-                }
+                device.reset_query_pool(
+                    frame.query_pool,
+                    0,
+                    frame.max_queries
+                );
             }
 
             // initial timestamp query
             let mut timestamp_value: i64 = 0;
-            unsafe {
 
-                let begin_info = vk::CommandBufferBeginInfo::default()
-                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-                device.begin_command_buffer(*command_buffer, &begin_info);
+            let begin_info = vk::CommandBufferBeginInfo::default()
+                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+            device.begin_command_buffer(*command_buffer, &begin_info)
+                .expect("Failed to begin command buffer for profiling");
 
-                device.cmd_write_timestamp(
-                    *command_buffer,
-                    vk::PipelineStageFlags::ALL_GRAPHICS,
-                    frames[0].query_pool.clone(),
-                    0
-                );
+            device.cmd_write_timestamp(
+                *command_buffer,
+                vk::PipelineStageFlags::ALL_GRAPHICS,
+                frames[0].query_pool.clone(),
+                0
+            );
 
-                device.end_command_buffer(*command_buffer);
+            device.end_command_buffer(*command_buffer)
+                .expect("Failed to end command buffer for profiling");
 
-                let submit_info = vk::SubmitInfo::default()
-                    .command_buffers(std::slice::from_ref(command_buffer));
+            let submit_info = vk::SubmitInfo::default()
+                .command_buffers(std::slice::from_ref(command_buffer));
 
-                device.queue_submit(
-                    queue.clone(),
-                    std::slice::from_ref(&submit_info),
-                    vk::Fence::null()
-                ).expect("Failed to submit queue for profiling");
+            device.queue_submit(
+                queue.clone(),
+                std::slice::from_ref(&submit_info),
+                vk::Fence::null()
+            ).expect("Failed to submit queue for profiling");
 
-                device.device_wait_idle()
-                    .expect("Failed to wait for idle for profiling");
+            device.device_wait_idle()
+                .expect("Failed to wait for idle for profiling");
 
-                device.get_query_pool_results(
-                    frames[0].query_pool,
-                    0,
-                    std::slice::from_mut(&mut timestamp_value),
-                    vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT
-                ).expect("Failed to retrieve initial GPU timestamp");
-            }
+            device.get_query_pool_results(
+                frames[0].query_pool,
+                0,
+                std::slice::from_mut(&mut timestamp_value),
+                vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT
+            ).expect("Failed to retrieve initial GPU timestamp");
 
             let tc = tracy_client::Client::start();
             let gpu_context = tc.new_gpu_context(
@@ -314,7 +310,7 @@ impl GpuSpanManager {
         }
     }
 
-    fn flush(&mut self, device: &ash::Device) {
+    fn _flush(&mut self, device: &ash::Device) {
         match self.frames.get_mut(self.frame_index) {
             None => {
                 panic!("Attempting to flush GpuSpanManager frame with invalid index");

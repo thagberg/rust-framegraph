@@ -1,4 +1,3 @@
-use std::sync::{Arc, Mutex};
 use ash::vk;
 use api_types::device::interface::DeviceInterface;
 
@@ -10,7 +9,7 @@ pub enum ThreadType {
 pub struct PerThread {
     device: DeviceInterface,
     // TODO: how do I make this member private?
-    thread_type: ThreadType,
+    _thread_type: ThreadType,
     graphics_pool: vk::CommandPool,
     compute_pool: vk::CommandPool,
     pub descriptor_pool: vk::DescriptorPool,
@@ -60,7 +59,7 @@ impl PerThread {
         num_graphics_buffers: u32,
         num_compute_buffers: u32) -> Self {
 
-        let command_buffer_level = match(thread_type) {
+        let command_buffer_level = match thread_type {
             ThreadType::Main => { vk::CommandBufferLevel::PRIMARY}
             ThreadType::Worker => { vk::CommandBufferLevel::SECONDARY}
         };
@@ -88,7 +87,7 @@ impl PerThread {
 
         PerThread {
             device: device.clone(),
-            thread_type,
+            _thread_type: thread_type,
             graphics_pool,
             compute_pool,
             descriptor_pool,

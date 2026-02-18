@@ -1,4 +1,3 @@
-use std::sync::{Arc, Mutex};
 use api_types::device::interface::DeviceInterface;
 
 pub trait RenderContext  {

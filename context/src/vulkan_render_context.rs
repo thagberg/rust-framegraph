@@ -1,17 +1,13 @@
-use std::cell::RefCell;
 use std::ffi::{c_void, CStr};
 use std::fmt::{Debug, Formatter};
 use std::os::raw::c_char;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::thread::Thread;
 use ash::{vk};
-use ash::vk::{ExtendsPhysicalDeviceFeatures2, PFN_vkGetPhysicalDeviceFeatures2, PhysicalDeviceFeatures2, PresentModeKHR};
+use ash::vk::{PhysicalDeviceFeatures2, PresentModeKHR};
 
 use ash::vk::DebugUtilsMessageSeverityFlagsEXT as severity_flags;
 use ash::vk::DebugUtilsMessageTypeFlagsEXT as type_flags;
-use num::complex::ComplexFloat;
 use api_types::device::debug::VulkanDebug;
 use api_types::device::physical::PhysicalDeviceWrapper;
 use api_types::device::interface::DeviceInterface;
@@ -35,7 +31,7 @@ unsafe extern "system" fn debug_utils_callback(
     severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     message_type: vk::DebugUtilsMessageTypeFlagsEXT,
     p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
-    p_user_data: *mut c_void
+    _p_user_data: *mut c_void
 ) -> vk::Bool32 {
     let severity_str = match severity {
         vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => "[Verbose]",
@@ -284,22 +280,20 @@ pub fn are_extensions_supported(
     required_extensions: &[&CStr]
 ) -> bool {
     // let available_extensions: Vec<&CStr> = unsafe {
-    let extension_properties;
-    let mut available_extensions: Vec<&CStr> = unsafe {
-        extension_properties = instance.get().enumerate_device_extension_properties(physical_device)
-        .expect("Failed to enumerate extensions from physical device.");
-
-        extension_properties
+    let extension_properties = unsafe {
+        instance.get().enumerate_device_extension_properties(physical_device)
+        .expect("Failed to enumerate extensions from physical device.")
+    };
+    let available_extensions: Vec<&CStr> = extension_properties
         .iter()
         .map(|extension| {
-            CStr::from_ptr(extension.extension_name.as_ptr())
+            unsafe { CStr::from_ptr(extension.extension_name.as_ptr()) }
         })
-        .collect()
-    };
+        .collect();
 
-    let available_extensions_length = available_extensions.len();
+    let _available_extensions_length = available_extensions.len();
     for ext in &available_extensions {
-        let s = ext.to_str().unwrap().to_string();
+        let _s = ext.to_str().unwrap().to_string();
     }
 
 
@@ -338,7 +332,7 @@ fn is_physical_device_suitable(
         // the scope of physical_device_features to ensure the borrows are released quickly
         let mut physical_device_features = vk::PhysicalDeviceFeatures2::default();
         // for mut required_feature in &mut copy_features {
-        for mut required_feature in &mut required_features {
+        for required_feature in &mut required_features {
             physical_device_features = required_feature.add_feature(physical_device_features);
         }
 
@@ -421,7 +415,7 @@ fn pick_physical_device(
 
 fn create_logical_device(
     instance: &InstanceWrapper,
-    physical_device_properties: vk::PhysicalDeviceProperties,
+    _physical_device_properties: vk::PhysicalDeviceProperties,
     mut debug: Option<VulkanDebug>,
     physical_device: &PhysicalDeviceWrapper,
     surface: &Option<SurfaceWrapper>,
@@ -456,12 +450,12 @@ fn create_logical_device(
     let mut physical_device_features = vk::PhysicalDeviceFeatures2::default();
     // TODO: make this an argument rather than a function call here
     let mut required_features = get_required_physical_device_features();
-    for mut required_feature in &mut required_features {
+    for required_feature in &mut required_features {
         physical_device_features = required_feature.add_feature(physical_device_features);
     }
 
     // convert layer names to const char*
-    let p_layers: Vec<*const c_char> = layers.iter().map(|c_layer| {
+    let _p_layers: Vec<*const c_char> = layers.iter().map(|c_layer| {
         c_layer.as_ptr()
     }).collect();
 
@@ -472,7 +466,6 @@ fn create_logical_device(
 
     let device_create_info = vk::DeviceCreateInfo::default()
         .queue_create_infos(&queue_create_infos)
-        .enabled_layer_names(&p_layers)
         .enabled_extension_names(&p_extensions)
         .push_next(&mut physical_device_features);
 
@@ -752,7 +745,7 @@ pub struct VulkanRenderContext {
     swapchain_index: AtomicU32,
     graphics_queue: vk::Queue,
     present_queue: vk::Queue,
-    compute_queue: vk::Queue,
+    _compute_queue: vk::Queue,
     main_thread_objects: Vec<PerThread>,
     worker_thread_objects: Vec<PerThread>,
     swapchain: Arc<Mutex<Option<SwapchainWrapper>>>,
@@ -763,7 +756,7 @@ pub struct VulkanRenderContext {
     physical_device: PhysicalDeviceWrapper,
     surface: Option<SurfaceWrapper>,
     instance: InstanceWrapper,
-    entry: ash::Entry
+    _entry: ash::Entry
 }
 
 impl Debug for VulkanRenderContext {
@@ -801,7 +794,7 @@ impl VulkanRenderContext {
     pub fn new(
         application_info: &vk::ApplicationInfo,
         debug_enabled: bool,
-        max_threads: usize,
+        _max_threads: usize,
         window: Option<&winit::window::Window>
     ) -> VulkanRenderContext {
         let mut layers = Vec::new();
@@ -846,7 +839,7 @@ impl VulkanRenderContext {
             &layers,
             &instance_extensions);
 
-        let mut handle_generator = HandleGenerator::new();
+        let handle_generator = HandleGenerator::new();
 
         let debug = {
             if debug_enabled {
@@ -918,15 +911,15 @@ impl VulkanRenderContext {
 
         let frame_index = 0;
 
-        let mut context = VulkanRenderContext {
+        let context = VulkanRenderContext {
             handle_generator: Mutex::new(handle_generator),
-            entry,
+            _entry: entry,
             instance: instance_wrapper,
             device: logical_device,
             physical_device,
             graphics_queue,
             present_queue,
-            compute_queue,
+            _compute_queue: compute_queue,
             surface: surface_wrapper,
             // swapchain,
             swapchain: Arc::new(Mutex::new(None)),
@@ -985,7 +978,7 @@ impl VulkanRenderContext {
         self.swapchain_semaphores = {
             let mut semaphores: Vec<vk::Semaphore> = Vec::new();
             let swapchain_length = self.get_max_frames_in_flight();
-            for i in 0..swapchain_length {
+            for _ in 0..swapchain_length {
                 let create_info = vk::SemaphoreCreateInfo::default();
 
                 semaphores.push(unsafe {
@@ -1001,7 +994,7 @@ impl VulkanRenderContext {
 
         let mut main_thread_objects: Vec<PerThread> = Vec::new();
         main_thread_objects.reserve(max_frames_in_flight as usize);
-        for i in (0..main_thread_objects.capacity()) {
+        for _ in 0..main_thread_objects.capacity() {
             main_thread_objects.push(create_per_thread_objects(
                 &self.device,
                 &descriptor_pool_sizes,
@@ -1013,7 +1006,7 @@ impl VulkanRenderContext {
 
         let mut worker_thread_objects: Vec<PerThread> = Vec::new();
         worker_thread_objects.reserve(max_threads);
-        for i in (0..worker_thread_objects.capacity()) {
+        for _ in 0..worker_thread_objects.capacity() {
             worker_thread_objects.push(create_per_thread_objects(
                 &self.device,
                 &descriptor_pool_sizes,
@@ -1290,10 +1283,6 @@ impl VulkanRenderContext {
 
         let raw_swapchain = swapchain.get();
         let swapchain_index = self.swapchain_index.load(Ordering::Relaxed);
-        let mut present_info = vk::PresentInfoKHR::default()
-            .wait_semaphores(wait_semaphores)
-            .swapchains(std::slice::from_ref(&raw_swapchain))
-            .image_indices(std::slice::from_ref(&swapchain_index));
 
         // wait for and reset the presentation fence
         let present_fence = self.present_fences.lock().unwrap()[swapchain_index as usize];
@@ -1312,7 +1301,11 @@ impl VulkanRenderContext {
         let mut swapchain_fence = vk::SwapchainPresentFenceInfoEXT::default()
             .fences(std::slice::from_ref(&present_fence));
 
-        let resolved_present_info = present_info.push_next(&mut swapchain_fence);
+        let resolved_present_info = vk::PresentInfoKHR::default()
+            .wait_semaphores(wait_semaphores)
+            .swapchains(std::slice::from_ref(&raw_swapchain))
+            .image_indices(std::slice::from_ref(&swapchain_index))
+            .push_next(&mut swapchain_fence);
 
         let is_suboptimal = unsafe {
             swapchain.get_loader().queue_present(
