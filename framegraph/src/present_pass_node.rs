@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use api_types::device::resource::DeviceResource;
 use crate::pass_node::PassNode;
@@ -31,7 +29,7 @@ impl PresentPassNodeBuilder {
         self
     }
 
-    pub fn build(mut self) -> Result<PresentPassNode, &'static str> {
+    pub fn build(self) -> Result<PresentPassNode, &'static str> {
         if let Some(swapchain_image) = self.swapchain_image {
             Ok(PresentPassNode {
                 swapchain_image,

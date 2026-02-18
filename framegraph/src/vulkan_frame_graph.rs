@@ -1,18 +1,18 @@
-extern crate petgraph;
-
-use std::cell::RefCell;
-use log::trace;
-
-use petgraph::stable_graph::{NodeIndex, StableDiGraph};
-extern crate multimap;
-use multimap::MultiMap;
-use tracing::{span, Level, debug, error, info, warn};
-
-extern crate context;
-use context::render_context::{RenderContext};
-
+use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
+use std::ops::{Deref, DerefMut};
+use std::sync::{Arc, Mutex, RwLock};
 use ash::vk;
+use ash::vk::DeviceSize;
+use petgraph::stable_graph::{NodeIndex, StableDiGraph};
+use petgraph::visit::Dfs;
+use multimap::MultiMap;
+use tracing::{span, Level, warn, trace};
+use log::trace as log_trace;
+use rayon::iter::IntoParallelRefIterator;
 use rayon::prelude::*;
+
+use context::render_context::{RenderContext};
 use crate::frame::Frame;
 use crate::frame_graph::FrameGraph;
 use crate::pass_node::PassNode;
@@ -21,14 +21,6 @@ use crate::graphics_pass_node::{GraphicsPassNode};
 use crate::pipeline::{Pipeline, VulkanPipelineManager};
 use crate::renderpass_manager::VulkanRenderpassManager;
 
-use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
-use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
-use std::sync::{Arc, Mutex, RwLock};
-use ash::vk::DeviceSize;
-use petgraph::data::DataMap;
-use petgraph::visit::Dfs;
 use api_types::buffer::BufferWrapper;
 use api_types::device::interface::DeviceInterface;
 use api_types::image::ImageWrapper;
@@ -37,7 +29,7 @@ use context::vulkan_render_context::VulkanRenderContext;
 use profiling::enter_span;
 use crate::attachment::AttachmentReference;
 use crate::barrier::{BufferBarrier, ImageBarrier};
-use crate::command_list::{CommandList, QueueWait};
+use crate::command_list::{CommandList};
 use crate::compute_pass_node::ComputePassNode;
 use crate::copy_pass_node::CopyPassNode;
 use crate::pass_type::PassType;
@@ -257,9 +249,9 @@ impl DescriptorUpdate {
     }
 }
 
-fn resolve_descriptors<'a, 'b>(
+fn resolve_descriptors(
     bindings: &[ResourceBinding],
-    pipeline: &Pipeline,
+    _pipeline: &Pipeline,
     descriptor_sets: &[vk::DescriptorSet],
     descriptor_updates: &mut DescriptorUpdate) {
     enter_span!(tracing::Level::TRACE, "Resolve descriptors");
@@ -490,7 +482,7 @@ fn link_present_node<'a>(node: &'a mut PresentPassNode, usage_cache: &'a mut Has
     // link_inputs(gn.get_inputs(), &mut node_barrier, &mut usage_cache);
     let mut swapchain = node.swapchain_image.lock().unwrap();
     let handle = swapchain.get_handle();
-    let mut swapchain_image = swapchain.get_image_mut();
+    let swapchain_image = swapchain.get_image_mut();
     let last_usage = {
         let usage = usage_cache.get(&handle);
         match usage {
@@ -617,7 +609,7 @@ impl VulkanFrameGraph {
 
         // unresolved and unused passes have been removed from the graph,
         // so now we can use a topological sort to generate an execution order
-        let mut sorted_nodes: Vec<NodeIndex> = Vec::new();
+        let sorted_nodes: Vec<NodeIndex>;
         {
             let sort_result = petgraph::algo::toposort(&*nodes, None);
             match sort_result {
@@ -625,7 +617,7 @@ impl VulkanFrameGraph {
                     // DFS requires we order nodes as input -> output, but for sorting we want output -> input
                     sorted_list.reverse();
                     for i in &sorted_list {
-                        log::trace!(target: "framegraph", "Sorted node: {:?}", nodes.node_weight(*i).unwrap().read().unwrap().get_name())
+                        log_trace!(target: "framegraph", "Sorted node: {:?}", nodes.node_weight(*i).unwrap().read().unwrap().get_name())
                     }
                     sorted_nodes = sorted_list;
                 },

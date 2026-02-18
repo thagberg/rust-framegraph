@@ -4,15 +4,13 @@ use std::sync::{Arc, Mutex};
 use ash::vk;
 use ash::vk::DeviceSize;
 use gpu_allocator::MemoryLocation;
-use image::{DynamicImage, GenericImageView, ImageReader};
+use image::{DynamicImage, ImageReader};
 use image::DynamicImage::*;
 use api_types::buffer::BufferCreateInfo;
 use api_types::device::allocator::ResourceAllocator;
 use api_types::device::interface::DeviceInterface;
-use api_types::device::queue::QueueFamilies;
 use api_types::device::resource::{DeviceResource, ResourceType};
 use api_types::image::{ImageCreateInfo, ImageType};
-use context::vulkan_render_context::VulkanRenderContext;
 
 pub fn create_from_bytes<'b>(
     image_handle: u64,

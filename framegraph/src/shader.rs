@@ -1,8 +1,6 @@
-use std::cell::RefCell;
 use std::fs;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use ash::vk;

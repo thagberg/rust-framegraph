@@ -1,8 +1,6 @@
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
-use std::ffi::CString;
 use std::fmt::{Debug, Formatter};
-use std::hash::{Hash, Hasher};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::{Arc, Mutex};
 
 use ash::vk;
@@ -12,8 +10,6 @@ use crate::shader::{Shader, ShaderManager};
 use api_types::pipeline::DevicePipeline;
 use api_types::device::interface::DeviceInterface;
 
-extern crate context;
-use context::vulkan_render_context::VulkanRenderContext;
 use profiling::enter_span;
 
 #[derive(Copy, Clone)]
@@ -81,10 +77,6 @@ impl PipelineDescription
         vertex_shader: Arc<Mutex<Shader>>,
         fragment_shader: Arc<Mutex<Shader>>) -> Self
     {
-        let vertex_input = vk::PipelineVertexInputStateCreateInfo::default()
-            .vertex_binding_descriptions(&vertex_binding_descriptions)
-            .vertex_attribute_descriptions(&vertex_attribute_descriptions);
-
         PipelineDescription {
             vertex_binding_descriptions,
             vertex_attribute_descriptions,
@@ -210,9 +202,6 @@ fn generate_rasteration_state<'n>(rasterization_type: RasterizationType) -> vk::
                 .depth_bias_constant_factor(0.0)
                 .depth_bias_enable(false)
                 .depth_bias_slope_factor(0.0)
-        },
-        _ => {
-            panic!("Invalid Rasterization Type")
         }
     }
 }
@@ -337,7 +326,7 @@ fn create_descriptor_set_layouts(device: DeviceInterface, full_bindings: &HashMa
 
     // then fill the DescriptorSetLayout vector, using null layouts to fill the holes
     // e.g. if a pipeline explicitly uses sets 0 and 2, set 1 will be a null handle
-    for set in (0..=highest_set) {
+    for set in 0..=highest_set {
         if let Some(bindings) = full_bindings.get(&set) {
             let layout_create_info = vk::DescriptorSetLayoutCreateInfo::default()
                 .bindings(&bindings);
@@ -380,7 +369,7 @@ impl VulkanPipelineManager {
         match pipeline_val {
             Some(pipeline) => { pipeline.clone() },
             None => {
-                let mut compute_shader_module = self.shader_manager.load_shader(
+                let compute_shader_module = self.shader_manager.load_shader(
                     device.clone(),
                     &pipeline_description.compute_name);
                 let mut compute_shader_ref = compute_shader_module.lock().unwrap();

@@ -1,11 +1,8 @@
-use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
-use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 use ash::vk;
 use petgraph::stable_graph::{StableDiGraph, NodeIndex};
 use api_types::device::interface::DeviceInterface;
-use crate::graphics_pass_node::GraphicsPassNode;
 use crate::pass_type::PassType;
 
 #[derive(Eq, PartialEq, Debug)]

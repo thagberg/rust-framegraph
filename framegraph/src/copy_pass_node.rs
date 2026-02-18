@@ -3,7 +3,6 @@ use std::sync::{Arc, Mutex};
 use ash::vk::CommandBuffer;
 use api_types::device::resource::DeviceResource;
 use api_types::device::interface::DeviceInterface;
-use context::vulkan_render_context::VulkanRenderContext;
 use crate::pass_node::{FillCallback, PassNode};
 
 pub struct CopyPassNode {

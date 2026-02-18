@@ -1,6 +1,5 @@
 use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Mutex};
-use api_types::device;
 use api_types::device::interface::DeviceInterface;
 use ash::vk;
 use api_types::device::resource::DeviceResource;
