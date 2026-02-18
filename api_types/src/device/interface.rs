@@ -3,7 +3,7 @@ use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use ash::vk;
-use ash::vk::{DebugUtilsLabelEXT, DebugUtilsObjectNameInfoEXT, Handle, ObjectType};
+use ash::vk::{DebugUtilsObjectNameInfoEXT};
 use gpu_allocator::MemoryLocation;
 use crate::buffer::{BufferCreateInfo, BufferWrapper};
 use crate::device::debug::VulkanDebug;
@@ -322,7 +322,7 @@ impl DeviceInterface {
         let allocation = device_buffer.allocation.as_ref()
             .expect("Cannot update buffer with no allocation");
         if let Some(resolved_resource) = &device_buffer.resource_type {
-            if let ResourceType::Buffer(resolved_buffer) = &resolved_resource {
+            if let ResourceType::Buffer(_) = &resolved_resource {
                 let mapped_range = unsafe {
                     vk::MappedMemoryRange::default()
                         .memory(allocation.memory())

@@ -2,13 +2,13 @@ use std::fmt::{Debug, Formatter};
 use std::os::raw::{c_char};
 use ash::vk;
 use ash::khr::surface as ash_surface;
-use winit::raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use crate::device::physical::PhysicalDeviceWrapper;
 
 
 pub fn get_required_surface_extensions(window: &winit::window::Window) -> &'static [*const c_char] {
-    let handle = window.raw_display_handle();
-    ash_window::enumerate_required_extensions(handle.unwrap())
+    let handle = window.display_handle();
+    ash_window::enumerate_required_extensions(handle.unwrap().as_raw())
         .expect("Failed to find required surface extension names")
 }
 
@@ -55,8 +55,8 @@ impl SurfaceWrapper {
             ash_window::create_surface(
                 entry,
                 instance,
-                window.raw_display_handle().unwrap(),
-                window.raw_window_handle().unwrap(),
+                window.display_handle().unwrap().as_raw(),
+                window.window_handle().unwrap().as_raw(),
                 None)
                 .expect("Failed to create window surface")
         };

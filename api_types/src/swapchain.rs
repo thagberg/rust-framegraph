@@ -1,11 +1,7 @@
-use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-use ash::prelude::VkResult;
 use ash::vk;
 use ash::khr::swapchain as ash_swapchain;
-use crate::device::interface::DeviceInterface;
 use crate::device::resource::DeviceResource;
 
 #[derive(PartialEq, Eq)]

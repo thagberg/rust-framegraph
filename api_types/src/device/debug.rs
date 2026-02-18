@@ -1,7 +1,6 @@
 use std::ffi::CString;
 use std::fmt::{Debug, Formatter};
 // use ash::extensions::ext::DebugUtils;
-use ash::ext::debug_utils::Device;
 use ash::vk;
 use ash::vk::{DebugUtilsLabelEXT, DebugUtilsMessengerEXT, DebugUtilsObjectNameInfoEXT};
 

@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Mutex};
 use ash::vk::Handle;
-use gpu_allocator::vulkan::{Allocation, Allocator};
+use gpu_allocator::vulkan::{Allocation};
 use crate::buffer::BufferWrapper;
 use crate::device::allocator::ResourceAllocator;
 use crate::device::interface::DeviceInterface;
