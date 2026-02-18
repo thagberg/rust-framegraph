@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use ash::vk;
 use gpu_allocator::MemoryLocation;
@@ -8,8 +6,6 @@ use api_types::device::resource::DeviceResource;
 use api_types::device::interface::DeviceInterface;
 use api_types::image::{ImageCreateInfo, ImageType};
 
-use context::render_context::RenderContext;
-use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::binding::{BindingInfo, BindingType, ImageBindingInfo, ResourceBinding};
 use framegraph::compute_pass_node::ComputePassNode;
 use framegraph::pass_type::PassType;

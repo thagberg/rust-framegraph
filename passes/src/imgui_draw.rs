@@ -1,13 +1,9 @@
-use std::cell::RefCell;
 use std::ffi::c_void;
 use std::fmt::{Debug, Formatter};
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use ash::vk;
-use ash::vk::{DeviceSize, Handle};
 use gpu_allocator::MemoryLocation;
 use imgui::{DrawData, DrawVert, DrawIdx};
-use log::warn;
 
 use tracing;
 use api_types::buffer::BufferCreateInfo;
@@ -15,7 +11,6 @@ use api_types::device::allocator::ResourceAllocator;
 use api_types::device::resource::{DeviceResource, ResourceType};
 use api_types::device::interface::DeviceInterface;
 
-use context::render_context::RenderContext;
 use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::attachment::AttachmentReference;
 use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding};
@@ -60,8 +55,8 @@ const IMGUI_VERTEX_ATTRIBUTES: [vk::VertexInputAttributeDescription; 3] = [
 ];
 
 pub struct DisplayBuffer {
-    scale: [f32; 2],
-    pos: [f32; 2]
+    _scale: [f32; 2],
+    _pos: [f32; 2]
 }
 
 pub struct ImguiRender {
@@ -204,8 +199,8 @@ impl ImguiRender {
                 display_pos[1] = -1.0 - draw_data.display_pos[1] * display_scale[1];
 
                 let display_value = DisplayBuffer {
-                    scale: display_scale,
-                    pos: display_pos
+                    _scale: display_scale,
+                    _pos: display_pos
                 };
 
                 unsafe {
