@@ -1,11 +1,9 @@
-use alloc::rc::Rc;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::ops::Mul;
 use std::sync::{Arc, Mutex};
 use ash::vk;
-use ash::vk::{Handle};
 use imgui::{Condition, Ui};
 use gltf::{Semantic};
 use gltf::accessor::{DataType, Dimensions};
@@ -28,7 +26,6 @@ use api_types::device::allocator::ResourceAllocator;
 use api_types::device::resource::{DeviceResource, ResourceType};
 use api_types::device::interface::DeviceInterface;
 use api_types::image::{ImageCreateInfo, ImageType};
-use context::render_context::RenderContext;
 use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding};
 use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
 use framegraph::shader;
@@ -155,10 +152,7 @@ fn get_vk_format(data_type: DataType, dimensions: Dimensions) -> vk::Format {
         num_components
     };
 
-    let result = unsafe {
-        *FORMAT_LOOKUP.get(&key).expect("Invalid format or num components")
-    };
-    result
+    *FORMAT_LOOKUP.get(&key).expect("Invalid format or num components")
 }
 
 pub enum GlmType {
@@ -420,7 +414,7 @@ impl Example for ModelExample {
             };
 
             let dynamic_states = vec!(vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR);
-            let vertex_input = vk::PipelineVertexInputStateCreateInfo::default()
+            let _vertex_input = vk::PipelineVertexInputStateCreateInfo::default()
                 .vertex_binding_descriptions(std::slice::from_ref(&render_mesh.vertex_binding))
                 .vertex_attribute_descriptions(&render_mesh.vertex_attributes);
 
@@ -640,7 +634,6 @@ impl ModelExample {
                                 }
                             };
 
-                            let mode = primitive.mode();
                             let mut num_indices = 0;
                             if let Some(indices_accessor) = primitive.indices() {
                                 // * create GPU index buffer
@@ -774,7 +767,7 @@ impl ModelExample {
                                     // source_offset is the offset into the source buffer defined by the buffer view (base) and the accessor
                                     let mut source_offset = view.offset() + attribute_accessor.offset();
 
-                                    for i in (0..vertex_count) {
+                                    for i in 0..vertex_count {
                                         let vertex = vertices.get_mut(i).unwrap();
 
                                         let glm_value = unsafe {
@@ -812,7 +805,7 @@ impl ModelExample {
                                     }
                                 } else {
                                     // use default values
-                                    for i in (0..vertex_count) {
+                                    for i in 0..vertex_count {
                                         let vertex = vertices.get_mut(i).unwrap();
 
                                         match semantic {
@@ -835,7 +828,7 @@ impl ModelExample {
                                     //     vertices.as_ptr(),
                                     //     mapped_memory as *mut Vert,
                                     //     vertices.len());
-                                    for i in (0..vertex_count) {
+                                    for i in 0..vertex_count {
                                         let vertex = &vertices[i];
 
                                         let offset = i * std::mem::size_of::<Vert>();
@@ -862,15 +855,15 @@ impl ModelExample {
                             let mut albedo_dev_tex: Option<Arc<Mutex<DeviceResource>>> = None;
                             {
                                 let material = primitive.material();
-                                if let Some(material_id) = material.index() {
+                                if let Some(_material_id) = material.index() {
                                     if let Some(albedo_tex) = material.pbr_metallic_roughness().base_color_texture() {
                                         // create device image from image bytes
                                         let image_source = albedo_tex.texture().source().source();
                                         match image_source {
-                                            Source::View{view, mime_type } => {
-                                                let buffer_data = duck_gltf.buffers.get(view.buffer().index())
+                                            Source::View{view, mime_type: _ } => {
+                                                let _buffer_data = duck_gltf.buffers.get(view.buffer().index())
                                                     .expect("Failed to get buffer data for image");
-                                                let source_offset = view.offset();
+                                                let _source_offset = view.offset();
                                                 // util::image::create_from_bytes(
                                                 //     device.clone(),
                                                 //     render_context)
@@ -884,7 +877,7 @@ impl ModelExample {
                                                 //     mapped_memory as *mut u8,
                                                 //     ibo_size);
                                             }
-                                            Source::Uri{ uri, mime_type } => {
+                                            Source::Uri{ uri, mime_type: _ } => {
                                                 let mut tex = util::image::create_from_uri(
                                                     0, // TODO: create image handle
                                                     device.clone(),

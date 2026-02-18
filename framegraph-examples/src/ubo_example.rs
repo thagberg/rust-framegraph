@@ -1,6 +1,4 @@
 use core::ffi::c_void;
-use alloc::rc::Rc;
-use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use ash::vk;
 use gpu_allocator::MemoryLocation;
@@ -9,8 +7,6 @@ use api_types::buffer::BufferCreateInfo;
 use api_types::device::allocator::ResourceAllocator;
 use api_types::device::resource::DeviceResource;
 use api_types::device::interface::DeviceInterface;
-use context::render_context::RenderContext;
-use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::attachment::AttachmentReference;
 use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ResourceBinding};
 use framegraph::graphics_pass_node::GraphicsPassNode;
@@ -40,10 +36,6 @@ impl Example for UboExample {
         _allocator: Arc<Mutex<ResourceAllocator>>,
         _imgui_ui: &mut Ui,
         back_buffer: AttachmentReference) -> Vec<PassType> {
-
-        let vertex_state_create = vk::PipelineVertexInputStateCreateInfo::default()
-            .vertex_attribute_descriptions(&[])
-            .vertex_binding_descriptions(&[]);
 
         let dynamic_states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
 

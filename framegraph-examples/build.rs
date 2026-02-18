@@ -1,7 +1,6 @@
 extern crate glob;
 
 use std::process::Command;
-use std::env;
 
 use glob::{glob, Paths};
 
@@ -64,4 +63,5 @@ fn main() {
     compile_shaders(pass_vert_shaders, &out_dir);
     compile_shaders(pass_frag_shaders, &out_dir);
     compile_shaders(pass_compute_shaders, &out_dir);
+    println!("cargo:rustc-env=SHADER_DIR={}", std::fs::canonicalize("shaders/build").expect("Could not canonicalize shader build dir").to_str().unwrap());
 }

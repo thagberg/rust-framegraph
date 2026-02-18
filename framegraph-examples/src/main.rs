@@ -10,22 +10,18 @@ extern crate core;
 
 use core::fmt::{Debug, Formatter};
 use std::ffi::CString;
-use std::mem::swap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use ash::vk;
-
-use simple_logger::SimpleLogger;
 
 use tracing_subscriber::layer::SubscriberExt;
 use winit;
 use winit::window::{Window, WindowBuilder};
 use winit::event::{Event, WindowEvent};
-use winit::event_loop::{EventLoop, ControlFlow};
+use winit::event_loop::EventLoop;
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use imgui;
 use imgui::BackendFlags;
-use tracy_client::span_location;
 use winit::error::EventLoopError;
 use api_types::device::allocator::ResourceAllocator;
 use api_types::swapchain::SwapchainStatus;
@@ -35,9 +31,7 @@ use framegraph::attachment::AttachmentReference;
 use framegraph::frame::Frame;
 use framegraph::frame_graph::FrameGraph;
 use framegraph::pass_type::PassType;
-use framegraph::pipeline::VulkanPipelineManager;
 use framegraph::present_pass_node::PresentPassNode;
-use framegraph::renderpass_manager::VulkanRenderpassManager;
 use framegraph::vulkan_frame_graph::VulkanFrameGraph;
 use passes::imgui_draw::ImguiRender;
 use passes::clear;
@@ -47,7 +41,7 @@ use crate::ubo_example::UboExample;
 use crate::phong_example::PhongExample;
 use crate::deferred_example::DeferredExample;
 
-const MAX_FRAMES_IN_FLIGHT: u32 = 2;
+const _MAX_FRAMES_IN_FLIGHT: u32 = 2;
 
 struct Examples {
     examples: Vec<Box<dyn Example>>,
@@ -106,7 +100,7 @@ impl WindowedVulkanApp {
             .with_inner_size(winit::dpi::PhysicalSize::new(width, height))
             .build(event_loop)
             .expect("Failed to create window");
-        let scale_factor = window.scale_factor();
+        let _scale_factor = window.scale_factor();
 
         let mut imgui = imgui::Context::create();
         imgui.set_ini_filename(None);
@@ -201,7 +195,7 @@ impl WindowedVulkanApp {
         let mut frames: Vec<Option<Box<Frame>>> = Vec::new();
         frames.resize_with(max_frames_in_flight as usize, Default::default);
 
-        let mut app = WindowedVulkanApp {
+        let app = WindowedVulkanApp {
             window,
             platform,
             examples: Examples::new(examples),
@@ -289,7 +283,7 @@ impl WindowedVulkanApp {
             swapchain_image,
             swapchain_semaphore,
             descriptor_pool,
-            frame_index: render_ctx_frame_index,
+            frame_index: _render_ctx_frame_index,
             ..
         } = self.render_context.get_next_frame_objects();
 
@@ -319,9 +313,9 @@ impl WindowedVulkanApp {
         let ui = self.imgui.new_frame();
         {
             let _span = tracy_client::span!("Build UI");
-            if let Some(main_menu) = ui.begin_main_menu_bar() {
-                if let Some(file_menu) = ui.begin_menu("File") {}
-                if let Some(examples_menu) = ui.begin_menu("Examples") {
+            if let Some(_main_menu) = ui.begin_main_menu_bar() {
+                if let Some(_file_menu) = ui.begin_menu("File") {}
+                if let Some(_examples_menu) = ui.begin_menu("Examples") {
                     for (i, example) in &mut self.examples.examples.iter().enumerate() {
                         if ui.menu_item(example.get_name()) {
                             self.examples.active_example_index = Some(i);
@@ -481,6 +475,6 @@ fn main() {
     // create app
     let event_loop: EventLoop<()> = EventLoop::new().expect("Couldn't create EventLoop");
     let app = WindowedVulkanApp::new(&event_loop, "Examples", 1200, 800);
-    run(app, event_loop);
+    let _ = run(app, event_loop);
 
 }
