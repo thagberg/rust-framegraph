@@ -10,12 +10,10 @@ use gltf::accessor::{DataType, Dimensions};
 use gpu_allocator::MemoryLocation;
 use framegraph::attachment::AttachmentReference;
 use framegraph::pass_type::PassType;
-use once_cell::sync::Lazy;
 use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::shader::Shader;
 use util::camera::Camera;
-use util::math::DecomposedMatrix;
 use glm;
 use glm::Vec4;
 use gltf::camera::Projection;
@@ -41,36 +39,17 @@ struct Vert {
     pub uv: [f32; 2]
 }
 
-struct VertexAttributeAccessor<'a> {
-    view: Option<gltf::buffer::View<'a>>,
-    offset: usize,
-    count: usize,
-    size: usize
-}
-
-struct VertexAttribute<'a> {
-    location: u32,
-    format: vk::Format,
-    accessor: Option<gltf::Accessor<'a>>
-}
-
 pub struct GltfModel {
     document: gltf::Document,
     buffers: Vec<gltf::buffer::Data>,
-    images: Vec<gltf::image::Data>
+    _images: Vec<gltf::image::Data>
 }
 
 struct MVP {
-    model: glm::TMat4<f32>,
-    view: glm::TMat4<f32>,
-    proj: glm::TMat4<f32>
+    _model: glm::TMat4<f32>,
+    _view: glm::TMat4<f32>,
+    _proj: glm::TMat4<f32>
 }
-
-static ATTRIBUTE_LOOKUP: Lazy<HashMap<gltf::mesh::Semantic, u32>> = Lazy::new(|| HashMap::from([
-    (gltf::mesh::Semantic::Positions, 0),
-    (gltf::mesh::Semantic::Normals, 1),
-    (gltf::mesh::Semantic::TexCoords(0), 2)
-]));
 
 const VERTEX_BINDING:  vk::VertexInputBindingDescription = vk::VertexInputBindingDescription {
     binding: 0,
@@ -97,44 +76,45 @@ pub struct FormatKey {
 
 
 // static mut FORMAT_LOOKUP: Lazy<HashMap<FormatKey, vk::Format>> = Lazy::new(|| HashMap::new());
-static FORMAT_LOOKUP: Lazy<HashMap<FormatKey, vk::Format>> = Lazy::new(|| HashMap::from([
-    // I8 formats
-    (FormatKey { data_type: DataType::I8 as u8, num_components: 1, }, vk::Format::R8_SINT),
-    (FormatKey { data_type: DataType::I8 as u8, num_components: 2, }, vk::Format::R8G8_SINT),
-    (FormatKey { data_type: DataType::I8 as u8, num_components: 3, }, vk::Format::R8G8B8_SINT),
-    (FormatKey { data_type: DataType::I8 as u8, num_components: 4, }, vk::Format::R8G8B8A8_SINT),
+// static FORMAT_LOOKUP: Lazy<HashMap<FormatKey, vk::Format>> = Lazy::new(|| HashMap::from([
+//     // I8 formats
+//     (FormatKey { data_type: DataType::I8 as u8, num_components: 1, }, vk::Format::R8_SINT),
+//     (FormatKey { data_type: DataType::I8 as u8, num_components: 2, }, vk::Format::R8G8_SINT),
+//     (FormatKey { data_type: DataType::I8 as u8, num_components: 3, }, vk::Format::R8G8B8_SINT),
+//     (FormatKey { data_type: DataType::I8 as u8, num_components: 4, }, vk::Format::R8G8B8A8_SINT),
+// 
+//     // I16 formats
+//     (FormatKey { data_type: DataType::I16 as u8, num_components: 1, }, vk::Format::R16_SINT),
+//     (FormatKey { data_type: DataType::I16 as u8, num_components: 2, }, vk::Format::R16G16_SINT),
+//     (FormatKey { data_type: DataType::I16 as u8, num_components: 3, }, vk::Format::R16G16B16_SINT),
+//     (FormatKey { data_type: DataType::I16 as u8, num_components: 4, }, vk::Format::R16G16B16A16_SINT),
+// 
+//     // U8 formats
+//     (FormatKey { data_type: DataType::U8 as u8, num_components: 1, }, vk::Format::R8_UINT),
+//     (FormatKey { data_type: DataType::U8 as u8, num_components: 2, }, vk::Format::R8G8_UINT),
+//     (FormatKey { data_type: DataType::U8 as u8, num_components: 3, }, vk::Format::R8G8B8_UINT),
+//     (FormatKey { data_type: DataType::U8 as u8, num_components: 4, }, vk::Format::R8G8B8A8_UINT),
+// 
+//     // U16 formats
+//     (FormatKey { data_type: DataType::U16 as u8, num_components: 1, }, vk::Format::R16_UINT),
+//     (FormatKey { data_type: DataType::U16 as u8, num_components: 2, }, vk::Format::R16G16_UINT),
+//     (FormatKey { data_type: DataType::U16 as u8, num_components: 3, }, vk::Format::R16G16B16_UINT),
+//     (FormatKey { data_type: DataType::U16 as u8, num_components: 4, }, vk::Format::R16G16B16A16_UINT),
+// 
+//     // U32 formats
+//     (FormatKey { data_type: DataType::U32 as u8, num_components: 1, }, vk::Format::R32_UINT),
+//     (FormatKey { data_type: DataType::U32 as u8, num_components: 2, }, vk::Format::R32G32_UINT),
+//     (FormatKey { data_type: DataType::U32 as u8, num_components: 3, }, vk::Format::R32G32B32_UINT),
+//     (FormatKey { data_type: DataType::U32 as u8, num_components: 4, }, vk::Format::R32G32B32A32_UINT),
+// 
+//     // float formats
+//     (FormatKey { data_type: DataType::F32 as u8, num_components: 1, }, vk::Format::R32_SFLOAT),
+//     (FormatKey { data_type: DataType::F32 as u8, num_components: 2, }, vk::Format::R32G32_SFLOAT),
+//     (FormatKey { data_type: DataType::F32 as u8, num_components: 3, }, vk::Format::R32G32B32_SFLOAT),
+//     (FormatKey { data_type: DataType::F32 as u8, num_components: 4, }, vk::Format::R32G32B32A32_SFLOAT)
+// ]));
 
-    // I16 formats
-    (FormatKey { data_type: DataType::I16 as u8, num_components: 1, }, vk::Format::R16_SINT),
-    (FormatKey { data_type: DataType::I16 as u8, num_components: 2, }, vk::Format::R16G16_SINT),
-    (FormatKey { data_type: DataType::I16 as u8, num_components: 3, }, vk::Format::R16G16B16_SINT),
-    (FormatKey { data_type: DataType::I16 as u8, num_components: 4, }, vk::Format::R16G16B16A16_SINT),
-
-    // U8 formats
-    (FormatKey { data_type: DataType::U8 as u8, num_components: 1, }, vk::Format::R8_UINT),
-    (FormatKey { data_type: DataType::U8 as u8, num_components: 2, }, vk::Format::R8G8_UINT),
-    (FormatKey { data_type: DataType::U8 as u8, num_components: 3, }, vk::Format::R8G8B8_UINT),
-    (FormatKey { data_type: DataType::U8 as u8, num_components: 4, }, vk::Format::R8G8B8A8_UINT),
-
-    // U16 formats
-    (FormatKey { data_type: DataType::U16 as u8, num_components: 1, }, vk::Format::R16_UINT),
-    (FormatKey { data_type: DataType::U16 as u8, num_components: 2, }, vk::Format::R16G16_UINT),
-    (FormatKey { data_type: DataType::U16 as u8, num_components: 3, }, vk::Format::R16G16B16_UINT),
-    (FormatKey { data_type: DataType::U16 as u8, num_components: 4, }, vk::Format::R16G16B16A16_UINT),
-
-    // U32 formats
-    (FormatKey { data_type: DataType::U32 as u8, num_components: 1, }, vk::Format::R32_UINT),
-    (FormatKey { data_type: DataType::U32 as u8, num_components: 2, }, vk::Format::R32G32_UINT),
-    (FormatKey { data_type: DataType::U32 as u8, num_components: 3, }, vk::Format::R32G32B32_UINT),
-    (FormatKey { data_type: DataType::U32 as u8, num_components: 4, }, vk::Format::R32G32B32A32_UINT),
-
-    // float formats
-    (FormatKey { data_type: DataType::F32 as u8, num_components: 1, }, vk::Format::R32_SFLOAT),
-    (FormatKey { data_type: DataType::F32 as u8, num_components: 2, }, vk::Format::R32G32_SFLOAT),
-    (FormatKey { data_type: DataType::F32 as u8, num_components: 3, }, vk::Format::R32G32B32_SFLOAT),
-    (FormatKey { data_type: DataType::F32 as u8, num_components: 4, }, vk::Format::R32G32B32A32_SFLOAT)
-]));
-
+/*
 fn get_vk_format(data_type: DataType, dimensions: Dimensions) -> vk::Format {
     let num_components = match dimensions { Dimensions::Scalar => 1,
         Dimensions::Vec2 => 2,
@@ -154,12 +134,13 @@ fn get_vk_format(data_type: DataType, dimensions: Dimensions) -> vk::Format {
 
     *FORMAT_LOOKUP.get(&key).expect("Invalid format or num components")
 }
+*/
 
 pub enum GlmType {
-    Scalar(f32),
+    _Scalar(#[allow(dead_code)] f32),
     Vec2(glm::TVec2<f32>),
     Vec3(glm::TVec3<f32>),
-    Vec4(glm::TVec4<f32>)
+    _Vec4(#[allow(dead_code)] glm::TVec4<f32>)
 }
 
 fn get_size_per_component(data_type: DataType) -> usize {
@@ -222,6 +203,7 @@ unsafe fn get_vec2_from_gltf_buffer(data_type: DataType, dimensions: Dimensions,
     )
 }
 
+/*
 unsafe fn get_vec3_from_gltf_buffer(data_type: DataType, dimensions: Dimensions, data_pointer: *const u8) -> glm::Vec3 {
     let bytes_per_component = get_size_per_component(data_type);
     let num_components = get_num_components_for_dimension(dimensions);
@@ -254,6 +236,7 @@ unsafe fn get_scalar_from_gltf_buffer(data_type: DataType, dimensions: Dimension
 
     buffer_bytes_to_f32(data_pointer, bytes_per_component)
 }
+*/
 
 fn get_glm_format(data_type: DataType, dimensions: Dimensions, data_pointer: *const u8) -> GlmType {
     let bytes_per_component = get_size_per_component(data_type);
@@ -262,7 +245,7 @@ fn get_glm_format(data_type: DataType, dimensions: Dimensions, data_pointer: *co
     unsafe {
         match num_components {
             1 => {
-                GlmType::Scalar(buffer_bytes_to_f32(data_pointer, bytes_per_component))
+                GlmType::_Scalar(buffer_bytes_to_f32(data_pointer, bytes_per_component))
             },
             2 => {
                 GlmType::Vec2(
@@ -277,7 +260,7 @@ fn get_glm_format(data_type: DataType, dimensions: Dimensions, data_pointer: *co
                 ))
             },
             4 => {
-                GlmType::Vec4(glm::Vec4::new(
+                GlmType::_Vec4(glm::Vec4::new(
                     buffer_bytes_to_f32(data_pointer, bytes_per_component),
                     buffer_bytes_to_f32(data_pointer.byte_add(bytes_per_component), bytes_per_component),
                     buffer_bytes_to_f32(data_pointer.byte_add(2 * bytes_per_component), bytes_per_component),
@@ -295,7 +278,7 @@ pub struct ModelExample {
     vertex_shader: Arc<Mutex<Shader>>,
     fragment_shader: Arc<Mutex<Shader>>,
     camera: Camera,
-    duck_model: GltfModel,
+    _duck_model: GltfModel,
     render_meshes: Vec<RenderMesh>
 }
 
@@ -382,9 +365,9 @@ impl Example for ModelExample {
 
                 device.update_buffer(&buffer, |mapped_memory: *mut c_void, _size: u64| {
                     let mvp = MVP {
-                        model: render_mesh.transform.clone(),
-                        view: self.camera.get_view(),
-                        proj: self.camera.projection.clone(),
+                        _model: render_mesh.transform.clone(),
+                        _view: self.camera.get_view(),
+                        _proj: self.camera.projection.clone(),
                     };
 
                     unsafe {
@@ -546,6 +529,7 @@ fn gltf_to_glm(m: &[[f32; 4]; 4]) -> glm::Mat4 {
 }
 
 /// t is an owned Transform because Transform::decomposed takes self as an argument
+/*
 fn gltf_to_decomposed_matrix(t: gltf::scene::Transform) -> DecomposedMatrix {
     let (translation, rotation, scale) = t.decomposed();
     // the gltf Transform specifies w (the scalar component of a quaternion) as the last element, but
@@ -556,6 +540,7 @@ fn gltf_to_decomposed_matrix(t: gltf::scene::Transform) -> DecomposedMatrix {
         glm::quat_to_mat4(&rot_quat),
         glm::Vec3::new(scale[0], scale[1], scale[2]))
 }
+*/
 
 impl ModelExample {
     pub fn new(
@@ -571,7 +556,7 @@ impl ModelExample {
                 GltfModel {
                     document: gltf.0,
                     buffers: gltf.1,
-                    images: gltf.2
+                    _images: gltf.2
                 }
             },
             Err(e) => {
@@ -1002,7 +987,7 @@ impl ModelExample {
             vertex_shader: vert_shader,
             fragment_shader: frag_shader,
             camera,
-            duck_model: duck_gltf,
+            _duck_model: duck_gltf,
             render_meshes: meshes
         }
     }

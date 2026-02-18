@@ -17,7 +17,7 @@ use profiling::{enter_gpu_span, enter_span};
 use crate::example::Example;
 
 pub struct UBO {
-    pub color: [f32; 3]
+    pub _color: [f32; 3]
 }
 pub struct UboExample {
     uniform_buffer: Arc<Mutex<DeviceResource>>,
@@ -132,7 +132,7 @@ impl UboExample {
             MemoryLocation::CpuToGpu);
 
         let ubo_value = UBO {
-            color: [1.0, 0.0, 0.0]
+            _color: [1.0, 0.0, 0.0]
         };
 
         device.update_buffer(&ubo, |mapped_memory: *mut c_void, _size: u64| {
