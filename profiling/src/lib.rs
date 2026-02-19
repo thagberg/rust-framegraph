@@ -115,7 +115,8 @@ impl FrameSpans {
                         panic!("Attempting to upload an invalid GPU span");
                     }
                     Some(span) => {
-                        span.upload_timestamp(start_timestamp as i64, end_timestamp as i64);
+                        span.upload_timestamp_start(start_timestamp as i64);
+                        span.upload_timestamp_end(end_timestamp as i64);
                     }
                 }
             }
