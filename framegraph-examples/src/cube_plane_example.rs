@@ -49,6 +49,7 @@ pub struct CubePlaneExample {
     vertex_shader: Arc<Mutex<Shader>>,
     fragment_shader: Arc<Mutex<Shader>>,
     time: f32,
+    light_angle: f32,
 }
 
 impl Example for CubePlaneExample {
@@ -76,10 +77,15 @@ impl Example for CubePlaneExample {
         );
         let proj = glm::perspective(width / height, 45.0f32.to_radians(), 0.1, 100.0);
         
+        let light_radius = 5.0f32;
+        let light_x = self.light_angle.cos() * light_radius;
+        let light_z = self.light_angle.sin() * light_radius;
+        let light_pos = glm::vec4(light_x, 5.0, light_z, 1.0);
+
         let uniforms = SceneUniforms {
             view,
             proj,
-            light_pos: glm::vec4(5.0, 5.0, 5.0, 1.0),
+            light_pos,
             view_pos: glm::vec4(view_pos.x, view_pos.y, view_pos.z, 1.0),
         };
 
@@ -120,6 +126,13 @@ impl Example for CubePlaneExample {
 
         imgui_ui.text(format!("Cube Floating over Plane"));
         imgui_ui.text(format!("Time: {:.2}", self.time));
+
+        let mut angle = self.light_angle;
+        imgui_ui.slider("Light Rotation", 0.0, 2.0 * std::f32::consts::PI, &mut angle);
+        unsafe {
+            let mut_self = self as *const Self as *mut Self;
+            (*mut_self).light_angle = angle;
+        }
 
         let mut passes: Vec<PassType> = Vec::new();
 
@@ -356,6 +369,7 @@ impl CubePlaneExample {
             vertex_shader,
             fragment_shader,
             time: 0.0,
+            light_angle: 45.0f32.to_radians(),
         }
     }
 }
