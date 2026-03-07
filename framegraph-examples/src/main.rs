@@ -3,6 +3,7 @@ mod example;
 mod model_example;
 mod phong_example;
 mod deferred_example;
+mod cube_plane_example;
 
 extern crate alloc;
 extern crate nalgebra_glm as glm;
@@ -40,6 +41,7 @@ use crate::model_example::ModelExample;
 use crate::ubo_example::UboExample;
 use crate::phong_example::PhongExample;
 use crate::deferred_example::DeferredExample;
+use crate::cube_plane_example::CubePlaneExample;
 
 const _MAX_FRAMES_IN_FLIGHT: u32 = 2;
 
@@ -189,7 +191,11 @@ impl WindowedVulkanApp {
                 render_context.get_device().clone(),
                 &render_context,
                 allocator.clone())),
-            Box::new(DeferredExample::new())
+            Box::new(DeferredExample::new()),
+            Box::new(CubePlaneExample::new(
+                render_context.get_device().clone(),
+                &render_context,
+                allocator.clone())),
         ];
 
         let mut frames: Vec<Option<Box<Frame>>> = Vec::new();
@@ -473,7 +479,17 @@ fn main() {
     ).expect("setup tracy layer");
 
     // create app
-    let event_loop: EventLoop<()> = EventLoop::new().expect("Couldn't create EventLoop");
+    let event_loop: EventLoop<()> = match EventLoop::new() {
+        Ok(el) => el,
+        Err(e) => {
+            eprintln!("CRITICAL: Couldn't create EventLoop: {:?}", e);
+            #[cfg(target_os = "linux")]
+            if std::env::var("WAYLAND_DISPLAY").is_ok() {
+                eprintln!("HINT: On Linux, if you see 'Connection(NoCompositor)' errors (e.g., when running under RenderDoc), try forcing X11 by unsetting WAYLAND_DISPLAY (e.g., WAYLAND_DISPLAY= ./framegraph-examples)");
+            }
+            panic!("Couldn't create EventLoop: {:?}", e);
+        }
+    };
     let app = WindowedVulkanApp::new(&event_loop, "Examples", 1200, 800);
     let _ = run(app, event_loop);
 

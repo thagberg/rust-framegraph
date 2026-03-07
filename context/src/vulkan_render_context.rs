@@ -188,34 +188,78 @@ fn create_vulkan_instance(
     required_layer_names: &[&CStr],
     required_extension_names: &[&CStr]) -> ash::Instance {
 
-    let raw_layer_names: Vec<*const c_char> = required_layer_names
-        .iter()
-        .map(|layer_name| layer_name.as_ptr())
-        .collect();
-
-    let raw_extension_names: Vec<*const c_char> = required_extension_names
-        .iter()
-        .map(|extension_name| extension_name.as_ptr())
-        .collect();
-
-    let mut builder = vk::InstanceCreateInfo::default()
-        .application_info(&application_info)
-        .enabled_layer_names(&raw_layer_names)
-        .enabled_extension_names(&raw_extension_names)
-        .flags(get_instance_flags());
-
     let mut instance_debug = vk::DebugUtilsMessengerCreateInfoEXT::default()
         .message_severity(severity_flags::WARNING | severity_flags::ERROR)
         .message_type(type_flags::GENERAL | type_flags::PERFORMANCE | type_flags::VALIDATION)
         .pfn_user_callback(Some(debug_utils_callback));
 
-    if !required_layer_names.is_empty() {
+    let available_layers = unsafe {
+        entry.enumerate_instance_layer_properties()
+            .expect("Failed to enumerate instance layers")
+    };
+    let mut actual_layers = Vec::new();
+    for layer_name in required_layer_names {
+        if available_layers.iter().any(|layer| {
+            let name = unsafe { CStr::from_ptr(layer.layer_name.as_ptr()) };
+            name == *layer_name
+        }) {
+            actual_layers.push(layer_name.as_ptr());
+        } else {
+            println!("Requested layer {:?} not available, skipping", layer_name);
+        }
+    }
+
+    let available_extensions = unsafe {
+        entry.enumerate_instance_extension_properties(None)
+            .expect("Failed to enumerate instance extensions")
+    };
+    let mut actual_extensions = Vec::new();
+    let mut missing_extensions = Vec::new();
+    for extension_name in required_extension_names {
+        if available_extensions.iter().any(|ext| {
+            let name = unsafe { CStr::from_ptr(ext.extension_name.as_ptr()) };
+            name == *extension_name
+        }) {
+            if !actual_extensions.contains(&extension_name.as_ptr()) {
+                actual_extensions.push(extension_name.as_ptr());
+            }
+        } else {
+            missing_extensions.push(extension_name);
+        }
+    }
+
+    if !missing_extensions.is_empty() {
+        println!("The following required extensions are not available:");
+        for ext in &missing_extensions {
+            println!("  {:?}", ext);
+        }
+    }
+
+    let mut builder = vk::InstanceCreateInfo::default()
+        .application_info(&application_info)
+        .enabled_layer_names(&actual_layers)
+        .enabled_extension_names(&actual_extensions)
+        .flags(get_instance_flags());
+
+    if !actual_layers.is_empty() && actual_extensions.iter().any(|&ext| {
+        let name = unsafe { CStr::from_ptr(ext) };
+        name == ash::ext::debug_utils::NAME
+    }) {
         builder = builder.push_next(&mut instance_debug);
     }
 
     let instance = unsafe {
-        entry.create_instance(&builder, None)
-            .expect("Failed to create Vulkan Instance")
+        match entry.create_instance(&builder, None) {
+            Ok(instance) => instance,
+            Err(err) => {
+                println!("Failed to create Vulkan Instance: {:?}", err);
+                println!("Requested layers: {:?}", required_layer_names);
+                println!("Actual layers: {:?}", actual_layers.iter().map(|&p| CStr::from_ptr(p)).collect::<Vec<_>>());
+                println!("Requested extensions: {:?}", required_extension_names);
+                println!("Actual extensions: {:?}", actual_extensions.iter().map(|&p| CStr::from_ptr(p)).collect::<Vec<_>>());
+                panic!("Failed to create Vulkan Instance: {:?}", err);
+            }
+        }
     };
 
     instance
@@ -814,19 +858,19 @@ impl VulkanRenderContext {
             }
         }
 
-        let mut instance_extensions = vec![
-            ash::ext::debug_utils::NAME
-        ];
+        let mut instance_extensions = vec![];
+        let mut surface_extensions = vec![];
 
         if let Some(resolved_window) = window {
             let extensions = surface::get_required_surface_extensions(resolved_window);
             for extension in extensions {
                 unsafe {
-                    instance_extensions.push(CStr::from_ptr(*extension));
+                    surface_extensions.push(CStr::from_ptr(*extension));
                 }
             }
         }
 
+        instance_extensions.extend(surface_extensions.iter().cloned());
         instance_extensions.append(&mut get_instance_extensions());
 
         let mut physical_device_extensions = get_physical_device_extensions();
@@ -838,6 +882,25 @@ impl VulkanRenderContext {
             application_info,
             &layers,
             &instance_extensions);
+
+        if window.is_some() {
+            let available_extensions = unsafe {
+                entry.enumerate_instance_extension_properties(None)
+                    .expect("Failed to enumerate instance extensions")
+            };
+            for &required_ext in &surface_extensions {
+                if !available_extensions.iter().any(|ext| {
+                    let name = unsafe { CStr::from_ptr(ext.extension_name.as_ptr()) };
+                    name == required_ext
+                }) {
+                    println!("CRITICAL: Required surface extension {:?} is not available.", required_ext);
+                    if required_ext.to_bytes().starts_with(b"VK_KHR_wayland_surface") {
+                        println!("HINT: On Linux, if Wayland is unavailable (e.g., when running under RenderDoc), try forcing X11 by unsetting WAYLAND_DISPLAY (e.g., WAYLAND_DISPLAY= ./framegraph-examples)");
+                    }
+                    panic!("Required surface extension {:?} is not available. Surface creation will fail.", required_ext);
+                }
+            }
+        }
 
         let handle_generator = HandleGenerator::new();
 
