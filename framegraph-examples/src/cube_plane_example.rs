@@ -18,6 +18,7 @@ use profiling::enter_span;
 use crate::example::Example;
 use nalgebra_glm as glm;
 use passes::clear;
+use passes::shadow::{ShadowMappingObject, ShadowPass};
 use util::camera::Camera;
 
 #[repr(C)]
@@ -46,7 +47,9 @@ pub struct CubePlaneExample {
     cube_ubo: Arc<Mutex<DeviceResource>>,
     plane_ubo: Arc<Mutex<DeviceResource>>,
     cube_vbuf: Arc<Mutex<DeviceResource>>,
+    cube_ibuf: Arc<Mutex<DeviceResource>>,
     plane_vbuf: Arc<Mutex<DeviceResource>>,
+    plane_ibuf: Arc<Mutex<DeviceResource>>,
     vertex_shader: Arc<Mutex<Shader>>,
     fragment_shader: Arc<Mutex<Shader>>,
     time: f32,
@@ -62,7 +65,7 @@ impl Example for CubePlaneExample {
     fn execute(
         &self,
         device: DeviceInterface,
-        _allocator: Arc<Mutex<ResourceAllocator>>,
+        allocator: Arc<Mutex<ResourceAllocator>>,
         imgui_ui: &mut Ui,
         back_buffer: AttachmentReference) -> Vec<PassType> {
 
@@ -167,7 +170,7 @@ impl Example for CubePlaneExample {
                 device.create_image(
                     0,
                     &image_create,
-                    _allocator.clone(),
+                    allocator.clone(),
                     MemoryLocation::GpuOnly
                 )
             };
@@ -210,7 +213,7 @@ impl Example for CubePlaneExample {
 
         let pipeline_description = Arc::new(PipelineDescription::new(
             vec![vertex_binding],
-            vertex_attributes,
+            vertex_attributes.clone(),
             dynamic_states,
             RasterizationType::CullBack,
             DepthStencilType::Enable,
@@ -262,7 +265,9 @@ impl Example for CubePlaneExample {
         };
 
         let cube_vbuf_ref = self.cube_vbuf.clone();
+        let cube_ibuf_ref = self.cube_ibuf.clone();
         let plane_vbuf_ref = self.plane_vbuf.clone();
+        let plane_ibuf_ref = self.plane_ibuf.clone();
 
         let (viewport, scissor) = {
             let v = vk::Viewport::default()
@@ -280,6 +285,61 @@ impl Example for CubePlaneExample {
             (v, s)
         };
 
+        // create shadow map and attachment
+        let shadow_map = {
+            let sm_create = vk::ImageCreateInfo::default()
+                .format(vk::Format::D32_SFLOAT)
+                .image_type(vk::ImageType::TYPE_2D)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                .initial_layout(vk::ImageLayout::UNDEFINED)
+                .samples(vk::SampleCountFlags::TYPE_1)
+                .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::SAMPLED)
+                .extent(vk::Extent3D { width: 1024, height: 1024, depth: 1 })
+                .mip_levels(1)
+                .array_layers(1);
+
+            let image_create = api_types::image::ImageCreateInfo::new(
+                sm_create,
+                "shadow_map".to_string(),
+                api_types::image::ImageType::Depth
+            );
+
+            device.create_image(
+                0,
+                &image_create,
+                allocator.clone(),
+                MemoryLocation::GpuOnly
+            )
+        };
+        let shadow_attachment = AttachmentReference::new(
+            Arc::new(Mutex::new(shadow_map)),
+            vk::SampleCountFlags::TYPE_1);
+
+        // create shadow objects vector
+        let shadow_objects = [
+            // cube object
+            ShadowMappingObject{
+                vertex_buffer: cube_vbuf_ref.clone(),
+                index_buffer: cube_ibuf_ref.clone(),
+                index_count: 36, // TODO: should store this somewhere
+                vertex_binding,
+                vertex_attributes: vertex_attributes.clone(), // TODO: can these be by ref?
+                model_matrix: cube_model_mat
+            },
+            ShadowMappingObject{
+                vertex_buffer: plane_vbuf_ref.clone(),
+                index_buffer: plane_ibuf_ref.clone(),
+                index_count: 6,
+                vertex_binding,
+                vertex_attributes,
+                model_matrix: glm::Mat4::identity()
+            }
+        ];
+
+        let shadows = ShadowPass::new(device.clone());
+        // let shadow_pass = shadows.generate_pass()
+
+
         // Pass for Plane
         let plane_pass = GraphicsPassNode::builder("plane_pass".to_string())
             .pipeline_description(pipeline_description.clone())
@@ -296,10 +356,12 @@ impl Example for CubePlaneExample {
                     enter_span!(tracing::Level::TRACE, "Draw Plane");
                     unsafe {
                         let vbuf = plane_vbuf_ref.lock().unwrap();
-                        if let ResourceType::Buffer(vb) = vbuf.resource_type.as_ref().unwrap() {
+                        let ibuf = plane_ibuf_ref.lock().unwrap();
+                        if let (ResourceType::Buffer(vb), ResourceType::Buffer(ib)) = (vbuf.resource_type.as_ref().unwrap(), ibuf.resource_type.as_ref().unwrap()) {
                             device.get().cmd_bind_vertex_buffers(command_buffer, 0, &[vb.buffer], &[0]);
+                            device.get().cmd_bind_index_buffer(command_buffer, ib.buffer, 0, vk::IndexType::UINT32);
                         }
-                        device.get().cmd_draw(command_buffer, 6, 1, 0, 0);
+                        device.get().cmd_draw_indexed(command_buffer, 6, 1, 0, 0, 0);
                     }
                 }
             ))
@@ -322,10 +384,12 @@ impl Example for CubePlaneExample {
                     enter_span!(tracing::Level::TRACE, "Draw Cube");
                     unsafe {
                         let vbuf = cube_vbuf_ref.lock().unwrap();
-                        if let ResourceType::Buffer(vb) = vbuf.resource_type.as_ref().unwrap() {
+                        let ibuf = cube_ibuf_ref.lock().unwrap();
+                        if let (ResourceType::Buffer(vb), ResourceType::Buffer(ib)) = (vbuf.resource_type.as_ref().unwrap(), ibuf.resource_type.as_ref().unwrap()) {
                             device.get().cmd_bind_vertex_buffers(command_buffer, 0, &[vb.buffer], &[0]);
+                            device.get().cmd_bind_index_buffer(command_buffer, ib.buffer, 0, vk::IndexType::UINT32);
                         }
-                        device.get().cmd_draw(command_buffer, 36, 1, 0, 0);
+                        device.get().cmd_draw_indexed(command_buffer, 36, 1, 0, 0, 0);
                     }
                 }
             ))
@@ -359,11 +423,13 @@ impl CubePlaneExample {
         _render_context: &VulkanRenderContext,
         allocator: Arc<Mutex<ResourceAllocator>>) -> Self {
 
-        let cube_vertices = create_cube_vertices();
-        let plane_vertices = create_plane_vertices();
+        let (cube_vertices, cube_indices) = create_cube_data();
+        let (plane_vertices, plane_indices) = create_plane_data();
 
         let cube_vbuf = create_vertex_buffer(device.clone(), allocator.clone(), &cube_vertices, "cube_vbuf");
+        let cube_ibuf = create_index_buffer(device.clone(), allocator.clone(), &cube_indices, "cube_ibuf");
         let plane_vbuf = create_vertex_buffer(device.clone(), allocator.clone(), &plane_vertices, "plane_vbuf");
+        let plane_ibuf = create_index_buffer(device.clone(), allocator.clone(), &plane_indices, "plane_ibuf");
 
         let scene_ubo = create_ubo(device.clone(), allocator.clone(), std::mem::size_of::<SceneUniforms>() as u64, "scene_ubo");
         let cube_ubo = create_ubo(device.clone(), allocator.clone(), std::mem::size_of::<ModelUniforms>() as u64, "cube_ubo");
@@ -386,7 +452,9 @@ impl CubePlaneExample {
             cube_ubo: Arc::new(Mutex::new(cube_ubo)),
             plane_ubo: Arc::new(Mutex::new(plane_ubo)),
             cube_vbuf: Arc::new(Mutex::new(cube_vbuf)),
+            cube_ibuf: Arc::new(Mutex::new(cube_ibuf)),
             plane_vbuf: Arc::new(Mutex::new(plane_vbuf)),
+            plane_ibuf: Arc::new(Mutex::new(plane_ibuf)),
             vertex_shader,
             fragment_shader,
             time: 0.0,
@@ -427,64 +495,86 @@ fn create_vertex_buffer(device: DeviceInterface, allocator: Arc<Mutex<ResourceAl
     buffer
 }
 
-fn create_cube_vertices() -> Vec<Vertex> {
-    let color = [0.8, 0.2, 0.3];
-    vec![
-        // Front
-        Vertex { pos: [-0.5, -0.5,  0.5], normal: [ 0.0,  0.0,  1.0], color },
-        Vertex { pos: [ 0.5,  0.5,  0.5], normal: [ 0.0,  0.0,  1.0], color },
-        Vertex { pos: [ 0.5, -0.5,  0.5], normal: [ 0.0,  0.0,  1.0], color },
-        Vertex { pos: [ 0.5,  0.5,  0.5], normal: [ 0.0,  0.0,  1.0], color },
-        Vertex { pos: [-0.5, -0.5,  0.5], normal: [ 0.0,  0.0,  1.0], color },
-        Vertex { pos: [-0.5,  0.5,  0.5], normal: [ 0.0,  0.0,  1.0], color },
-        // Back
-        Vertex { pos: [ 0.5, -0.5, -0.5], normal: [ 0.0,  0.0, -1.0], color },
-        Vertex { pos: [-0.5,  0.5, -0.5], normal: [ 0.0,  0.0, -1.0], color },
-        Vertex { pos: [-0.5, -0.5, -0.5], normal: [ 0.0,  0.0, -1.0], color },
-        Vertex { pos: [-0.5,  0.5, -0.5], normal: [ 0.0,  0.0, -1.0], color },
-        Vertex { pos: [ 0.5, -0.5, -0.5], normal: [ 0.0,  0.0, -1.0], color },
-        Vertex { pos: [ 0.5,  0.5, -0.5], normal: [ 0.0,  0.0, -1.0], color },
-        // Top
-        Vertex { pos: [-0.5,  0.5,  0.5], normal: [ 0.0,  1.0,  0.0], color },
-        Vertex { pos: [ 0.5,  0.5, -0.5], normal: [ 0.0,  1.0,  0.0], color },
-        Vertex { pos: [ 0.5,  0.5,  0.5], normal: [ 0.0,  1.0,  0.0], color },
-        Vertex { pos: [ 0.5,  0.5, -0.5], normal: [ 0.0,  1.0,  0.0], color },
-        Vertex { pos: [-0.5,  0.5,  0.5], normal: [ 0.0,  1.0,  0.0], color },
-        Vertex { pos: [-0.5,  0.5, -0.5], normal: [ 0.0,  1.0,  0.0], color },
-        // Bottom
-        Vertex { pos: [-0.5, -0.5, -0.5], normal: [ 0.0, -1.0,  0.0], color },
-        Vertex { pos: [ 0.5, -0.5,  0.5], normal: [ 0.0, -1.0,  0.0], color },
-        Vertex { pos: [ 0.5, -0.5, -0.5], normal: [ 0.0, -1.0,  0.0], color },
-        Vertex { pos: [ 0.5, -0.5,  0.5], normal: [ 0.0, -1.0,  0.0], color },
-        Vertex { pos: [-0.5, -0.5, -0.5], normal: [ 0.0, -1.0,  0.0], color },
-        Vertex { pos: [-0.5, -0.5,  0.5], normal: [ 0.0, -1.0,  0.0], color },
-        // Right
-        Vertex { pos: [ 0.5, -0.5,  0.5], normal: [ 1.0,  0.0,  0.0], color },
-        Vertex { pos: [ 0.5,  0.5, -0.5], normal: [ 1.0,  0.0,  0.0], color },
-        Vertex { pos: [ 0.5, -0.5, -0.5], normal: [ 1.0,  0.0,  0.0], color },
-        Vertex { pos: [ 0.5,  0.5, -0.5], normal: [ 1.0,  0.0,  0.0], color },
-        Vertex { pos: [ 0.5, -0.5,  0.5], normal: [ 1.0,  0.0,  0.0], color },
-        Vertex { pos: [ 0.5,  0.5,  0.5], normal: [ 1.0,  0.0,  0.0], color },
-        // Left
-        Vertex { pos: [-0.5, -0.5, -0.5], normal: [-1.0,  0.0,  0.0], color },
-        Vertex { pos: [-0.5,  0.5,  0.5], normal: [-1.0,  0.0,  0.0], color },
-        Vertex { pos: [-0.5, -0.5,  0.5], normal: [-1.0,  0.0,  0.0], color },
-        Vertex { pos: [-0.5,  0.5,  0.5], normal: [-1.0,  0.0,  0.0], color },
-        Vertex { pos: [-0.5, -0.5, -0.5], normal: [-1.0,  0.0,  0.0], color },
-        Vertex { pos: [-0.5,  0.5, -0.5], normal: [-1.0,  0.0,  0.0], color },
-    ]
+fn create_index_buffer(device: DeviceInterface, allocator: Arc<Mutex<ResourceAllocator>>, indices: &[u32], name: &str) -> DeviceResource {
+    let size = (std::mem::size_of::<u32>() * indices.len()) as vk::DeviceSize;
+    let create_info = BufferCreateInfo::new(
+        vk::BufferCreateInfo::default()
+            .size(size)
+            .usage(vk::BufferUsageFlags::INDEX_BUFFER)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE),
+        name.to_string()
+    );
+
+    let buffer = device.create_buffer(0, &create_info, allocator, MemoryLocation::CpuToGpu);
+    device.update_buffer(&buffer, |mapped_memory: *mut c_void, _size: u64| {
+        unsafe {
+            core::ptr::copy_nonoverlapping(indices.as_ptr(), mapped_memory as *mut u32, indices.len());
+        }
+    });
+    buffer
 }
 
-fn create_plane_vertices() -> Vec<Vertex> {
+fn create_cube_data() -> (Vec<Vertex>, Vec<u32>) {
+    let color = [0.8, 0.2, 0.3];
+    let vertices = vec![
+        // Front
+        Vertex { pos: [-0.5, -0.5,  0.5], normal: [ 0.0,  0.0,  1.0], color }, // 0
+        Vertex { pos: [ 0.5, -0.5,  0.5], normal: [ 0.0,  0.0,  1.0], color }, // 1
+        Vertex { pos: [ 0.5,  0.5,  0.5], normal: [ 0.0,  0.0,  1.0], color }, // 2
+        Vertex { pos: [-0.5,  0.5,  0.5], normal: [ 0.0,  0.0,  1.0], color }, // 3
+        // Back
+        Vertex { pos: [-0.5, -0.5, -0.5], normal: [ 0.0,  0.0, -1.0], color }, // 4
+        Vertex { pos: [ 0.5, -0.5, -0.5], normal: [ 0.0,  0.0, -1.0], color }, // 5
+        Vertex { pos: [ 0.5,  0.5, -0.5], normal: [ 0.0,  0.0, -1.0], color }, // 6
+        Vertex { pos: [-0.5,  0.5, -0.5], normal: [ 0.0,  0.0, -1.0], color }, // 7
+        // Top
+        Vertex { pos: [-0.5,  0.5,  0.5], normal: [ 0.0,  1.0,  0.0], color }, // 8
+        Vertex { pos: [ 0.5,  0.5,  0.5], normal: [ 0.0,  1.0,  0.0], color }, // 9
+        Vertex { pos: [ 0.5,  0.5, -0.5], normal: [ 0.0,  1.0,  0.0], color }, // 10
+        Vertex { pos: [-0.5,  0.5, -0.5], normal: [ 0.0,  1.0,  0.0], color }, // 11
+        // Bottom
+        Vertex { pos: [-0.5, -0.5,  0.5], normal: [ 0.0, -1.0,  0.0], color }, // 12
+        Vertex { pos: [ 0.5, -0.5,  0.5], normal: [ 0.0, -1.0,  0.0], color }, // 13
+        Vertex { pos: [ 0.5, -0.5, -0.5], normal: [ 0.0, -1.0,  0.0], color }, // 14
+        Vertex { pos: [-0.5, -0.5, -0.5], normal: [ 0.0, -1.0,  0.0], color }, // 15
+        // Right
+        Vertex { pos: [ 0.5, -0.5,  0.5], normal: [ 1.0,  0.0,  0.0], color }, // 16
+        Vertex { pos: [ 0.5,  0.5,  0.5], normal: [ 1.0,  0.0,  0.0], color }, // 17
+        Vertex { pos: [ 0.5,  0.5, -0.5], normal: [ 1.0,  0.0,  0.0], color }, // 18
+        Vertex { pos: [ 0.5, -0.5, -0.5], normal: [ 1.0,  0.0,  0.0], color }, // 19
+        // Left
+        Vertex { pos: [-0.5, -0.5,  0.5], normal: [-1.0,  0.0,  0.0], color }, // 20
+        Vertex { pos: [-0.5,  0.5,  0.5], normal: [-1.0,  0.0,  0.0], color }, // 21
+        Vertex { pos: [-0.5,  0.5, -0.5], normal: [-1.0,  0.0,  0.0], color }, // 22
+        Vertex { pos: [-0.5, -0.5, -0.5], normal: [-1.0,  0.0,  0.0], color }, // 23
+    ];
+
+    let indices = vec![
+        0, 3, 2, 2, 1, 0, // Front
+        4, 5, 6, 6, 7, 4, // Back
+        8, 11, 10, 10, 9, 8, // Top
+        12, 13, 14, 14, 15, 12, // Bottom
+        16, 17, 18, 18, 19, 16, // Right
+        20, 23, 22, 22, 21, 20, // Left
+    ];
+
+    (vertices, indices)
+}
+
+fn create_plane_data() -> (Vec<Vertex>, Vec<u32>) {
     let color = [0.3, 0.5, 0.3];
     let n = [0.0, 1.0, 0.0];
     let s = 5.0;
-    vec![
-        Vertex { pos: [-s, 0.0,  s], normal: n, color },
-        Vertex { pos: [ s, 0.0, -s], normal: n, color },
-        Vertex { pos: [ s, 0.0,  s], normal: n, color },
-        Vertex { pos: [ s, 0.0, -s], normal: n, color },
-        Vertex { pos: [-s, 0.0,  s], normal: n, color },
-        Vertex { pos: [-s, 0.0, -s], normal: n, color },
-    ]
+    let vertices = vec![
+        Vertex { pos: [-s, 0.0,  s], normal: n, color }, // 0
+        Vertex { pos: [ s, 0.0,  s], normal: n, color }, // 1
+        Vertex { pos: [ s, 0.0, -s], normal: n, color }, // 2
+        Vertex { pos: [-s, 0.0, -s], normal: n, color }, // 3
+    ];
+
+    let indices = vec![
+        0, 3, 2, 2, 1, 0
+    ];
+
+    (vertices, indices)
 }
