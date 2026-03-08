@@ -15,5 +15,7 @@ pub trait Example {
         imgui_ui: &mut Ui,
         back_buffer: AttachmentReference) -> Vec<PassType>;
 
+    fn handle_event(&mut self, _event: &winit::event::Event<()>) {}
+
     fn update(&mut self, _delta_time: f32) {}
 }

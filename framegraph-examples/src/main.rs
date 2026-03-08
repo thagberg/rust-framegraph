@@ -471,6 +471,11 @@ fn run(mut app: WindowedVulkanApp, event_loop: EventLoop<()>) -> Result<(), Even
                 app.shutdown();
             },
             event => {
+                if let Some(index) = app.examples.active_example_index {
+                    if let Some(active_example) = app.examples.examples.get_mut(index) {
+                        active_example.handle_event(&event);
+                    }
+                }
                 app.platform.handle_event(app.imgui.io_mut(), &app.window, &event);
             }
         }

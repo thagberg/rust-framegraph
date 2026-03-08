@@ -18,6 +18,7 @@ use profiling::enter_span;
 use crate::example::Example;
 use nalgebra_glm as glm;
 use passes::clear;
+use util::camera::Camera;
 
 #[repr(C)]
 struct SceneUniforms {
@@ -48,8 +49,10 @@ pub struct CubePlaneExample {
     plane_vbuf: Arc<Mutex<DeviceResource>>,
     vertex_shader: Arc<Mutex<Shader>>,
     fragment_shader: Arc<Mutex<Shader>>,
+    camera: Camera,
     time: f32,
     light_angle: f32,
+    camera_distance: f32,
 }
 
 impl Example for CubePlaneExample {
@@ -69,22 +72,28 @@ impl Example for CubePlaneExample {
         let width = extent.width as f32;
         let height = extent.height as f32;
 
-        let view_pos = glm::vec3(0.0, 3.0, 6.0);
-        let view = glm::look_at(
+        let target = glm::vec3(0.0, 0.5, 0.0);
+        let base_view_dir = glm::normalize(&(glm::vec3(0.0, 3.0, 6.0) - target));
+        let view_pos = target + base_view_dir * self.camera_distance;
+        
+        let camera = Camera::new(
+            width / height,
+            45.0f32.to_radians(),
+            0.1,
+            100.0,
             &view_pos,
-            &glm::vec3(0.0, 0.5, 0.0),
+            &target,
             &glm::vec3(0.0, 1.0, 0.0)
         );
-        let proj = glm::perspective(width / height, 45.0f32.to_radians(), 0.1, 100.0);
-        
+
         let light_radius = 5.0f32;
         let light_x = self.light_angle.cos() * light_radius;
         let light_z = self.light_angle.sin() * light_radius;
         let light_pos = glm::vec4(light_x, 5.0, light_z, 1.0);
 
         let uniforms = SceneUniforms {
-            view,
-            proj,
+            view: camera.view,
+            proj: camera.projection,
             light_pos,
             view_pos: glm::vec4(view_pos.x, view_pos.y, view_pos.z, 1.0),
         };
@@ -330,6 +339,17 @@ impl Example for CubePlaneExample {
     fn update(&mut self, delta_time: f32) {
         self.time += delta_time;
     }
+
+    fn handle_event(&mut self, event: &winit::event::Event<()>) {
+        use winit::event::{WindowEvent, MouseScrollDelta, Event};
+        if let Event::WindowEvent { event: WindowEvent::MouseWheel { delta, .. }, .. } = event {
+            let zoom_amount = match delta {
+                MouseScrollDelta::LineDelta(_, y) => *y,
+                MouseScrollDelta::PixelDelta(pos) => (pos.y as f32) / 20.0,
+            };
+            self.camera_distance = (self.camera_distance - zoom_amount).clamp(1.0, 50.0);
+        }
+    }
 }
 
 impl CubePlaneExample {
@@ -360,6 +380,16 @@ impl CubePlaneExample {
                 "cube_plane-frag",
                 include_bytes!(concat!(env!("SHADER_DIR"), "/cube_plane-frag.spv")))));
 
+        let camera = Camera::new(
+            1200.0 / 800.0,
+            45.0f32.to_radians(),
+            0.1,
+            100.0,
+            &glm::vec3(0.0, 3.0, 6.0),
+            &glm::vec3(0.0, 0.5, 0.0),
+            &glm::vec3(0.0, 1.0, 0.0)
+        );
+
         CubePlaneExample {
             scene_ubo: Arc::new(Mutex::new(scene_ubo)),
             cube_ubo: Arc::new(Mutex::new(cube_ubo)),
@@ -368,8 +398,10 @@ impl CubePlaneExample {
             plane_vbuf: Arc::new(Mutex::new(plane_vbuf)),
             vertex_shader,
             fragment_shader,
+            camera,
             time: 0.0,
             light_angle: 45.0f32.to_radians(),
+            camera_distance: 6.0,
         }
     }
 }
