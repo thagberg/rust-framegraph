@@ -460,6 +460,10 @@ fn run(mut app: WindowedVulkanApp, event_loop: EventLoop<()>) -> Result<(), Even
             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
                 event_loop.exit();
             },
+            Event::WindowEvent { event: WindowEvent::Resized(_), .. } => {
+                app.render_context.recreate_swapchain(&app.window);
+                app.platform.handle_event(app.imgui.io_mut(), &app.window, &event);
+            }
             Event::WindowEvent { event: WindowEvent::RedrawRequested, .. } => {
                 app.draw_frame();
             },
