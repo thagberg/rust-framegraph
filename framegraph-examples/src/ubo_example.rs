@@ -69,7 +69,8 @@ impl Example for UboExample {
             .render_target(back_buffer)
             .fill_commands(Box::new(
                 move |device: DeviceInterface,
-                     command_buffer: vk::CommandBuffer | {
+                     command_buffer: vk::CommandBuffer,
+                     _pipeline_layout: vk::PipelineLayout| {
 
                     enter_span!(tracing::Level::TRACE, "Draw Triangle");
                     enter_gpu_span!("Draw Triangle GPU", "examples", &device.get(), &command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);

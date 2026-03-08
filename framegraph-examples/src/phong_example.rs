@@ -137,7 +137,8 @@ impl Example for PhongExample {
             .render_target(back_buffer)
             .fill_commands(Box::new(
                 move |device: DeviceInterface,
-                      command_buffer: vk::CommandBuffer| {
+                      command_buffer: vk::CommandBuffer,
+                      _pipeline_layout: vk::PipelineLayout| {
 
                     enter_span!(tracing::Level::TRACE, "Draw Phong Cube");
                     enter_gpu_span!("Draw Phong Cube GPU", "examples", &device.get(), &command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);

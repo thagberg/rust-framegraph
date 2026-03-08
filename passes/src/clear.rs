@@ -38,7 +38,8 @@ pub fn clear(
         .write(target_binding)
         .fill_commands(Box::new(
             move |device: DeviceInterface,
-                  command_buffer: vk::CommandBuffer | {
+                  command_buffer: vk::CommandBuffer,
+                  _pipeline_layout: vk::PipelineLayout| {
 
                 enter_span!(tracing::Level::TRACE, "clear");
                 //let borrowed_device = device.borrow();

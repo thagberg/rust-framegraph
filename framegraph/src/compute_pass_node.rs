@@ -36,10 +36,12 @@ impl ComputePassNode {
     pub fn execute(
         &self,
         device: DeviceInterface,
-        command_buffer: CommandBuffer) {
+        command_buffer: CommandBuffer,
+        pipeline_layout: ash::vk::PipelineLayout) {
         (self.fill_callback)(
             device,
-            command_buffer);
+            command_buffer,
+            pipeline_layout);
     }
 }
 

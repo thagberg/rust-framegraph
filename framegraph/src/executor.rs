@@ -46,7 +46,8 @@ pub fn execute_copy_node(
     // Copy node is ez-pz
     node.execute(
         render_context.get_device(),
-        *command_buffer);
+        *command_buffer,
+        vk::PipelineLayout::null());
 }
 
 #[tracing::instrument(skip(pipeline_manager, device, node))]
@@ -115,9 +116,11 @@ pub fn execute_compute_node(
     }
 
     // execute node
+    let pipeline_layout = pipeline_ref.get_pipeline_layout();
     node.execute(
         device,
-        command_buffer);
+        command_buffer,
+        pipeline_layout);
 }
 
 #[tracing::instrument(skip(renderpass_manager, pipeline_manager, render_context, node))]
@@ -130,6 +133,7 @@ pub fn execute_graphics_node(
     command_buffer: &vk::CommandBuffer,
     node: &mut GraphicsPassNode) {
 
+    let mut _pipeline_layout: vk::PipelineLayout = vk::PipelineLayout::null();
     let active_pipeline = &node.pipeline_description;
     if let Some(pipeline_description) = active_pipeline {
         // resolve render targets for this node
@@ -194,6 +198,8 @@ pub fn execute_graphics_node(
                 node.framebuffer = Some(framebuffer);
                 node.get_framebuffer()
             };
+
+            _pipeline_layout = pipeline_ref.get_pipeline_layout();
 
             // TODO: parameterize this per framebuffer attachment
             let clear_value = vk::ClearValue {
@@ -299,7 +305,13 @@ pub fn execute_graphics_node(
         }
 
         // execute this node
-        node.execute(device, *command_buffer);
+        let layout = if active_pipeline.is_some() {
+            // we already extracted this earlier in the graphics path
+            _pipeline_layout
+        } else {
+            vk::PipelineLayout::null()
+        };
+        node.execute(device, *command_buffer, layout);
     }
 
 

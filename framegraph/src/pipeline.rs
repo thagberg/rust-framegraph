@@ -97,6 +97,14 @@ impl PipelineDescription
     }
 
     pub fn get_name(&self) -> &str { &self.name }
+
+    pub fn get_vertex_shader(&self) -> &Arc<Mutex<Shader>> {
+        &self.vertex_shader
+    }
+
+    pub fn get_fragment_shader(&self) -> &Arc<Mutex<Shader>> {
+        &self.fragment_shader
+    }
 }
 
 
@@ -472,11 +480,34 @@ impl VulkanPipelineManager {
 
                 let descriptor_set_layouts = create_descriptor_set_layouts(device.clone(), &full_bindings);
 
+                let mut push_constant_ranges: Vec<vk::PushConstantRange> = Vec::new();
+                for range in &pipeline_description.vertex_shader.lock().unwrap().push_constant_ranges {
+                    let mut new_range = range.clone();
+                    new_range.stage_flags = vk::ShaderStageFlags::VERTEX;
+                    push_constant_ranges.push(new_range);
+                }
+                for range in &pipeline_description.fragment_shader.lock().unwrap().push_constant_ranges {
+                    let duplicate = push_constant_ranges.iter_mut().find(|x| {
+                        x.offset == range.offset && x.size == range.size
+                    });
+                    match duplicate {
+                        Some(dupe_range) => {
+                            dupe_range.stage_flags |= vk::ShaderStageFlags::FRAGMENT;
+                        },
+                        None => {
+                            let mut new_range = range.clone();
+                            new_range.stage_flags = vk::ShaderStageFlags::FRAGMENT;
+                            push_constant_ranges.push(new_range);
+                        }
+                    }
+                }
+
                 // let descriptor_sets = render_context.create_descriptor_sets(&descriptor_set_layouts);
 
                 let pipeline_layout = {
                         let pipeline_layout_create = vk::PipelineLayoutCreateInfo::default()
-                            .set_layouts(&descriptor_set_layouts);
+                            .set_layouts(&descriptor_set_layouts)
+                            .push_constant_ranges(&push_constant_ranges);
                         unsafe {
                             device.get().create_pipeline_layout(&pipeline_layout_create, None)
                                 .expect("Failed to create pipeline layout")

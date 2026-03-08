@@ -49,7 +49,6 @@ pub struct CubePlaneExample {
     plane_vbuf: Arc<Mutex<DeviceResource>>,
     vertex_shader: Arc<Mutex<Shader>>,
     fragment_shader: Arc<Mutex<Shader>>,
-    camera: Camera,
     time: f32,
     light_angle: f32,
     camera_distance: f32,
@@ -292,7 +291,8 @@ impl Example for CubePlaneExample {
             .scissor(scissor)
             .fill_commands(Box::new(
                 move |device: DeviceInterface,
-                      command_buffer: vk::CommandBuffer| {
+                      command_buffer: vk::CommandBuffer,
+                      _pipeline_layout: vk::PipelineLayout| {
                     enter_span!(tracing::Level::TRACE, "Draw Plane");
                     unsafe {
                         let vbuf = plane_vbuf_ref.lock().unwrap();
@@ -317,7 +317,8 @@ impl Example for CubePlaneExample {
             .scissor(scissor)
             .fill_commands(Box::new(
                 move |device: DeviceInterface,
-                      command_buffer: vk::CommandBuffer| {
+                      command_buffer: vk::CommandBuffer,
+                      _pipeline_layout: vk::PipelineLayout| {
                     enter_span!(tracing::Level::TRACE, "Draw Cube");
                     unsafe {
                         let vbuf = cube_vbuf_ref.lock().unwrap();
@@ -380,16 +381,6 @@ impl CubePlaneExample {
                 "cube_plane-frag",
                 include_bytes!(concat!(env!("SHADER_DIR"), "/cube_plane-frag.spv")))));
 
-        let camera = Camera::new(
-            1200.0 / 800.0,
-            45.0f32.to_radians(),
-            0.1,
-            100.0,
-            &glm::vec3(0.0, 3.0, 6.0),
-            &glm::vec3(0.0, 0.5, 0.0),
-            &glm::vec3(0.0, 1.0, 0.0)
-        );
-
         CubePlaneExample {
             scene_ubo: Arc::new(Mutex::new(scene_ubo)),
             cube_ubo: Arc::new(Mutex::new(cube_ubo)),
@@ -398,7 +389,6 @@ impl CubePlaneExample {
             plane_vbuf: Arc::new(Mutex::new(plane_vbuf)),
             vertex_shader,
             fragment_shader,
-            camera,
             time: 0.0,
             light_angle: 45.0f32.to_radians(),
             camera_distance: 6.0,

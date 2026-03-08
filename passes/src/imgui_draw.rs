@@ -330,7 +330,8 @@ impl ImguiRender {
                 .scissor(scissor)
                 .fill_commands(Box::new(
                     move |device: DeviceInterface,
-                          command_buffer: vk::CommandBuffer | {
+                          command_buffer: vk::CommandBuffer,
+                          _pipeline_layout: vk::PipelineLayout| {
                         unsafe {
                             enter_span!(tracing::Level::TRACE, "Imgui Draw");
                             // let x = render_ctx.get_device().borrow().get()

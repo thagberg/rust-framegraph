@@ -135,11 +135,13 @@ impl GraphicsPassNode  {
     pub fn execute(
         &self,
         device: DeviceInterface,
-        command_buffer: vk::CommandBuffer)
+        command_buffer: vk::CommandBuffer,
+        pipeline_layout: vk::PipelineLayout)
     {
         (self.fill_callback)(
             device,
-            command_buffer);
+            command_buffer,
+            pipeline_layout);
     }
 
 }

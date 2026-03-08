@@ -458,8 +458,9 @@ impl Example for ModelExample {
                     .viewport(viewport)
                     .scissor(scissor)
                     .fill_commands(Box::new(
-                        move | device: DeviceInterface,
-                               command_buffer: vk::CommandBuffer | {
+                        move |device: DeviceInterface,
+                              command_buffer: vk::CommandBuffer,
+                              _pipeline_layout: vk::PipelineLayout| {
 
                             enter_span!(tracing::Level::TRACE, "Draw RenderMesh");
                             enter_gpu_span!("RenderMesh GPU", "examples", device.get(), &command_buffer, vk::PipelineStageFlags::ALL_GRAPHICS);

@@ -4,7 +4,8 @@ use ash::vk;
 pub type FillCallback = dyn (
 Fn(
     DeviceInterface,
-    vk::CommandBuffer
+    vk::CommandBuffer,
+    vk::PipelineLayout
 )
 ) + Sync + Send;
 

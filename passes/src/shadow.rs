@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 use ash::vk;
+use nalgebra_glm as glm;
 use api_types::device::interface::DeviceInterface;
 use api_types::device::resource::DeviceResource;
 use framegraph::attachment::AttachmentReference;
@@ -11,13 +12,13 @@ use framegraph::shader;
 use framegraph::shader::Shader;
 use profiling::{enter_gpu_span, enter_span};
 
-pub struct ShadowMappingObjects {
+pub struct ShadowMappingObject {
     pub vertex_buffer: Arc<Mutex<DeviceResource>>,
     pub index_buffer: Arc<Mutex<DeviceResource>>,
     pub index_count: u32,
     pub vertex_binding: vk::VertexInputBindingDescription,
     pub vertex_attributes: Vec<vk::VertexInputAttributeDescription>,
-    pub light_mvp_buffer: Arc<Mutex<DeviceResource>>,
+    pub model_matrix: glm::Mat4,
 }
 
 pub struct ShadowPass {
@@ -47,9 +48,10 @@ impl ShadowPass {
     pub fn generate_pass(
         &self,
         depth_target: AttachmentReference,
-        objects: Vec<ShadowMappingObjects>,
+        objects: Vec<ShadowMappingObject>,
+        light_mvp_buffer: Arc<Mutex<DeviceResource>>,
     ) -> PassType {
-        // Assuming all objects can use the same pipeline for shadow mapping if their vertex layout is same.
+        // Assuming all objects can use the same pipeline for shadow mapping if their vertex layout is the same.
         // For simplicity, we'll use the first object's vertex layout for the pipeline.
         // In a real scenario, we might need multiple passes or multiple pipelines.
         let (vertex_binding, vertex_attributes) = if let Some(first) = objects.first() {
@@ -71,29 +73,27 @@ impl ShadowPass {
         ));
 
         let mut pass_node_builder = GraphicsPassNode::builder("shadow_pass".to_string())
-            .pipeline_description(pipeline_description)
+            .pipeline_description(pipeline_description.clone())
             .depth_target(depth_target.clone());
 
-        for object in &objects {
-            let mvp_binding = ResourceBinding {
-                resource: object.light_mvp_buffer.clone(),
-                binding_info: BindingInfo {
-                    binding_type: BindingType::Buffer(BufferBindingInfo {
-                        offset: 0,
-                        range: vk::WHOLE_SIZE,
-                    }),
-                    set: 0,
-                    slot: 0,
-                    stage: vk::PipelineStageFlags::VERTEX_SHADER,
-                    access: vk::AccessFlags::SHADER_READ,
-                },
-            };
-            pass_node_builder = pass_node_builder.read(mvp_binding);
-        }
+        let mvp_binding = ResourceBinding {
+            resource: light_mvp_buffer,
+            binding_info: BindingInfo {
+                binding_type: BindingType::Buffer(BufferBindingInfo {
+                    offset: 0,
+                    range: vk::WHOLE_SIZE,
+                }),
+                set: 0,
+                slot: 0,
+                stage: vk::PipelineStageFlags::VERTEX_SHADER,
+                access: vk::AccessFlags::SHADER_READ,
+            },
+        };
+        pass_node_builder = pass_node_builder.read(mvp_binding);
 
         let pass_node = pass_node_builder
             .fill_commands(Box::new(
-                move |device: DeviceInterface, command_buffer: vk::CommandBuffer| {
+                move |device: DeviceInterface, command_buffer: vk::CommandBuffer, pipeline_layout: vk::PipelineLayout| {
                     enter_span!(tracing::Level::TRACE, "shadow_pass");
                     enter_gpu_span!(
                         "shadow_pass_gpu",
@@ -142,6 +142,18 @@ impl ShadowPass {
                                 ib.get_buffer().buffer,
                                 0,
                                 vk::IndexType::UINT32,
+                            );
+
+                            let model_matrix_bytes = std::slice::from_raw_parts(
+                                object.model_matrix.as_ptr() as *const u8,
+                                std::mem::size_of::<glm::Mat4>(),
+                            );
+                            device.get().cmd_push_constants(
+                                command_buffer,
+                                pipeline_layout,
+                                vk::ShaderStageFlags::VERTEX,
+                                0,
+                                model_matrix_bytes,
                             );
 
                             device.get().cmd_draw_indexed(

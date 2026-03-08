@@ -60,7 +60,19 @@ fn create_shader_module(device: DeviceInterface, file_name: &str) -> Shader
         binding_map.insert(set.0, descriptor_set_bindings);
     }
 
-    Shader::new(shader, binding_map)
+    let push_constant_range = reflection_module.get_push_constant_range()
+        .expect("Failed to get push constants for reflected shader");
+    let mut push_constant_ranges: Vec<vk::PushConstantRange> = Vec::new();
+    if let Some(push_constant) = push_constant_range {
+        push_constant_ranges.push(
+            vk::PushConstantRange::default()
+                .offset(push_constant.offset)
+                .size(push_constant.size)
+                .stage_flags(vk::ShaderStageFlags::empty())
+        );
+    }
+
+    Shader::new(shader, binding_map, push_constant_ranges)
 }
 
 pub fn create_shader_module_from_bytes(device: DeviceInterface, name: &str, bytes: &[u8]) -> Shader
@@ -111,14 +123,27 @@ pub fn create_shader_module_from_bytes(device: DeviceInterface, name: &str, byte
         binding_map.insert(set.0, descriptor_set_bindings);
     }
 
-    Shader::new(shader, binding_map)
+    let push_constant_range = reflection_module.get_push_constant_range()
+        .expect("Failed to get push constants for reflected shader from bytes");
+    let mut push_constant_ranges: Vec<vk::PushConstantRange> = Vec::new();
+    if let Some(push_constant) = push_constant_range {
+        push_constant_ranges.push(
+            vk::PushConstantRange::default()
+                .offset(push_constant.offset)
+                .size(push_constant.size)
+                .stage_flags(vk::ShaderStageFlags::empty())
+        );
+    }
+
+    Shader::new(shader, binding_map, push_constant_ranges)
 }
 
 #[derive(Clone)]
 pub struct Shader
 {
     pub shader: DeviceShader,
-    pub descriptor_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding<'static>>>
+    pub descriptor_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding<'static>>>,
+    pub push_constant_ranges: Vec<vk::PushConstantRange>,
 }
 
 /// Must impl Sync to allow vk::DescriptorSetLayoutBinding to be shared between threads
@@ -133,11 +158,13 @@ impl Shader
 {
     pub fn new(
         shader: DeviceShader,
-        descriptor_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding<'static>>>) -> Shader
+        descriptor_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding<'static>>>,
+        push_constant_ranges: Vec<vk::PushConstantRange>) -> Shader
     {
         Shader {
             shader,
-            descriptor_bindings
+            descriptor_bindings,
+            push_constant_ranges
         }
     }
 }
