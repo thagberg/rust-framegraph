@@ -26,6 +26,12 @@ pub struct ShadowPass {
     fragment_shader: Arc<Mutex<Shader>>,
 }
 
+#[repr(C)]
+pub struct LightMVP {
+    pub view: glm::Mat4,
+    pub proj: glm::Mat4
+}
+
 impl ShadowPass {
     pub fn new(device: DeviceInterface) -> Self {
         let vertex_shader = Arc::new(Mutex::new(shader::create_shader_module_from_bytes(

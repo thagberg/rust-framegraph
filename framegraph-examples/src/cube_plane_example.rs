@@ -18,7 +18,7 @@ use profiling::enter_span;
 use crate::example::Example;
 use nalgebra_glm as glm;
 use passes::clear;
-use passes::shadow::{ShadowMappingObject, ShadowPass};
+use passes::shadow::{ShadowMappingObject, ShadowPass, LightMVP};
 use util::camera::Camera;
 
 #[repr(C)]
@@ -329,7 +329,7 @@ impl Example for CubePlaneExample {
             vk::SampleCountFlags::TYPE_1);
 
         // create shadow objects vector
-        let shadow_objects = [
+        let shadow_objects = vec![
             // cube object
             ShadowMappingObject{
                 vertex_buffer: cube_vbuf_ref.clone(),
@@ -349,9 +349,43 @@ impl Example for CubePlaneExample {
             }
         ];
 
-        let shadows = ShadowPass::new(device.clone());
-        // let shadow_pass = shadows.generate_pass()
+        // create light UBO
+        let shadow_camera = Camera::new(
+            1.0,
+            self.light_angle,
+            0.1,
+            100.0,
+            &light_dir,
+            &light_pos.xyz(),
+            &glm::vec3(0.0, 1.0, 0.0));
 
+        let shadow_ubo = create_ubo(
+            device.clone(),
+            allocator.clone(),
+            std::mem::size_of::<LightMVP>() as u64,
+            "shadow_ubo");
+
+
+        let light_mvp = LightMVP{
+            view: shadow_camera.view,
+            proj: shadow_camera.projection
+        };
+
+        device.update_buffer(&shadow_ubo, |mapped_memory: *mut c_void, _size: u64| {
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    &light_mvp,
+                    mapped_memory as *mut LightMVP,
+                    1
+                );
+            }
+        });
+
+        let shadows = ShadowPass::new(device.clone());
+        let shadow_pass = shadows.generate_pass(
+            shadow_attachment,
+            shadow_objects,
+            Arc::new(Mutex::new(shadow_ubo)));
 
         // Pass for Plane
         let plane_pass = GraphicsPassNode::builder("plane_pass".to_string())
@@ -409,6 +443,7 @@ impl Example for CubePlaneExample {
             .build()
             .expect("Failed to create Cube passnode");
 
+        passes.push(shadow_pass);
         passes.push(PassType::Graphics(plane_pass));
         passes.push(PassType::Graphics(cube_pass));
         passes
