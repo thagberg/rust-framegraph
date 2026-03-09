@@ -9,7 +9,7 @@ use api_types::device::resource::{DeviceResource, ResourceType};
 use api_types::device::interface::DeviceInterface;
 use context::vulkan_render_context::VulkanRenderContext;
 use framegraph::attachment::AttachmentReference;
-use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ResourceBinding};
+use framegraph::binding::{BindingInfo, BindingType, BufferBindingInfo, ImageBindingInfo, ResourceBinding};
 use framegraph::graphics_pass_node::GraphicsPassNode;
 use framegraph::pass_type::PassType;
 use framegraph::pipeline::{BlendType, DepthStencilType, PipelineDescription, RasterizationType};
@@ -317,15 +317,15 @@ impl Example for CubePlaneExample {
                 api_types::image::ImageType::Depth
             );
 
-            device.create_image(
+            Arc::new(Mutex::new(device.create_image(
                 0,
                 &image_create,
                 allocator.clone(),
                 MemoryLocation::GpuOnly
-            )
+            )))
         };
         let shadow_attachment = AttachmentReference::new(
-            Arc::new(Mutex::new(shadow_map)),
+            shadow_map.clone(),
             vk::SampleCountFlags::TYPE_1);
 
         // create shadow objects vector
@@ -387,11 +387,25 @@ impl Example for CubePlaneExample {
             shadow_objects,
             Arc::new(Mutex::new(shadow_ubo)));
 
+        // create binding for shadow map
+        let shadow_binding = ResourceBinding {
+            resource: shadow_map.clone(),
+            binding_info: BindingInfo {
+                binding_type: BindingType::Image(ImageBindingInfo{
+                    layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL }),
+                set: 0,
+                slot: 1,
+                stage: vk::PipelineStageFlags::FRAGMENT_SHADER,
+                access: vk::AccessFlags::SHADER_READ,
+            },
+        };
+
         // Pass for Plane
         let plane_pass = GraphicsPassNode::builder("plane_pass".to_string())
             .pipeline_description(pipeline_description.clone())
             .read(scene_binding.clone())
             .read(plane_ubo_binding)
+            .read(shadow_binding.clone())
             .render_target(back_buffer.clone())
             .depth_target(depth_attachment.clone())
             .viewport(viewport)
@@ -420,6 +434,7 @@ impl Example for CubePlaneExample {
             .pipeline_description(pipeline_description)
             .read(scene_binding)
             .read(cube_ubo_binding)
+            .read(shadow_binding.clone())
             .render_target(back_buffer)
             .depth_target(depth_attachment)
             .viewport(viewport)
