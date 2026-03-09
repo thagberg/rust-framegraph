@@ -453,10 +453,10 @@ impl VulkanPipelineManager {
                 let mut full_bindings: HashMap<u32, Vec<vk::DescriptorSetLayoutBinding>> = HashMap::new();
                 for (set, bindings) in &pipeline_description.vertex_shader.lock().unwrap().descriptor_bindings {
                     let set_bindings = full_bindings.entry(*set).or_insert(Vec::new());
-                    // set_bindings.copy_from_slice(&bindings);
-                    set_bindings.extend(bindings.iter());
-                    for binding in set_bindings {
-                        binding.stage_flags = vk::ShaderStageFlags::VERTEX;
+                    for binding in bindings {
+                        let mut new_binding = binding.clone();
+                        new_binding.stage_flags = vk::ShaderStageFlags::VERTEX;
+                        set_bindings.push(new_binding);
                     }
                 }
                 for (set, bindings) in &pipeline_description.fragment_shader.lock().unwrap().descriptor_bindings {

@@ -258,7 +258,7 @@ impl Example for CubePlaneExample {
                 }),
                 set: 0,
                 slot: 1,
-                stage: vk::PipelineStageFlags::ALL_GRAPHICS,
+                stage: vk::PipelineStageFlags::VERTEX_SHADER,
                 access: vk::AccessFlags::SHADER_READ
             },
         };
@@ -272,7 +272,7 @@ impl Example for CubePlaneExample {
                 }),
                 set: 0,
                 slot: 1,
-                stage: vk::PipelineStageFlags::ALL_GRAPHICS,
+                stage: vk::PipelineStageFlags::VERTEX_SHADER,
                 access: vk::AccessFlags::SHADER_READ
             },
         };
@@ -324,6 +324,24 @@ impl Example for CubePlaneExample {
                 MemoryLocation::GpuOnly
             )))
         };
+
+        unsafe {
+            let sampler_create = vk::SamplerCreateInfo::default()
+                .mag_filter(vk::Filter::LINEAR)
+                .min_filter(vk::Filter::LINEAR)
+                .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+                .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+                .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+                .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+                .border_color(vk::BorderColor::FLOAT_OPAQUE_WHITE);
+
+            let sampler = device.get().create_sampler(&sampler_create, None)
+                .expect("Failed to create sampler for shadow map");
+            device.set_debug_name(sampler, "shadow_sampler");
+
+            shadow_map.lock().unwrap().get_image_mut().sampler = Some(sampler);
+        }
+
         let shadow_attachment = AttachmentReference::new(
             shadow_map.clone(),
             vk::SampleCountFlags::TYPE_1);
@@ -394,7 +412,7 @@ impl Example for CubePlaneExample {
                 binding_type: BindingType::Image(ImageBindingInfo{
                     layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL }),
                 set: 0,
-                slot: 1,
+                slot: 2,
                 stage: vk::PipelineStageFlags::FRAGMENT_SHADER,
                 access: vk::AccessFlags::SHADER_READ,
             },

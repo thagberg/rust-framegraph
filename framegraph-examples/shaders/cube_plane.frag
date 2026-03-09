@@ -11,6 +11,8 @@ layout(set = 0, binding = 0) uniform SceneUniforms {
     float spotlight_angle;
 } scene;
 
+layout(set = 0, binding = 2) uniform sampler2DShadow shadowMap;
+
 layout(location = 0) in struct {
     vec3 frag_pos;
     vec3 normal;
