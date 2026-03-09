@@ -27,6 +27,9 @@ struct SceneUniforms {
     proj: glm::Mat4,
     light_pos: glm::Vec4,
     view_pos: glm::Vec4,
+    light_dir: glm::Vec4,
+    spotlight_angle: f32,
+    _pad0: [f32; 3],
 }
 
 #[repr(C)]
@@ -55,6 +58,7 @@ pub struct CubePlaneExample {
     time: f32,
     light_angle: f32,
     camera_distance: f32,
+    spotlight_opening_angle: f32,
 }
 
 impl Example for CubePlaneExample {
@@ -92,12 +96,16 @@ impl Example for CubePlaneExample {
         let light_x = self.light_angle.cos() * light_radius;
         let light_z = self.light_angle.sin() * light_radius;
         let light_pos = glm::vec4(light_x, 5.0, light_z, 1.0);
+        let light_dir = glm::normalize(&(target - light_pos.xyz()));
 
         let uniforms = SceneUniforms {
             view: camera.view,
             proj: camera.projection,
             light_pos,
             view_pos: glm::vec4(view_pos.x, view_pos.y, view_pos.z, 1.0),
+            light_dir: glm::vec4(light_dir.x, light_dir.y, light_dir.z, 0.0),
+            spotlight_angle: self.spotlight_opening_angle.cos(),
+            _pad0: [0.0; 3],
         };
 
         device.update_buffer(&self.scene_ubo.lock().unwrap(), |mapped_memory: *mut c_void, _size: u64| {
@@ -140,9 +148,14 @@ impl Example for CubePlaneExample {
 
         let mut angle = self.light_angle;
         imgui_ui.slider("Light Rotation", 0.0, 2.0 * std::f32::consts::PI, &mut angle);
+        
+        let mut spotlight_angle = self.spotlight_opening_angle.to_degrees();
+        imgui_ui.slider("Spotlight Angle", 1.0, 90.0, &mut spotlight_angle);
+
         unsafe {
             let mut_self = self as *const Self as *mut Self;
             (*mut_self).light_angle = angle;
+            (*mut_self).spotlight_opening_angle = spotlight_angle.to_radians();
         }
 
         let mut passes: Vec<PassType> = Vec::new();
@@ -460,6 +473,7 @@ impl CubePlaneExample {
             time: 0.0,
             light_angle: 45.0f32.to_radians(),
             camera_distance: 6.0,
+            spotlight_opening_angle: 30.0f32.to_radians(),
         }
     }
 }

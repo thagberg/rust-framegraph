@@ -9,6 +9,8 @@ layout(set = 0, binding = 0) uniform SceneUniforms {
     mat4 proj;
     vec4 light_pos;
     vec4 view_pos;
+    vec4 light_dir;
+    float spotlight_angle;
 } scene;
 
 layout(set = 0, binding = 1) uniform ModelUniforms {
@@ -23,8 +25,6 @@ layout(location = 0) out struct {
     vec3 frag_pos;
     vec3 normal;
     vec3 color;
-    vec3 light_pos;
-    vec3 view_pos;
 } Out;
 
 void main() {
@@ -32,8 +32,6 @@ void main() {
     Out.frag_pos = world_pos.xyz;
     Out.normal = normalize(mat3(transpose(inverse(model_obj.model))) * normal);
     Out.color = color;
-    Out.light_pos = scene.light_pos.xyz;
-    Out.view_pos = scene.view_pos.xyz;
     
     gl_Position = scene.proj * scene.view * world_pos;
 }
