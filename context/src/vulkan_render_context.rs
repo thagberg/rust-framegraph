@@ -56,6 +56,9 @@ unsafe extern "system" fn debug_utils_callback(
         // Let's just print it for now if we're under RenderDoc or just in general
         // to be less aggressive.
         println!("Vulkan Error detected: {:?}", message);
+        if std::env::var("VK_PANIC_ON_ERROR").is_ok() {
+            panic!("Vulkan Error detected: {:?}", message);
+        }
         // assert!(severity != vk::DebugUtilsMessageSeverityFlagsEXT::ERROR);
     }
 
@@ -69,7 +72,8 @@ fn get_instance_extensions() -> Vec<&'static CStr> {
         ash::khr::portability_enumeration::NAME,
         ash::khr::get_physical_device_properties2::NAME,
         ash::khr::get_surface_capabilities2::NAME,
-        ash::ext::surface_maintenance1::NAME
+        ash::ext::surface_maintenance1::NAME,
+        ash::ext::debug_utils::NAME
     ]
 }
 

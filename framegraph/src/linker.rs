@@ -215,10 +215,32 @@ pub fn link_graphics_node(node: &mut GraphicsPassNode, usage_cache: &mut HashMap
     link_inputs(node.get_outputs(), &mut node_barrier, usage_cache);
 
     if let Some(dt) = node.get_depth_mut() {
-        let handle = {
-            dt.resource_image.lock().unwrap().get_handle()
+        let mut dt_lock = dt.resource_image.lock().unwrap();
+        let handle = dt_lock.get_handle();
+        let last_usage = {
+            let usage = usage_cache.get(&handle);
+            match usage {
+                Some(found_usage) => {found_usage.clone()},
+                _ => {
+                    let resolved_image = {
+                        match &dt_lock.resource_type {
+                            Some(ResourceType::Image(image)) => {
+                                image
+                            }
+                            _ => {
+                                panic!("Depth target must be an image");
+                            }
+                        }
+                    };
+                    ResourceUsage {
+                        access: vk::AccessFlags::NONE,
+                        stage: vk::PipelineStageFlags::ALL_COMMANDS,
+                        layout: Some(resolved_image.layout)
+                    }
+                }
+            }
         };
-        let last_usage = usage_cache.get(&handle);
+
         // TODO: handle separate depth and stencil targets
         let new_usage = ResourceUsage {
             access: vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE |
@@ -226,51 +248,111 @@ pub fn link_graphics_node(node: &mut GraphicsPassNode, usage_cache: &mut HashMap
             stage: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
             layout: Some(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
         };
-        if let Some(usage) = last_usage {
-            // The RenderPassManager expects the RT layout to be in the
-            // post-barrier (i.e. new) layout
-            dt.layout = new_usage.layout.unwrap();
 
+        // The RenderPassManager expects the RT layout to be in the
+        // post-barrier (i.e. new) layout
+        dt.layout = new_usage.layout.unwrap();
+
+        let layout_changed = {
+            if let Some(layout) = last_usage.layout {
+                layout != dt.layout
+            } else {
+                true
+            }
+        };
+
+        let prev_write = is_write(last_usage.access, last_usage.stage);
+
+        if layout_changed || prev_write {
             let image_barrier = ImageBarrier {
                 resource: dt.resource_image.clone(),
-                source_stage: usage.stage,
+                source_stage: last_usage.stage,
                 dest_stage: new_usage.stage,
-                source_access: usage.access,
+                source_access: last_usage.access,
                 dest_access: new_usage.access,
-                old_layout: usage.layout.expect("Tried to get image layout from non-image"),
+                old_layout: last_usage.layout.expect("Tried to get image layout from non-image"),
                 new_layout: dt.layout
             };
             node_barrier.image_barriers.push(image_barrier);
+
+            match &mut dt_lock.resource_type {
+                Some(ResourceType::Image(image)) => {
+                    image.layout = dt.layout;
+                }
+                _ => {}
+            }
         }
+
+        usage_cache.insert(handle, new_usage);
     }
 
     for rt in node.get_rendertargets_mut() {
         // rendertargets always write, so if this isn't the first usage of this resource
         // then we know we need a barrier
-        let handle = {
-            rt.resource_image.lock().unwrap().get_handle()
+        let mut rt_lock = rt.resource_image.lock().unwrap();
+        let handle = rt_lock.get_handle();
+        let last_usage = {
+            let usage = usage_cache.get(&handle);
+            match usage {
+                Some(found_usage) => {found_usage.clone()},
+                _ => {
+                    let resolved_image = {
+                        match &rt_lock.resource_type {
+                            Some(ResourceType::Image(image)) => {
+                                image
+                            }
+                            _ => {
+                                panic!("Render target must be an image");
+                            }
+                        }
+                    };
+                    ResourceUsage {
+                        access: vk::AccessFlags::NONE,
+                        stage: vk::PipelineStageFlags::ALL_COMMANDS,
+                        layout: Some(resolved_image.layout)
+                    }
+                }
+            }
         };
-        let last_usage = usage_cache.get(&handle);
+
         let new_usage = ResourceUsage {
             access: vk::AccessFlags::COLOR_ATTACHMENT_WRITE | vk::AccessFlags::COLOR_ATTACHMENT_READ,
             stage: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
             layout: Some(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
         };
-        if let Some(usage) = last_usage {
-            // The RenderPassManager expects the RT layout to be in the
-            // post-barrier (i.e. new) layout
-            rt.layout = new_usage.layout.unwrap();
 
+        // The RenderPassManager expects the RT layout to be in the
+        // post-barrier (i.e. new) layout
+        rt.layout = new_usage.layout.unwrap();
+
+        let layout_changed = {
+            if let Some(layout) = last_usage.layout {
+                layout != rt.layout
+            } else {
+                true
+            }
+        };
+
+        let prev_write = is_write(last_usage.access, last_usage.stage);
+
+        if layout_changed || prev_write {
             let image_barrier = ImageBarrier {
                 resource: rt.resource_image.clone(),
-                source_stage: usage.stage,
+                source_stage: last_usage.stage,
                 dest_stage: new_usage.stage,
-                source_access: usage.access,
+                source_access: last_usage.access,
                 dest_access: new_usage.access,
-                old_layout: usage.layout.expect("Tried to get image layout from non-image"),
+                old_layout: last_usage.layout.expect("Tried to get image layout from non-image"),
                 new_layout: rt.layout
             };
             node_barrier.image_barriers.push(image_barrier);
+
+            match &mut rt_lock.resource_type {
+                Some(ResourceType::Image(image)) => {
+                    image.layout = rt.layout;
+                }
+                _ => {}
+            }
         }
 
         usage_cache.insert(handle, new_usage);
@@ -286,18 +368,27 @@ pub fn link_copy_node(node: &mut CopyPassNode, usage_cache: &mut HashMap<u64, Re
     };
 
     for resource in &node.copy_sources {
-        let handle = {
-            resource.lock().unwrap().get_handle()
-        };
+        let mut resource_lock = resource.lock().unwrap();
+        let handle = resource_lock.get_handle();
         let last_usage = {
             let usage = usage_cache.get(&handle);
             match usage {
                 Some(found_usage) => {found_usage.clone()},
                 _ => {
+                    let resolved_image_layout = {
+                        match &resource_lock.resource_type {
+                            Some(ResourceType::Image(image)) => {
+                                Some(image.layout)
+                            }
+                            _ => {
+                                None
+                            }
+                        }
+                    };
                     ResourceUsage {
                         access: vk::AccessFlags::NONE,
-                        stage: vk::PipelineStageFlags::ALL_COMMANDS,
-                        layout: Some(vk::ImageLayout::UNDEFINED)
+                        stage: vk::PipelineStageFlags::TOP_OF_PIPE,
+                        layout: resolved_image_layout
                     }
                 }
             }
@@ -320,21 +411,39 @@ pub fn link_copy_node(node: &mut CopyPassNode, usage_cache: &mut HashMap<u64, Re
             new_layout: new_usage.layout.unwrap()
         };
         node_barrier.image_barriers.push(image_barrier);
+
+        match &mut resource_lock.resource_type {
+            Some(ResourceType::Image(image)) => {
+                image.layout = new_usage.layout.unwrap();
+            }
+            _ => {}
+        }
+
+        usage_cache.insert(handle, new_usage);
     }
 
     for resource in &node.copy_dests {
-        let handle = {
-            resource.lock().unwrap().get_handle()
-        };
+        let mut resource_lock = resource.lock().unwrap();
+        let handle = resource_lock.get_handle();
         let last_usage = {
             let usage = usage_cache.get(&handle);
             match usage {
                 Some(found_usage) => {found_usage.clone()},
                 _ => {
+                    let resolved_image_layout = {
+                        match &resource_lock.resource_type {
+                            Some(ResourceType::Image(image)) => {
+                                Some(image.layout)
+                            }
+                            _ => {
+                                None
+                            }
+                        }
+                    };
                     ResourceUsage {
                         access: vk::AccessFlags::NONE,
                         stage: vk::PipelineStageFlags::TOP_OF_PIPE,
-                        layout: Some(vk::ImageLayout::UNDEFINED)
+                        layout: resolved_image_layout
                     }
                 }
             }
@@ -357,6 +466,15 @@ pub fn link_copy_node(node: &mut CopyPassNode, usage_cache: &mut HashMap<u64, Re
             new_layout: new_usage.layout.unwrap()
         };
         node_barrier.image_barriers.push(image_barrier);
+
+        match &mut resource_lock.resource_type {
+            Some(ResourceType::Image(image)) => {
+                image.layout = new_usage.layout.unwrap();
+            }
+            _ => {}
+        }
+
+        usage_cache.insert(handle, new_usage);
     }
 
     node_barrier
