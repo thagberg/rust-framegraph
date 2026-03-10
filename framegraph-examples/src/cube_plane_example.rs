@@ -349,6 +349,12 @@ impl Example for CubePlaneExample {
             shadow_map.clone(),
             vk::SampleCountFlags::TYPE_1);
 
+        // Clear shadow map
+        passes.push(clear::clear(
+            shadow_attachment.resource_image.clone(),
+            vk::ImageAspectFlags::DEPTH));
+
+
         // create shadow objects vector
         let shadow_objects = vec![
             // cube object
