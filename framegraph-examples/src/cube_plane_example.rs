@@ -22,12 +22,14 @@ use passes::shadow::{ShadowMappingObject, ShadowPass, LightMVP};
 use util::camera::Camera;
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 struct SceneUniforms {
     view: glm::Mat4,
     proj: glm::Mat4,
     light_pos: glm::Vec4,
     view_pos: glm::Vec4,
     light_dir: glm::Vec4,
+    light_space_matrix: glm::Mat4,
     spotlight_angle: f32,
     _pad0: [f32; 3],
 }
@@ -104,6 +106,7 @@ impl Example for CubePlaneExample {
             light_pos,
             view_pos: glm::vec4(view_pos.x, view_pos.y, view_pos.z, 1.0),
             light_dir: glm::vec4(light_dir.x, light_dir.y, light_dir.z, 0.0),
+            light_space_matrix: glm::Mat4::identity(),
             spotlight_angle: self.spotlight_opening_angle.cos(),
             _pad0: [0.0; 3],
         };
@@ -394,6 +397,19 @@ impl Example for CubePlaneExample {
                 core::ptr::copy_nonoverlapping(
                     &light_mvp,
                     mapped_memory as *mut LightMVP,
+                    1
+                );
+            }
+        });
+
+        // Update Scene Uniforms with light space matrix
+        device.update_buffer(&self.scene_ubo.lock().unwrap(), |mapped_memory: *mut c_void, _size: u64| {
+            unsafe {
+                let mut updated_uniforms = uniforms;
+                updated_uniforms.light_space_matrix = light_mvp.proj * light_mvp.view;
+                core::ptr::copy_nonoverlapping(
+                    &updated_uniforms,
+                    mapped_memory as *mut SceneUniforms,
                     1
                 );
             }

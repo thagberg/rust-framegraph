@@ -8,6 +8,7 @@ layout(set = 0, binding = 0) uniform SceneUniforms {
     vec4 light_pos;
     vec4 view_pos;
     vec4 light_dir;
+    mat4 light_space_matrix;
     float spotlight_angle;
 } scene;
 
@@ -17,6 +18,7 @@ layout(location = 0) in struct {
     vec3 frag_pos;
     vec3 normal;
     vec3 color;
+    vec4 light_space_pos;
 } In;
 
 void main() {
@@ -34,6 +36,11 @@ void main() {
     
     vec3 result;
     if (theta > scene.spotlight_angle) {
+        // Shadow calculation
+        vec3 proj_coords = In.light_space_pos.xyz / In.light_space_pos.w;
+        proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
+        float shadow = texture(shadowMap, vec3(proj_coords.xy, proj_coords.z));
+        
         // Diffuse
         vec3 norm = normalize(In.normal);
         vec3 light_dir = -light_to_frag;
@@ -51,7 +58,7 @@ void main() {
         float epsilon = 0.05;
         float intensity = clamp((theta - scene.spotlight_angle) / epsilon, 0.0, 1.0);
         
-        result = (ambient + (diffuse + specular) * intensity) * object_color;
+        result = (ambient + shadow * (diffuse + specular) * intensity) * object_color;
     } else {
         result = ambient * object_color;
     }
