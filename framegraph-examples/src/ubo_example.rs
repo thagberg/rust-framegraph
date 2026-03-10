@@ -127,7 +127,6 @@ impl UboExample {
         );
 
         let ubo = device.create_buffer(
-            0, // TODO: create buffer handle
             &ubo_create,
             allocator.clone(),
             MemoryLocation::CpuToGpu);

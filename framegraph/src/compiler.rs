@@ -50,6 +50,13 @@ pub fn compile(nodes: &mut StableDiGraph<RwLock<PassType>, u32>, root_index: Nod
             retained_nodes[node_id.index()] = true;
         }
 
+        for node_index in nodes.node_indices() {
+            if !retained_nodes[node_index.index()] {
+                let name = nodes[node_index].read().unwrap().get_name().to_string();
+                log_trace!(target: "framegraph", "Removed pass: {name}");
+            }
+        }
+
         nodes.retain_nodes(|_graph, node_index| {
             retained_nodes[node_index.index()]
         });
@@ -62,11 +69,10 @@ pub fn compile(nodes: &mut StableDiGraph<RwLock<PassType>, u32>, root_index: Nod
         let sort_result = petgraph::algo::toposort(&*nodes, None);
         match sort_result {
             Ok(mut sorted_list) => {
-                // DFS requires we order nodes as input -> output, but for sorting we want output -> input
-                sorted_list.reverse();
                 for i in &sorted_list {
                     log_trace!(target: "framegraph", "Sorted node: {:?}", nodes.node_weight(*i).unwrap().read().unwrap().get_name())
                 }
+                sorted_list.reverse();
                 sorted_nodes = sorted_list;
             },
             Err(cycle_error) => {

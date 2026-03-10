@@ -47,7 +47,6 @@ pub fn generate_pass(
     };
 
     let blur_target = Arc::new(Mutex::new(device.create_image(
-        0, // TODO: create image handle
         &blur_target_create_info,
         allocator.clone(),
         MemoryLocation::GpuOnly)));

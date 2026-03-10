@@ -184,7 +184,6 @@ impl Example for CubePlaneExample {
                 );
 
                 device.create_image(
-                    0,
                     &image_create,
                     allocator.clone(),
                     MemoryLocation::GpuOnly
@@ -321,7 +320,6 @@ impl Example for CubePlaneExample {
             );
 
             Arc::new(Mutex::new(device.create_image(
-                0,
                 &image_create,
                 allocator.clone(),
                 MemoryLocation::GpuOnly
@@ -577,7 +575,7 @@ fn create_ubo(device: DeviceInterface, allocator: Arc<Mutex<ResourceAllocator>>,
         name.to_string()
     );
 
-    device.create_buffer(0, &ubo_create, allocator, MemoryLocation::CpuToGpu)
+    device.create_buffer(&ubo_create, allocator, MemoryLocation::CpuToGpu)
 }
 
 fn create_vertex_buffer(device: DeviceInterface, allocator: Arc<Mutex<ResourceAllocator>>, vertices: &[Vertex], name: &str) -> DeviceResource {
@@ -590,7 +588,7 @@ fn create_vertex_buffer(device: DeviceInterface, allocator: Arc<Mutex<ResourceAl
         name.to_string()
     );
 
-    let buffer = device.create_buffer(0, &create_info, allocator, MemoryLocation::CpuToGpu);
+    let buffer = device.create_buffer(&create_info, allocator, MemoryLocation::CpuToGpu);
     device.update_buffer(&buffer, |mapped_memory: *mut c_void, _size: u64| {
         unsafe {
             core::ptr::copy_nonoverlapping(vertices.as_ptr(), mapped_memory as *mut Vertex, vertices.len());
@@ -609,7 +607,7 @@ fn create_index_buffer(device: DeviceInterface, allocator: Arc<Mutex<ResourceAll
         name.to_string()
     );
 
-    let buffer = device.create_buffer(0, &create_info, allocator, MemoryLocation::CpuToGpu);
+    let buffer = device.create_buffer(&create_info, allocator, MemoryLocation::CpuToGpu);
     device.update_buffer(&buffer, |mapped_memory: *mut c_void, _size: u64| {
         unsafe {
             core::ptr::copy_nonoverlapping(indices.as_ptr(), mapped_memory as *mut u32, indices.len());

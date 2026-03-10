@@ -606,7 +606,7 @@ fn create_debug_util(
 }
 
 fn create_swapchain(
-    handle_generator: &mut HandleGenerator,
+    _handle_generator: &mut HandleGenerator,
     instance: &InstanceWrapper,
     device: &DeviceInterface,
     physical_device: &PhysicalDeviceWrapper,
@@ -722,13 +722,10 @@ fn create_swapchain(
             .expect("Failed to get swapchain images.")
             .iter()
             .map(|image| {
-                let handle = handle_generator.generate_handle();
-
                 device.set_debug_name(*image, &format!("Swapchain image {}", index));
                 index += 1;
 
                 Arc::new(Mutex::new(device.wrap_image(
-                    handle,
                     image.clone(),
                     swapchain_format.format,
                     vk::ImageAspectFlags::COLOR,

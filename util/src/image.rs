@@ -13,7 +13,6 @@ use api_types::device::resource::{DeviceResource, ResourceType};
 use api_types::image::{ImageCreateInfo, ImageType};
 
 pub fn create_from_bytes<'b>(
-    image_handle: u64,
     device: DeviceInterface,
     allocator: Arc<Mutex<ResourceAllocator>>,
     immediate_command_buffer: &vk::CommandBuffer,
@@ -31,7 +30,6 @@ pub fn create_from_bytes<'b>(
         name.to_string()
     );
     let buffer = device.create_buffer(
-        0,
         &buffer_create,
         allocator.clone(),
         MemoryLocation::CpuToGpu
@@ -55,7 +53,6 @@ pub fn create_from_bytes<'b>(
         ImageType::Color
     );
     let image = device.create_image(
-        image_handle,
         &image_create,
         allocator.clone(),
         MemoryLocation::GpuOnly
@@ -177,7 +174,6 @@ pub fn create_from_bytes<'b>(
     }
 }
 pub fn create_from_uri<'a>(
-    image_handle: u64,
     device: DeviceInterface,
     allocator: Arc<Mutex<ResourceAllocator>>,
     immediate_command_buffer: &vk::CommandBuffer,
@@ -234,7 +230,6 @@ pub fn create_from_uri<'a>(
         .array_layers(1);
 
     create_from_bytes(
-        image_handle,
         device.clone(),
         allocator,
         immediate_command_buffer,

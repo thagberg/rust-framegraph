@@ -261,7 +261,6 @@ impl PhongExample {
         );
 
         let vertex_buffer = device.create_buffer(
-            0,
             &vertex_buffer_create,
             allocator.clone(),
             MemoryLocation::CpuToGpu);
@@ -284,7 +283,6 @@ impl PhongExample {
         );
 
         let uniform_buffer = device.create_buffer(
-            0,
             &ubo_create,
             allocator.clone(),
             MemoryLocation::CpuToGpu);

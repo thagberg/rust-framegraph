@@ -108,7 +108,6 @@ impl ImguiRender {
                 .array_layers(1);
 
         let mut font_texture = image::create_from_bytes(
-            0 as u64,
             device.clone(),
             allocator,
             immediate_command_buffer,
@@ -184,7 +183,6 @@ impl ImguiRender {
                     .usage(vk::BufferUsageFlags::UNIFORM_BUFFER),
                 "Imgui_display_buffer".to_string());
             let display_buffer = device.create_buffer(
-                0, // TODO: need to generate a real handle value
                 &display_create_info,
                 allocator.clone(),
                 MemoryLocation::CpuToGpu);
@@ -223,7 +221,6 @@ impl ImguiRender {
                                                    "imgui_vtx_buffer".to_string());
 
             let vtx_buffer = Arc::new(Mutex::new(device.create_buffer(
-                0, // TODO: create real buffer handle
                 &vtx_create,
                 allocator.clone(),
                 MemoryLocation::CpuToGpu)));
@@ -245,7 +242,6 @@ impl ImguiRender {
                                                    "imgui_idx_buffer".to_string());
 
             let idx_buffer = Arc::new(Mutex::new(device.create_buffer(
-                0, // TODO: create buffer handle
                 &idx_create,
                 allocator.clone(),
                 MemoryLocation::CpuToGpu)));

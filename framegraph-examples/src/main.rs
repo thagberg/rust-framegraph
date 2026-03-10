@@ -16,6 +16,8 @@ use std::time::Instant;
 use ash::vk;
 
 use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{fmt, EnvFilter};
 use winit;
 use winit::window::{Window, WindowBuilder};
 use winit::event::{Event, WindowEvent};
@@ -91,9 +93,6 @@ impl Debug for WindowedVulkanApp {
 impl WindowedVulkanApp {
     pub fn new(event_loop: &EventLoop<()>, title: &str, width: u32, height: u32) -> WindowedVulkanApp {
         let tracy = tracy_client::Client::start();
-
-        // SimpleLogger::new().init().unwrap();
-        simple_logger::init_with_level(log::Level::Warn).unwrap();
 
         let window = WindowBuilder::new()
             .with_title(title)
@@ -483,9 +482,11 @@ fn run(mut app: WindowedVulkanApp, event_loop: EventLoop<()>) -> Result<(), Even
 }
 
 fn main() {
-    tracing::subscriber::set_global_default(
-        tracing_subscriber::registry().with(tracing_tracy::TracyLayer::default())
-    ).expect("setup tracy layer");
+    tracing_subscriber::registry()
+        .with(fmt::Layer::default())
+        .with(EnvFilter::from_default_env())
+        .with(tracing_tracy::TracyLayer::default())
+        .init();
 
     // create app
     let event_loop: EventLoop<()> = match EventLoop::new() {

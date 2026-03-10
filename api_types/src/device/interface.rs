@@ -2,6 +2,7 @@ use std::ffi::{c_void, CString};
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
 use ash::vk;
 use ash::vk::{DebugUtilsObjectNameInfoEXT};
 use gpu_allocator::MemoryLocation;
@@ -10,6 +11,7 @@ use crate::device::debug::VulkanDebug;
 use crate::device::allocator::ResourceAllocator;
 use crate::device::queue::QueueFamilies;
 use crate::device::resource::{DeviceResource, ResourceType};
+use crate::handle::HandleGenerator;
 use crate::image::{ImageCreateInfo, ImageType, ImageWrapper};
 use crate::pipeline::DevicePipeline;
 use crate::renderpass::DeviceRenderpass;
@@ -24,6 +26,7 @@ struct DeviceInterfaceInner {
     device: ash::Device,
     queue_families: QueueFamilies,
     debug: Option<VulkanDebug>,
+    handle_generator: HandleGenerator,
 }
 
 impl DeviceInterface {
@@ -37,6 +40,7 @@ impl DeviceInterface {
                 device,
                 queue_families,
                 debug,
+                handle_generator: HandleGenerator::new(),
             })
         }
     }
@@ -131,10 +135,10 @@ impl DeviceInterface {
 
     pub fn create_image(
         &self,
-        handle: u64,
         image_desc: &ImageCreateInfo,
         allocator: Arc<Mutex<ResourceAllocator>>,
         memory_location: MemoryLocation) -> DeviceResource {
+        let handle = self.inner.handle_generator.generate_handle();
         let device_image = {
             let create_info = image_desc.get_create_info();
             let image = unsafe {
@@ -223,7 +227,6 @@ impl DeviceInterface {
 
     pub fn wrap_image(
         &self,
-        handle: u64,
         image: vk::Image,
         format: vk::Format,
         image_aspect_flags: vk::ImageAspectFlags,
@@ -231,6 +234,7 @@ impl DeviceInterface {
         extent: vk::Extent3D,
         is_swapchain_image: bool
     ) -> DeviceResource {
+        let handle = self.inner.handle_generator.generate_handle();
         let image_view = self.create_image_view(
             image,
             format,
@@ -263,10 +267,10 @@ impl DeviceInterface {
 
     pub fn create_buffer<'m>(
         &self,
-        handle: u64,
         buffer_desc: &'m BufferCreateInfo<'m>,
         allocator: Arc<Mutex<ResourceAllocator>>,
         memory_location: MemoryLocation) -> DeviceResource {
+        let handle = self.inner.handle_generator.generate_handle();
 
         let device_buffer = {
             log::trace!(target: "resource", "Creating buffer: {} -- {}", handle, buffer_desc.get_name());

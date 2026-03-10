@@ -329,7 +329,6 @@ impl Example for ModelExample {
                 );
 
                 device.create_image(
-                    0, // TODO: create image handle
                     &image_create,
                     allocator.clone(),
                     MemoryLocation::GpuOnly
@@ -357,7 +356,6 @@ impl Example for ModelExample {
                     "MVP_buffer".to_string()
                 );
                 let buffer = device.create_buffer(
-                    0, // TODO: create buffer handle
                     &create_info,
                     allocator.clone(),
                     MemoryLocation::CpuToGpu
@@ -636,7 +634,6 @@ impl ModelExample {
                                         primitive_name.clone()
                                     );
                                     Arc::new(Mutex::new(device.create_buffer(
-                                        0, // TODO: create buffer handle
                                         &ibo_create,
                                         allocator.clone(),
                                         MemoryLocation::CpuToGpu
@@ -723,7 +720,6 @@ impl ModelExample {
                                     primitive_name.clone()
                                 );
                                 device.create_buffer(
-                                    0, // TODO: create buffer handle
                                     &vbo_create,
                                     allocator.clone(),
                                     MemoryLocation::CpuToGpu
@@ -865,7 +861,6 @@ impl ModelExample {
                                             }
                                             Source::Uri{ uri, mime_type: _ } => {
                                                 let mut tex = util::image::create_from_uri(
-                                                    0, // TODO: create image handle
                                                     device.clone(),
                                                     allocator.clone(),
                                                     immediate_command_buffer,

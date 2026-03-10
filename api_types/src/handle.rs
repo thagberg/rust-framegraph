@@ -12,7 +12,7 @@ impl HandleGenerator {
     }
 
     pub fn generate_handle(
-        &mut self
+        &self
     ) -> u64 {
         self.next_val.fetch_add(1, Ordering::SeqCst)
     }
