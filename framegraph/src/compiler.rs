@@ -28,7 +28,6 @@ pub fn compile(nodes: &mut StableDiGraph<RwLock<PassType>, u32>, root_index: Nod
             // input/output match defines a graph edge
             for matched_output in matched_outputs {
                 // use update_edge instead of add_edge to avoid duplicates
-                // if matched_output.index() != node_index.index() {
                 if matched_output != node_index {
                     nodes.update_edge(
                         *node_index,
@@ -39,12 +38,32 @@ pub fn compile(nodes: &mut StableDiGraph<RwLock<PassType>, u32>, root_index: Nod
         }
     }
 
+    // Also need to handle Write-after-Write (WAW) dependencies to ensure correct ordering
+    // for nodes that write to the same resource.
+    for (output, node_index) in output_map.iter() {
+        let find_outputs = output_map.get_vec(output);
+        if let Some(matched_outputs) = find_outputs {
+            for matched_output in matched_outputs {
+                if matched_output != node_index {
+                    // This is a bit tricky. We need to know the order in which nodes were added to the frame.
+                    // For now, let's assume that if matched_output has a lower index than node_index,
+                    // then node_index depends on matched_output.
+                    if matched_output.index() < node_index.index() {
+                        nodes.update_edge(
+                            *node_index,
+                            *matched_output,
+                            0);
+                    }
+                }
+            }
+        }
+    }
+
     // Use DFS to find all accessible nodes from the root node
     {
         let mut retained_nodes: Vec<bool> = Vec::new();
         retained_nodes.resize(nodes.node_count(), false);
 
-        //let mut dfs = Dfs::new(&nodes, root_index);
         let mut dfs = Dfs::new(&*nodes, root_index);
         while let Some(node_id) = dfs.next(&*nodes) {
             retained_nodes[node_id.index()] = true;

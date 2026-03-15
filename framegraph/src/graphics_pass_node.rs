@@ -45,16 +45,9 @@ impl PassNode for GraphicsPassNode  {
 
     fn get_reads(&self) -> Vec<u64> {
         let mut reads: Vec<u64> = Vec::new();
-        reads.reserve(self.inputs.len() + self.render_targets.len());
+        reads.reserve(self.inputs.len());
         for input in &self.inputs {
            reads.push(input.resource.lock().unwrap().get_handle());
-        }
-        // color and depth targets also likely depend on previous writes
-        for rt in &self.render_targets {
-            reads.push(rt.resource_image.lock().unwrap().get_handle());
-        }
-        if let Some(dt) = &self.depth_target {
-            reads.push(dt.resource_image.lock().unwrap().get_handle());
         }
 
         reads
