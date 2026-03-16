@@ -308,7 +308,7 @@ impl Example for CubePlaneExample {
                 .sharing_mode(vk::SharingMode::EXCLUSIVE)
                 .initial_layout(vk::ImageLayout::UNDEFINED)
                 .samples(vk::SampleCountFlags::TYPE_1)
-                .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::SAMPLED)
+                .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST)
                 .extent(vk::Extent3D { width: 1024, height: 1024, depth: 1 })
                 .mip_levels(1)
                 .array_layers(1);
