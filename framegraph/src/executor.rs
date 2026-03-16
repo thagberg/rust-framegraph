@@ -164,6 +164,16 @@ pub fn execute_graphics_node(
                     }
                 }
             }
+            if let Some(resolved_depth) = &resolved_depth_target {
+                match extent {
+                    Some(extent) => {
+                        assert_eq!(extent, resolved_depth.extent, "All framebuffer attachments must be the same dimensions");
+                    },
+                    None => {
+                        extent = Some(resolved_depth.extent.clone());
+                    }
+                }
+            }
             extent.expect("Framebuffer required for renderpass")
         };
 
